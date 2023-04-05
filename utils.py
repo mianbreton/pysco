@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+from astropy.constants import G, pc
 from numba import njit, prange
 
 import morton
@@ -30,7 +31,9 @@ def time_me(func: callable) -> callable:
         """
         t1 = perf_counter()
         result = func(*args, **kw)
-        print(f"{func.__name__} took {perf_counter() - t1} seconds")
+        print(
+            f"Function {func.__name__:->40} took {perf_counter() - t1} seconds{'':{'-'}<{10}}"
+        )
         return result
 
     return time_func
@@ -133,6 +136,30 @@ def index_linear(ijk: npt.NDArray[np.int32], ncells_1d: int) -> npt.NDArray[np.i
     return (ijk[0] * ncells_1d**2 + ijk[1] * ncells_1d + ijk[2]).astype(np.int64)
 
 
+# Units
+
+
+def set_units(param: pd.Series) -> None:
+    """Compute dimensions in SI units
+
+    Args:
+        param (pd.Series): Parameter container
+    """
+    # Put in good units (Box Units to km,kg,s)
+    npart = 8 ** param["ncoarse"]
+    # Get constants
+    mpc_to_km = 1e3 * pc.value  #   Mpc -> km
+    g = G.value * 1e-9  # m3/kg/s2 -> km3/kg/s2
+    # Modify relevant quantities
+    H0 = param["H0"] / mpc_to_km  # km/s/Mpc -> 1/s
+    rhoc = 3 * H0**2 / (8 * np.pi * g)  #   kg/m3
+    # Set param
+    param["unit_l"] = param["aexp"] * param["boxlen"] * 100.0 / H0  # BU to proper km
+    param["unit_t"] = param["aexp"] ** 2 / H0  # BU to lookback seconds
+    param["unit_d"] = param["Om_m"] * rhoc / param["aexp"] ** 3  # BU to kg/km3
+    param["mpart"] = param["unit_d"] * param["unit_l"] ** 3 / npart  # In kg
+
+
 # Reading routines
 
 
@@ -175,10 +202,9 @@ def read_param_file(name: str) -> pd.Series:
             "boxlen": float,
             "ncoarse": int,
             "n_reorder": int,
-            "n_multigrid_level_min": int,
             "Npre": int,
             "Npost": int,
-            "n_cycle": int,
+            "n_cycles_max": int,
             "epsrel": float,
             "Courant_factor": float,
         }
@@ -224,6 +250,7 @@ def read_snapshot_particles_hdf5(
 # Writing routines
 
 
+@time_me
 def write_snapshot_particles_parquet(
     filename: str, position: npt.NDArray[np.float32], velocity: npt.NDArray[np.float32]
 ) -> None:  # TODO: do better, perhaps multithread this?
@@ -297,6 +324,20 @@ def add_vector_scalar_inplace(
 
 
 @njit(fastmath=True, cache=True, parallel=True)
+def prod_vector_scalar_inplace(y: npt.NDArray[np.float32], a: np.float32) -> None:
+    """Multiply vector by scalar inplace \\
+    y *= a
+
+    Args:
+        y (npt.NDArray[np.float32]): Mutable array
+        a (np.float32): Scalar
+    """
+    y_ravel = y.ravel()
+    for i in prange(y_ravel.shape[0]):
+        y_ravel[i] *= a
+
+
+@njit(fastmath=True, cache=True, parallel=True)
 def prod_vector_scalar(
     x: npt.NDArray[np.float32], a: np.float32
 ) -> npt.NDArray[np.float32]:
@@ -338,35 +379,17 @@ def density_renormalize(
         x_ravel[i] = f1 * (f2 * x_ravel[i] - one)
 
 
-# Particles utilities
 def reorder_particles(
-    position: npt.NDArray[np.float32], velocity: npt.NDArray[np.float32]
-) -> None:
-    """Reorder particles inplace with Morton indices
-
-    Args:
-        position (npt.NDArray[np.float32]): Position [3, N_part]
-        velocity (npt.NDArray[np.float32]): Velocity [3, N_part]
-    """
-    logging.debug(f"Re-order particles")
-    index = morton.positions_to_keys(position)
-    arg = np.argsort(index)
-    logging.debug(f"{arg=}")
-    position[:] = position[:, arg]
-    velocity[:] = velocity[:, arg]
-
-
-def reorder_particles3(
     position: npt.NDArray[np.float32],
     velocity: npt.NDArray[np.float32],
-    acceleration: npt.NDArray[np.float32],
+    acceleration: npt.NDArray[np.float32] = None,
 ) -> None:
     """Reorder particles inplace with Morton indices
 
     Args:
         position (npt.NDArray[np.float32]): Position [3, N_part]
         velocity (npt.NDArray[np.float32]): Velocity [3, N_part]
-        acceleration (npt.NDArray[np.float32]): Acceleration [3, N_part]
+        acceleration (npt.NDArray[np.float32]): Acceleration [3, N_part]. Defaults to None.
     """
     logging.debug(f"Re-order particles and acceleration")
     index = morton.positions_to_keys(position)
@@ -374,7 +397,8 @@ def reorder_particles3(
     logging.debug(f"{arg=}")
     position[:] = position[:, arg]
     velocity[:] = velocity[:, arg]
-    acceleration[:] = acceleration[:, arg]
+    if acceleration is not None:
+        acceleration[:] = acceleration[:, arg]
 
 
 @njit(fastmath=True, cache=True, parallel=True)

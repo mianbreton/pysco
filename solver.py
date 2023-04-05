@@ -6,16 +6,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+from scipy.interpolate import interp1d
 
 import mesh
 import utils
 
 
 # @utils.profile_me
+@utils.time_me
 def pm(
     position: npt.NDArray[np.float32],
     param: pd.Series,
     potential: npt.NDArray[np.float32] = None,
+    tables: list[interp1d] = [],
 ) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Compute Particle-Mesh acceleration
 
@@ -23,6 +26,7 @@ def pm(
         position (npt.NDArray[np.float32]): Positions [3,N_part]
         param (pd.Series): Parameter container
         potential (npt.NDArray[np.float32], optional): Gravitational potential [N_cells_1d, N_cells_1d,N_cells_1d]
+        list[interp1d]: Interpolated functions [a(t), t(a), Dplus(a)]. Defaults to None.
         Defaults to None.
 
     Returns:
@@ -50,22 +54,18 @@ def pm(
     rhs = func_interp(position, ncells_1d)
     utils.density_renormalize(rhs, f1, f2)
 
-    # print("COmpute residual....")
-    res1 = mesh.residual((-1.0 / 6 * h**2) * rhs, rhs, h).ravel()
-    # print(f"Residual, density approx {np.dot(res, res)}")
-    if potential is not None:
-        res2 = mesh.residual(potential, rhs, h).ravel()
-        # print(f"Residual, previous {np.dot(res, res)}")
-        res3 = mesh.residual(
-            (param["aexp"] / param["aexp_old"]) * potential, rhs, h
-        ).ravel()
-        print(
-            f"{param['aexp']} {np.dot(res1, res1)} {np.dot(res2, res2)} {np.dot(res3, res3)} # residuals"
-        )
-    # Initialise Potential if there is no previous step
+    # Initialise Potential if there is no previous step. Else, rescale the potential using growth and scale factors
     if potential is None:
+        print("Assign density")
         potential = utils.prod_vector_scalar(rhs, (-1.0 / 6 * h**2))
-
+    else:
+        print("Rescale potential")
+        scaling = (
+            param["aexp"]
+            * tables[2](param["aexp"])
+            / (param["aexp_old"] * tables[2](param["aexp_old"]))
+        )
+        utils.prod_vector_scalar_inplace(potential, scaling)
     # Main procedure: Poisson solver
     if param["poisson_solver"].casefold() == "mg".casefold():
         potential = multigrid(potential, rhs, h, param)
@@ -80,12 +80,14 @@ def pm(
             "ERROR: Only 'mg', 'fft', 'cg' or 'sd' solvers for the moment..."
         )
 
+    rhs = 0
     # Compute Force
     force = mesh.derivative(potential)
     acceleration = func_inv_interp(force, position)  # In BU, particle mass = 1
     return (acceleration, potential)  # return acceleration
 
 
+# @utils.profile_me
 @utils.time_me
 def multigrid(
     x: npt.NDArray[np.float32],
@@ -111,34 +113,41 @@ def multigrid(
     #        - Define types in decorator
     #        - Check if we get better initial residual with scaled potential from previous step
     # Compute tolerance
-    # if param["tolerance"] == 0:
-    if not "tolerance" in param:
-        trunc = mesh.truncation(rhs, h).ravel()
-        param["tolerance"] = param["epsrel"] * np.sqrt(np.dot(trunc, trunc))
+    # If tolerance not yet assigned or every 5 time steps, compute truncation error
+    if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
+        print("Compute Truncation error")
+        param["tolerance"] = param["epsrel"] * mesh.truncation_error(rhs)
 
     # Main procedure: Multigrid
-    if param["cycle"].casefold() == "V".casefold():
+    if param["n_cycles_F"] == 0:
         func_cycle = mesh.V_cycle
-    elif param["cycle"].casefold() == "F".casefold():
-        func_cycle = mesh.F_cycle
-    elif param["cycle"].casefold() == "W".casefold():
-        func_cycle = mesh.W_cycle
     else:
-        raise ValueError("ERROR: Cycle must be 'V', 'F' or 'W'")
-    # Cycling
-    for _ in range(param["n_cycle"]):
-        potential = func_cycle(
-            x,
-            rhs,
-            0,
-            param,
-        )
-        # residual = mesh.residual(potential, rhs, h).ravel()
-        # residual_error = np.sqrt(np.dot(residual, residual))
+        func_cycle = mesh.F_cycle
+    func_cycle = mesh.V_cycle
+    # n_V_cycles = 0
+    for _ in range(param["n_cycles_max"]):
+        if _ >= param["n_cycles_F"]:
+            func_cycle = mesh.V_cycle
+        print(f"{func_cycle.__name__}")
+        # if "V_cycle".casefold() in func_cycle.__name__.casefold():
+        #    n_V_cycles += 1
+        potential = func_cycle(x, rhs, 0, param)
         residual_error = mesh.residual_error_half(potential, rhs, h)
-        print(f"{residual_error=}")
+        print(
+            f"{residual_error=} {param['tolerance']=} {param['n_cycles_F']=} {param['n_cycles_V']=}"
+        )
         if residual_error < param["tolerance"]:
             break
+        """# Except for the first case, try to use V or F cycles efficiently
+        if param["nsteps"] == 0:
+            continue
+        # If n_cycles_V is not enough, add one
+        if n_V_cycles >= (param["n_cycles_V"]):
+            param["n_cycles_V"] = n_V_cycles + 1
+            # If we reach 3 V cycles, switch F cycles
+            if param["n_cycles_V"] >= 3 - param["n_cycles_F"]:
+                param["n_cycles_V"] = 0
+                param["n_cycles_F"] += 1"""
     return potential
 
 
@@ -149,7 +158,7 @@ def fft(
 
     Args:
         rhs (npt.NDArray[np.float32]): Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
-        h (np.float32): grid size
+        h (np.float32): grid size (UNUSED)
         param (pd.Series): Parameter container
 
     Returns:
