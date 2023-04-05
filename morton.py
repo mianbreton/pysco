@@ -272,7 +272,7 @@ def incZ(key: np.int64, level: np.int64) -> np.int64:
 
 @njit(fastmath=True, cache=True)
 def decX(key: np.int64, level: np.int64) -> np.int64:
-    """Increase Morton index by one along x axis
+    """Decrease Morton index by one along x axis
 
     Args:
         key (np.int64): Morton index

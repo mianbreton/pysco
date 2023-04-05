@@ -195,7 +195,6 @@ def residual_error_half(
     Returns:
         npt.NDArray[np.float32]: Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
     """
-    three = np.float32(3.0)
     six = np.float32(6.0)
     invh2 = np.float32(h ** (-2))
     result = np.float32(0)
@@ -962,7 +961,7 @@ def truncation2(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.flo
 
 
 # @njit(fastmath=True, cache=True)
-def truncation(b: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float32]:
+def truncation(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     """Truncation error estimator \\
     In Knebe et al. (2001), the authors estimate the truncation error as \\
     t = Prolongation(Laplacian(Restriction(Phi))) - Laplacian(Phi) \\
@@ -972,12 +971,169 @@ def truncation(b: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.floa
 
     Args:
         x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        h (np.float32): Grid size
 
     Returns:
         npt.NDArray[np.float32]: Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     return prolongation(restriction(b)) - b
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def truncation_error(b: npt.NDArray[np.float32]) -> np.float32:
+    """Truncation error estimator \\
+    In Knebe et al. (2001), the authors estimate the truncation error as \\
+    t = Prolongation(Laplacian(Restriction(Phi))) - Laplacian(Phi) \\
+    However, we found more efficient to use instead the estimator \\
+    t = Prolongation(Restriction(b)) - b \\
+    which gives roughly the same results. \\
+    
+    The final trunction error is given by \\
+    truncation_error = Sqrt(Sum(t**2))
+
+    Args:
+        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Returns:
+        np.float32: Truncation error
+    """
+    truncation = np.float32(0)
+    f0 = np.float32(27.0 / 64)
+    f1 = np.float32(9.0 / 64)
+    f2 = np.float32(3.0 / 64)
+    f3 = np.float32(1.0 / 64)
+    # Restriction
+    result = restriction(b)
+    # Prolongation and subtraction
+    for i in prange(-1, result.shape[0] - 1):
+        im1 = i - 1
+        ip1 = i + 1
+        ii = 2 * i
+        iip1 = ii + 1
+        for j in prange(-1, result.shape[1] - 1):
+            jm1 = j - 1
+            jp1 = j + 1
+            jj = 2 * j
+            jjp1 = jj + 1
+            for k in prange(-1, result.shape[2] - 1):
+                km1 = k - 1
+                kp1 = k + 1
+                kk = 2 * k
+                kkp1 = kk + 1
+                # Get result
+                tmp000 = result[im1, jm1, km1]
+                tmp001 = result[im1, jm1, k]
+                tmp002 = result[im1, jm1, kp1]
+                tmp010 = result[im1, j, km1]
+                tmp011 = result[im1, j, k]
+                tmp012 = result[im1, j, kp1]
+                tmp020 = result[im1, jp1, km1]
+                tmp021 = result[im1, jp1, k]
+                tmp022 = result[im1, jp1, kp1]
+                tmp100 = result[i, jm1, km1]
+                tmp101 = result[i, jm1, k]
+                tmp102 = result[i, jm1, kp1]
+                tmp110 = result[i, j, km1]
+                tmp111 = result[i, j, k]
+                tmp112 = result[i, j, kp1]
+                tmp120 = result[i, jp1, km1]
+                tmp121 = result[i, jp1, k]
+                tmp122 = result[i, jp1, kp1]
+                tmp200 = result[ip1, jm1, km1]
+                tmp201 = result[ip1, jm1, k]
+                tmp202 = result[ip1, jm1, kp1]
+                tmp210 = result[ip1, j, km1]
+                tmp211 = result[ip1, j, k]
+                tmp212 = result[ip1, j, kp1]
+                tmp220 = result[ip1, jp1, km1]
+                tmp221 = result[ip1, jp1, k]
+                tmp222 = result[ip1, jp1, kp1]
+                # Central
+                tmp0 = f0 * tmp111
+                # Put in fine grid
+                truncation += (
+                    (
+                        (
+                            tmp0
+                            + f1 * (tmp011 + tmp101 + tmp110)
+                            + f2 * (tmp001 + tmp010 + tmp100)
+                            + f3 * tmp000
+                        )
+                        - b[ii, jj, kk]
+                    )
+                    ** 2
+                    + (
+                        (
+                            tmp0
+                            + f1 * (tmp011 + tmp101 + tmp112)
+                            + f2 * (tmp001 + tmp012 + tmp102)
+                            + f3 * tmp002
+                        )
+                        - b[ii, jj, kkp1]
+                    )
+                    ** 2
+                    + (
+                        (
+                            tmp0
+                            + f1 * (tmp011 + tmp121 + tmp110)
+                            + f2 * (tmp021 + tmp010 + tmp120)
+                            + f3 * tmp020
+                        )
+                        - b[ii, jjp1, kk]
+                    )
+                    ** 2
+                    + (
+                        (
+                            tmp0
+                            + f1 * (tmp011 + tmp121 + tmp112)
+                            + f2 * (tmp021 + tmp012 + tmp122)
+                            + f3 * tmp022
+                        )
+                        - b[ii, jjp1, kkp1]
+                    )
+                    ** 2
+                    + (
+                        (
+                            tmp0
+                            + f1 * (tmp211 + tmp101 + tmp110)
+                            + f2 * (tmp201 + tmp210 + tmp100)
+                            + f3 * tmp200
+                        )
+                        - b[iip1, jj, kk]
+                    )
+                    ** 2
+                    + (
+                        (
+                            tmp0
+                            + f1 * (tmp211 + tmp101 + tmp112)
+                            + f2 * (tmp201 + tmp212 + tmp102)
+                            + f3 * tmp202
+                        )
+                        - b[iip1, jj, kkp1]
+                    )
+                    ** 2
+                    + (
+                        (
+                            tmp0
+                            + f1 * (tmp211 + tmp121 + tmp110)
+                            + f2 * (tmp221 + tmp210 + tmp120)
+                            + f3 * tmp220
+                        )
+                        - b[iip1, jjp1, kk]
+                    )
+                    ** 2
+                    + (
+                        (
+                            tmp0
+                            + f1 * (tmp211 + tmp121 + tmp112)
+                            + f2 * (tmp221 + tmp212 + tmp122)
+                            + f3 * tmp222
+                        )
+                        - b[iip1, jjp1, kkp1]
+                    )
+                    ** 2
+                )
+
+    return np.sqrt(truncation)
 
 
 def V_cycle(
@@ -998,7 +1154,6 @@ def V_cycle(
         npt.NDArray[np.float32]: Corrected Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     logging.debug("In V_cycle")
-    one = np.float32(1.0)
     h = 1.0 / 2 ** (params["ncoarse"] - nlevel)
     smoothing(x, b, h, params["Npre"])
     res_c = restric_residual_half(x, b, h)
@@ -1006,7 +1161,7 @@ def V_cycle(
     # Initialise array (initial guess is no correction needed)
     x_corr_c = np.zeros_like(res_c)
     # Stop if we are at coarse enough level
-    if nlevel >= (params["ncoarse"] - params["n_multigrid_level_min"]):
+    if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
         x_corr_c = V_cycle(x_corr_c, res_c, nlevel + 1, params)
@@ -1040,7 +1195,7 @@ def F_cycle(
     # Initialise array (initial guess is no correction needed)
     x_corr_c = np.zeros_like(res_c)
     # Stop if we are at coarse enough level
-    if nlevel >= (params["ncoarse"] - params["n_multigrid_level_min"]):
+    if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
         x_corr_c = F_cycle(x_corr_c, res_c, nlevel + 1, params)
@@ -1054,7 +1209,7 @@ def F_cycle(
     x_corr_c = np.zeros_like(res_c)
 
     # Stop if we are at coarse enough level
-    if nlevel >= (params["ncoarse"] - params["n_multigrid_level_min"]):
+    if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
         x_corr_c = V_cycle(x_corr_c, res_c, nlevel + 1, params)  # Careful, V_cycle here
@@ -1090,7 +1245,7 @@ def W_cycle(
     # Initialise array (initial guess is no correction needed)
     x_corr_c = np.zeros_like(res_c)
     # Stop if we are at coarse enough level
-    if nlevel >= (params["ncoarse"] - params["n_multigrid_level_min"]):
+    if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
         x_corr_c = W_cycle(x_corr_c, res_c, nlevel + 1, params)
@@ -1104,7 +1259,7 @@ def W_cycle(
     x_corr_c = np.zeros_like(res_c)
 
     # Stop if we are at coarse enough level
-    if nlevel >= (params["ncoarse"] - params["n_multigrid_level_min"]):
+    if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
         x_corr_c = W_cycle(x_corr_c, res_c, nlevel + 1, params)
@@ -1118,7 +1273,8 @@ def W_cycle(
 def derivative(
     a: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
-    """Spatial derivatives of a scalar field on a grid
+    """Spatial derivatives of a scalar field on a grid \\
+    Second-order derivative with finite differences
 
     Args:
         a (npt.NDArray[np.float32]): Field [N_cells_1d, N_cells_1d, N_cells_1d]
@@ -1143,6 +1299,52 @@ def derivative(
                 result[0, i, j, k] = halfinvh * (a[im1, j, k] - a[ip1, j, k])
                 result[1, i, j, k] = halfinvh * (a[i, jm1, k] - a[i, jp1, k])
                 result[2, i, j, k] = halfinvh * (a[i, j, km1] - a[i, j, kp1])
+    return result
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def derivative4(
+    a: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid
+    Fourth-order derivative with finite differences
+
+    Args:
+        a (npt.NDArray[np.float32]): Field [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Returns:
+        npt.NDArray[np.float32]: Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+    """
+    eight = np.float32(8)
+    inv12h = np.float32(a.shape[-1] / 12.0)
+    ncells_1d = a.shape[-1]
+    # Initialise mesh
+    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    # Compute
+    for i in prange(-2, a.shape[-3] - 2):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        for j in prange(-2, a.shape[-2] - 2):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            for k in prange(-2, a.shape[-1] - 2):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+                result[0, i, j, k] = inv12h * (
+                    eight * (a[im1, j, k] - a[ip1, j, k]) - a[im2, j, k] + a[ip2, j, k]
+                )
+                result[1, i, j, k] = inv12h * (
+                    eight * (a[i, jm1, k] - a[i, jp1, k]) - a[i, jm2, k] + a[i, jp2, k]
+                )
+                result[2, i, j, k] = inv12h * (
+                    eight * (a[i, j, km1] - a[i, j, kp1]) - a[i, j, km2] + a[i, j, kp2]
+                )
     return result
 
 

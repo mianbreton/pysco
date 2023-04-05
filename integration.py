@@ -7,17 +7,16 @@ import pandas as pd
 from scipy.interpolate import interp1d
 
 import solver
-import units
 import utils
 
 
+@utils.time_me
 def integrate(
     position: npt.NDArray[np.float32],
     velocity: npt.NDArray[np.float32],
     acceleration: npt.NDArray[np.float32],
     potential: npt.NDArray[np.float32],
-    func_a_t: interp1d,
-    func_t_a: interp1d,
+    tables: list[interp1d],
     param: pd.Series,
 ) -> tuple[
     npt.NDArray[np.float32],
@@ -25,15 +24,14 @@ def integrate(
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
 ]:
-    """_summary_
+    """Computes one integration step
 
     Args:
         position (npt.NDArray[np.float32]): Positions [3, N_part]
         velocity (npt.NDArray[np.float32]): Velocities [3, N_part]
         acceleration (npt.NDArray[np.float32]): Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
         potential (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        func_a_t (interp1d): a(t) interpolator
-        func_t_a (interp1d): t(a) interpolator
+        tables list[interp1d]: Interpolated functions [a(t), t(a), Dplus(a)]
         param (pd.Series): Parameter container
 
     Returns:
@@ -43,18 +41,14 @@ def integrate(
     logging.debug("In integrate")
     dt1 = dt_CFL_maxacc(acceleration, param)
     dt2 = dt_CFL_maxvel(velocity, param)
-    dt3 = dt_weak_variation(func_t_a, param)
+    dt3 = dt_weak_variation(tables[1], param)
     dt = np.min([dt1, dt2, dt3])
     logging.debug(f"{dt1=} {dt2=} {dt3=}")
     # Integrate
     if param.integrator == "leapfrog":
-        return leapfrog(
-            position, velocity, acceleration, potential, dt, func_a_t, func_t_a, param
-        )
+        return leapfrog(position, velocity, acceleration, potential, dt, tables, param)
     elif param.integrator == "euler":
-        return euler(
-            position, velocity, acceleration, potential, dt, func_a_t, func_t_a, param
-        )
+        return euler(position, velocity, acceleration, potential, dt, tables, param)
     else:
         raise ValueError("ERROR: Integrator must be 'leapfrog' or 'euler'")
 
@@ -65,8 +59,7 @@ def euler(
     acceleration: npt.NDArray[np.float32],
     potential: npt.NDArray[np.float32],
     dt: np.float32,
-    func_a_t: interp1d,
-    func_t_a: interp1d,
+    tables: list[interp1d],
     param: pd.Series,
 ) -> tuple[
     npt.NDArray[np.float32],
@@ -81,15 +74,15 @@ def euler(
     utils.add_vector_scalar_inplace(position, velocity, dt)
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
-    param["aexp"] = func_a_t(param["t"])
-    units.set_units(param)
+    param["aexp"] = tables[0](param["t"])
+    utils.set_units(param)
     # Periodic boundary conditions
     utils.periodic_wrap(position)
     logging.debug(f"{np.min(position)=} {np.max(position)}")
     # Kick
     utils.add_vector_scalar_inplace(velocity, acceleration, dt)
     # Solver
-    acceleration, potential = solver.pm(position, param, potential)
+    acceleration, potential = solver.pm(position, param, potential, tables)
     return (position, velocity, acceleration, potential)
 
 
@@ -99,8 +92,7 @@ def leapfrog(
     acceleration: npt.NDArray[np.float32],
     potential: npt.NDArray[np.float32],
     dt: np.float32,
-    func_a_t: interp1d,
-    func_t_a: interp1d,
+    tables: list[interp1d],
     param: pd.Series,
 ) -> tuple[
     npt.NDArray[np.float32],
@@ -116,16 +108,16 @@ def leapfrog(
     utils.add_vector_scalar_inplace(velocity, acceleration, half_dt)
 
     # Drift
-    utils.add_vector_scalar_inplace(position, velocity, half_dt)
+    utils.add_vector_scalar_inplace(position, velocity, dt)
 
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
-    param["aexp"] = func_a_t(param["t"])
-    units.set_units(param)
+    param["aexp"] = tables[0](param["t"])
+    utils.set_units(param)
     # Periodic boundary conditions
     utils.periodic_wrap(position)
     # Solver
-    acceleration, potential = solver.pm(position, param, potential)
+    acceleration, potential = solver.pm(position, param, potential, tables)
     # Kick
     utils.add_vector_scalar_inplace(velocity, acceleration, half_dt)
 
@@ -140,7 +132,7 @@ def dt_CFL_maxacc(
     return np.float32(param["Courant_factor"]) * np.sqrt(dx / max_acc)
 
 
-# TODO: Check if really useful (Joachim's comment)
+# TODO: Check if really useful
 def dt_CFL_maxvel(
     velocity: npt.NDArray[np.float32], param: pd.Series
 ) -> np.float32:  # Angulo & Hahn 2021 (review), Teyssier 2002 (RAMSES)

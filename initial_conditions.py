@@ -4,7 +4,6 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-import units
 import utils
 
 
@@ -20,16 +19,13 @@ def generate(
         tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]: 3D position, velocity
     """
     flag = "random"
-    if flag == "random":
+    if param["initial_conditions"].casefold() == "random".casefold():
         position, velocity = random(param)
-    elif flag == "sphere":
+    elif param["initial_conditions"].casefold() == "sphere".casefold():
         position, velocity = sphere(param)
     else:
-        # TODO: Read aexp and compute param['t']
-        position, velocity = read_hdf5(
-            "/home/mabreton/boxlen500_n64_lcdmw7v2/output_00001/pfof_cube_snap_part_data_boxlen500_n64_lcdmw7v2_00000_00000.h5",
-            param,
-        )
+        position, velocity = read_hdf5(param)
+    print(f"{position.shape=} {velocity.shape=}")
     # Wrap particles
     utils.reorder_particles(position, velocity)
     # Write initial distribution
@@ -87,12 +83,11 @@ def sphere(param: pd.Series) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.fl
 
 
 def read_hdf5(
-    filename: str, param: pd.Series
+    param: pd.Series,
 ) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Read initial conditions from HDF5 Ramses snapshot
 
     Args:
-        filename (str): HDF5 snapshot filename
         param (pd.Series): Parameters, will be modified for "aexp" key
 
     Returns:
@@ -102,23 +97,22 @@ def read_hdf5(
 
     logging.debug("HDF5 initial conditions")
     # Open file
-    f = h5py.File(filename, "r")
+    f = h5py.File(param["initial_conditions"], "r")
     # Get scale factor
     param["aexp"] = f["metadata/ramses_info"].attrs["aexp"][0]
-    units.set_units(param)
+    print(f"Initial redshift snapshot {1./param['aexp'] - 1}")
+    utils.set_units(param)
     # Get positions
     npart = int(f["metadata/npart_file"][:])
     position = np.empty((3, npart))
     velocity = np.empty_like(position)
     npart_grp_array = f["metadata/npart_grp_array"][:]
 
-    print(npart, npart_grp_array)
+    print(f"{npart=}")
     data = f["data"]
     istart = 0
     for i in range(npart_grp_array.shape[0]):
         name = "group" + str(i + 1).zfill(8)
-        # print (name + '/position_part', npart_grp_array[i])
-        # print (data[name + '/position_part'][:])
         position[:, istart : istart + npart_grp_array[i]] = data[
             name + "/position_part"
         ][:].T
@@ -126,9 +120,5 @@ def read_hdf5(
             name + "/velocity_part"
         ][:].T
         istart += npart_grp_array[i]
-    # Write in parquet file
-    utils.write_snapshot_particles_parquet(
-        "output/snap_00000.parquet", position, velocity
-    )
 
     return position, velocity
