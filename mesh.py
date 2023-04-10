@@ -10,7 +10,7 @@ from numba import config, njit, prange
 import utils
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:,:,:](f4[:,:,:], f4)"], fastmath=True, cache=True, parallel=True)
 def laplacian(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float32]:
     """Laplacian operator
 
@@ -49,7 +49,7 @@ def laplacian(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:,:,:](f4[:,:,:], f4[:,:,:], f4)"], fastmath=True, cache=True, parallel=True)
 def residual(
     x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
 ) -> npt.NDArray[np.float32]:
@@ -96,7 +96,7 @@ def residual(
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:,:,:](f4[:,:,:], f4[:,:,:], f4)"], fastmath=True, cache=True, parallel=True)
 def restric_residual_half(
     x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
 ) -> npt.NDArray[np.float32]:
@@ -176,7 +176,7 @@ def restric_residual_half(
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4(f4[:,:,:], f4[:,:,:], f4)"], fastmath=True, cache=True, parallel=True)
 def residual_error_half(
     x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
 ) -> np.float32:
@@ -271,7 +271,7 @@ def residual_error_half(
     return np.sqrt(result)
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["void(f4[:,:,:], f4[:,:,:], f4)"], fastmath=True, cache=True, parallel=True)
 def jacobi(
     x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
 ) -> None:
@@ -307,7 +307,7 @@ def jacobi(
                 ) * invsix
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["void(f4[:,:,:], f4[:,:,:], f4, f4)"], fastmath=True, cache=True, parallel=True)
 def gauss_seidel(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -501,7 +501,7 @@ def gauss_seidel(
                 )
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["void(f4[:,:,:], f4[:,:,:], f4)"], fastmath=True, cache=True, parallel=True)
 def gauss_seidel_no_overrelaxation(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -663,7 +663,7 @@ def smoothing(
         gauss_seidel_no_overrelaxation(x, b, h)
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:,:,:](f4[:,:,:])"], fastmath=True, cache=True, parallel=True)
 def restriction(
     x: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
@@ -702,7 +702,7 @@ def restriction(
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:,:,:](f4[:,:,:])"], fastmath=True, cache=True, parallel=True)
 def prolongation0(
     x: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
@@ -741,7 +741,7 @@ def prolongation0(
     return x_fine
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:,:,:](f4[:,:,:])"], fastmath=True, cache=True, parallel=True)
 def prolongation(
     x: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
@@ -859,7 +859,7 @@ def prolongation(
     return x_fine
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["void(f4[:,:,:], f4[:,:,:])"], fastmath=True, cache=True, parallel=True)
 def add_prolongation_half(
     x: npt.NDArray[np.float32],
     corr_c: npt.NDArray[np.float32],
@@ -944,7 +944,7 @@ def add_prolongation_half(
                 )
 
 
-@njit(fastmath=True, cache=True)
+@njit(["f4[:,:,:](f4[:,:,:], f4)"], fastmath=True, cache=True)
 def truncation2(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float32]:
     """Truncation error estimator \\
     As in Knebe et al. (2001), we estimate the truncation error as \\
@@ -960,7 +960,7 @@ def truncation2(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.flo
     return prolongation(laplacian(restriction(x), 2 * h)) - laplacian(x, h)
 
 
-# @njit(fastmath=True, cache=True)
+@njit(["f4[:,:,:](f4[:,:,:])"], fastmath=True, cache=True)
 def truncation(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     """Truncation error estimator \\
     In Knebe et al. (2001), the authors estimate the truncation error as \\
@@ -978,7 +978,7 @@ def truncation(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     return prolongation(restriction(b)) - b
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4(f4[:,:,:])"], fastmath=True, cache=True, parallel=True)
 def truncation_error(b: npt.NDArray[np.float32]) -> np.float32:
     """Truncation error estimator \\
     In Knebe et al. (2001), the authors estimate the truncation error as \\
@@ -1272,7 +1272,7 @@ def W_cycle(
     return x
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:,:,:,:](f4[:,:,:])"], fastmath=True, cache=True, parallel=True)
 def derivative2(
     a: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
@@ -1305,7 +1305,7 @@ def derivative2(
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:,:,:,:](f4[:,:,:])"], fastmath=True, cache=True, parallel=True)
 def derivative(
     a: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
@@ -1351,7 +1351,9 @@ def derivative(
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=False)  # FIXME: NOT THREAD SAFE
+@njit(
+    ["f4[:,:,:](f4[:,:], i2)"], fastmath=True, cache=True, parallel=False
+)  # FIXME: NOT THREAD SAFE
 def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
     """Nearest Grid Point interpolation \\
     Computes density on a grid from particle distribution
@@ -1376,7 +1378,9 @@ def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=False)  # FIXME: NOT THREAD SAFE
+@njit(
+    ["f4[:,:,:](f4[:,:], i2)"], fastmath=True, cache=True, parallel=False
+)  # FIXME: NOT THREAD SAFE
 def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
     """Cloud-in-Cell interpolation \\
     Computes density on a grid from particle distribution
@@ -1433,7 +1437,9 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=False)  # FIXME: NOT THREAD SAFE
+@njit(
+    ["f4[:,:,:](f4[:,:], i2)"], fastmath=True, cache=True, parallel=False
+)  # FIXME: NOT THREAD SAFE
 def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
     """Triangular-Shaped Cloud interpolation \\
     Computes density on a grid from particle distribution
@@ -1523,7 +1529,7 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:](f4[:,:,:], f4[:,:])"], fastmath=True, cache=True, parallel=True)
 def invNGP(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
 ) -> npt.NDArray[np.float32]:
@@ -1535,7 +1541,7 @@ def invNGP(
         position (npt.NDArray[np.float32]): Position [3, N_part]
 
     Returns:
-        npt.NDArray[np.float32]: interpolated Field [3, N_part]
+        npt.NDArray[np.float32]: interpolated Field [N_part]
     """
     ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
@@ -1550,7 +1556,7 @@ def invNGP(
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:,:](f4[:,:,:,:], f4[:,:])"], fastmath=True, cache=True, parallel=True)
 def invNGP_vec(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
 ) -> npt.NDArray[np.float32]:
@@ -1578,7 +1584,7 @@ def invNGP_vec(
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:](f4[:,:,:], f4[:,:])"], fastmath=True, cache=True, parallel=True)
 def invCIC(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
 ) -> npt.NDArray[np.float32]:
@@ -1590,7 +1596,7 @@ def invCIC(
         position (npt.NDArray[np.float32]): Position [3, N_part]
 
     Returns:
-        npt.NDArray[np.float32]: interpolated Field [3, N_part]
+        npt.NDArray[np.float32]: interpolated Field [N_part]
     """
     ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
@@ -1640,7 +1646,7 @@ def invCIC(
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:,:](f4[:,:,:,:], f4[:,:])"], fastmath=True, cache=True, parallel=True)
 def invCIC_vec(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
 ) -> npt.NDArray[np.float32]:
@@ -1703,7 +1709,7 @@ def invCIC_vec(
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:](f4[:,:,:], f4[:,:])"], fastmath=True, cache=True, parallel=True)
 def invTSC(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
 ) -> npt.NDArray[np.float32]:
@@ -1715,7 +1721,7 @@ def invTSC(
         position (npt.NDArray[np.float32]): Position [3, N_part]
 
     Returns:
-        npt.NDArray[np.float32]: interpolated Field [3, N_part]
+        npt.NDArray[np.float32]: interpolated Field [N_part]
     """
     ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
     ncells_1d_m1 = np.int16(ncells_1d - 1)
@@ -1826,7 +1832,7 @@ def invTSC(
     return result
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(["f4[:,:](f4[:,:,:,:], f4[:,:])"], fastmath=True, cache=True, parallel=True)
 def invTSC_vec(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
 ) -> npt.NDArray[np.float32]:

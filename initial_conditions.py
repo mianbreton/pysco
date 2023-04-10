@@ -18,7 +18,6 @@ def generate(
     Returns:
         tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]: 3D position, velocity
     """
-    flag = "random"
     if param["initial_conditions"].casefold() == "random".casefold():
         position, velocity = random(param)
     elif param["initial_conditions"].casefold() == "sphere".casefold():
@@ -121,4 +120,4 @@ def read_hdf5(
         ][:].T
         istart += npart_grp_array[i]
 
-    return position, velocity
+    return position.astype(np.float32), velocity.astype(np.float32)
