@@ -70,7 +70,7 @@ def pm(
     if param["poisson_solver"].casefold() == "mg".casefold():
         potential = multigrid(potential, rhs, h, param)
     elif param["poisson_solver"].casefold() == "fft".casefold():
-        potential = fft(rhs, h, param)
+        potential = fft(rhs, param)
     elif param["poisson_solver"].casefold() == "cg".casefold():
         potential = conjugate_gradient(potential, rhs, h, param)
     elif param["poisson_solver"].casefold() == "sd".casefold():
@@ -119,41 +119,19 @@ def multigrid(
         param["tolerance"] = param["epsrel"] * mesh.truncation_error(rhs)
 
     # Main procedure: Multigrid
-    if param["n_cycles_F"] == 0:
-        func_cycle = mesh.V_cycle
-    else:
-        func_cycle = mesh.F_cycle
-    func_cycle = mesh.V_cycle
-    # n_V_cycles = 0
+    # Start with one Cycle
     for _ in range(param["n_cycles_max"]):
-        if _ >= param["n_cycles_F"]:
-            func_cycle = mesh.V_cycle
-        print(f"{func_cycle.__name__}")
-        # if "V_cycle".casefold() in func_cycle.__name__.casefold():
-        #    n_V_cycles += 1
-        potential = func_cycle(x, rhs, 0, param)
+        potential = mesh.V_cycle(x, rhs, 0, param)
         residual_error = mesh.residual_error_half(potential, rhs, h)
-        print(
-            f"{residual_error=} {param['tolerance']=} {param['n_cycles_F']=} {param['n_cycles_V']=}"
-        )
+        print(f"{residual_error=} {param['tolerance']=}")
         if residual_error < param["tolerance"]:
             break
-        """# Except for the first case, try to use V or F cycles efficiently
-        if param["nsteps"] == 0:
-            continue
-        # If n_cycles_V is not enough, add one
-        if n_V_cycles >= (param["n_cycles_V"]):
-            param["n_cycles_V"] = n_V_cycles + 1
-            # If we reach 3 V cycles, switch F cycles
-            if param["n_cycles_V"] >= 3 - param["n_cycles_F"]:
-                param["n_cycles_V"] = 0
-                param["n_cycles_F"] += 1"""
+        # If not enough, continue with V cycles
     return potential
 
 
-def fft(
-    rhs: npt.NDArray[np.float32], h: np.float32, param: pd.Series
-) -> npt.NDArray[np.float32]:
+@utils.time_me
+def fft(rhs: npt.NDArray[np.float32], param: pd.Series) -> npt.NDArray[np.float32]:
     """Compute FFT
 
     Args:
@@ -212,7 +190,7 @@ def conjugate_gradient(
     d = r
     rrold = np.dot(r, r)
 
-    if param["tolerance"] == 0:
+    if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
         param["tolerance"] = param["epsrel"] * np.sqrt(rrold)
 
     for i in range(Nmax):
@@ -265,7 +243,7 @@ def steepest_descent(
     r = mesh.residual(x, rhs, h).ravel()
     rr = np.dot(np.transpose(r), r)
 
-    if param["tolerance"] == 0:
+    if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
         param["tolerance"] = param["epsrel"] * np.sqrt(rr)
 
     for i in range(Nmax):
