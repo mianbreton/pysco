@@ -20,10 +20,6 @@ def run(param):
     # Debug verbose
     if param["DEBUG"].casefold() == "True".casefold():
         logging.basicConfig(level=logging.DEBUG)
-
-    if param["poisson_solver"].casefold() == "mg".casefold():
-        param["n_cycles_V"] = 1  # Start with V cycle
-        param["n_cycles_F"] = 0  # Start without F cycles
     ###################################################
     # Get cosmological table
     logging.debug("Get table...")
@@ -57,7 +53,7 @@ def run(param):
         if param["nsteps"] % param["n_reorder"] == 0:
             print("Reordering particles")
             utils.reorder_particles(position, velocity, acceleration)
-        if param["aexp"] > aexp_out[i_snap - 1]:
+        if param["aexp"] >= aexp_out[i_snap - 1]:
             snap_name = f"{param['base']}/output_{i_snap:05d}/particles.parquet"
             print(f"Write snapshot...{snap_name=} {param['aexp']=}")
             utils.write_snapshot_particles_parquet(f"{snap_name}", position, velocity)

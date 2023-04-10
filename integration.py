@@ -43,6 +43,9 @@ def integrate(
     dt2 = dt_CFL_maxvel(velocity, param)
     dt3 = dt_weak_variation(tables[1], param)
     dt = np.min([dt1, dt2, dt3])
+    # Finish at z = 0 exactly
+    if (param["t"] + dt) > 0:
+        dt = -param["t"]
     logging.debug(f"{dt1=} {dt2=} {dt3=}")
     # Integrate
     if param.integrator == "leapfrog":
@@ -67,8 +70,20 @@ def euler(
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
 ]:
-    """
-    Euler integrator
+    """Euler integrator
+
+    Args:
+        position (npt.NDArray[np.float32]): Positions [3, N_part]
+        velocity (npt.NDArray[np.float32]): Velocities [3, N_part]
+        acceleration (npt.NDArray[np.float32]): Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
+        potential (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+        dt (np.float32): Time step
+        tables list[interp1d]: Interpolated functions [a(t), t(a), Dplus(a)]
+        param (pd.Series): Parameter container
+
+    Returns:
+        tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]:
+        position, velocity, acceleration, potential [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     # Drift
     utils.add_vector_scalar_inplace(position, velocity, dt)
@@ -100,8 +115,20 @@ def leapfrog(
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
 ]:
-    """
-    Leapfrog integrator
+    """Leapfrog integrator
+
+    Args:
+        position (npt.NDArray[np.float32]): Positions [3, N_part]
+        velocity (npt.NDArray[np.float32]): Velocities [3, N_part]
+        acceleration (npt.NDArray[np.float32]): Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
+        potential (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+        dt (np.float32): Time step
+        tables list[interp1d]: Interpolated functions [a(t), t(a), Dplus(a)]
+        param (pd.Series): Parameter container
+
+    Returns:
+        tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]:
+        position, velocity, acceleration, potential [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     half_dt = np.float32(0.5 * dt)
     # Kick
@@ -113,6 +140,7 @@ def leapfrog(
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
     param["aexp"] = tables[0](param["t"])
+    print(f"{param['t']=} {param['aexp']=}")
     utils.set_units(param)
     # Periodic boundary conditions
     utils.periodic_wrap(position)

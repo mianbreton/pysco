@@ -1136,6 +1136,7 @@ def truncation_error(b: npt.NDArray[np.float32]) -> np.float32:
     return np.sqrt(truncation)
 
 
+@utils.time_me
 def V_cycle(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -1170,6 +1171,7 @@ def V_cycle(
     return x
 
 
+@utils.time_me
 def F_cycle(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -1219,6 +1221,7 @@ def F_cycle(
     return x
 
 
+@utils.time_me
 def W_cycle(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -1270,7 +1273,7 @@ def W_cycle(
 
 
 @njit(fastmath=True, cache=True, parallel=True)
-def derivative(
+def derivative2(
     a: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
     """Spatial derivatives of a scalar field on a grid \\
@@ -1303,7 +1306,7 @@ def derivative(
 
 
 @njit(fastmath=True, cache=True, parallel=True)
-def derivative4(
+def derivative(
     a: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
     """Spatial derivatives of a scalar field on a grid
@@ -1473,6 +1476,15 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
         wx_p1 = half * (half + dx) ** 2
         wy_p1 = half * (half + dy) ** 2
         wz_p1 = half * (half + dz) ** 2
+        wx_m1_y_m1 = wx_m1 * wy_m1
+        wx_m1_y = wx_m1 * wy
+        wx_m1_y_p1 = wx_m1 * wy_p1
+        wx_y_m1 = wx * wy_m1
+        wx_y = wx * wy
+        wx_y_p1 = wx * wy_p1
+        wx_p1_y_m1 = wx_p1 * wy_m1
+        wx_p1_y = wx_p1 * wy
+        wx_p1_y_p1 = wx_p1 * wy_p1
         # Get other indices
         i_m1 = i - one
         j_m1 = j - one
@@ -1481,33 +1493,33 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
         j_p1 = j - ncells_1d_m1
         k_p1 = k - ncells_1d_m1
         # 27 neighbours
-        result[i_m1, j_m1, k_m1] += wx_m1 * wy_m1 * wz_m1
-        result[i_m1, j_m1, k] += wx_m1 * wy_m1 * wz
-        result[i_m1, j_m1, k_p1] += wx_m1 * wy_m1 * wz_p1
-        result[i_m1, j, k_m1] += wx_m1 * wy * wz_m1
-        result[i_m1, j, k] += wx_m1 * wy * wz
-        result[i_m1, j, k_p1] += wx_m1 * wy * wz_p1
-        result[i_m1, j_p1, k_m1] += wx_m1 * wy_p1 * wz_m1
-        result[i_m1, j_p1, k] += wx_m1 * wy_p1 * wz
-        result[i_m1, j_p1, k_p1] += wx_m1 * wy_p1 * wz_p1
-        result[i, j_m1, k_m1] += wx * wy_m1 * wz_m1
-        result[i, j_m1, k] += wx * wy_m1 * wz
-        result[i, j_m1, k_p1] += wx * wy_m1 * wz_p1
-        result[i, j, k_m1] += wx * wy * wz_m1
-        result[i, j, k] += wx * wy * wz
-        result[i, j, k_p1] += wx * wy * wz_p1
-        result[i, j_p1, k_m1] += wx * wy_p1 * wz_m1
-        result[i, j_p1, k] += wx * wy_p1 * wz
-        result[i, j_p1, k_p1] += wx * wy_p1 * wz_p1
-        result[i_p1, j_m1, k_m1] += wx_p1 * wy_m1 * wz_m1
-        result[i_p1, j_m1, k] += wx_p1 * wy_m1 * wz
-        result[i_p1, j_m1, k_p1] += wx_p1 * wy_m1 * wz_p1
-        result[i_p1, j, k_m1] += wx_p1 * wy * wz_m1
-        result[i_p1, j, k] += wx_p1 * wy * wz
-        result[i_p1, j, k_p1] += wx_p1 * wy * wz_p1
-        result[i_p1, j_p1, k_m1] += wx_p1 * wy_p1 * wz_m1
-        result[i_p1, j_p1, k] += wx_p1 * wy_p1 * wz
-        result[i_p1, j_p1, k_p1] += wx_p1 * wy_p1 * wz_p1
+        result[i_m1, j_m1, k_m1] += wx_m1_y_m1 * wz_m1
+        result[i_m1, j_m1, k] += wx_m1_y_m1 * wz
+        result[i_m1, j_m1, k_p1] += wx_m1_y_m1 * wz_p1
+        result[i_m1, j, k_m1] += wx_m1_y * wz_m1
+        result[i_m1, j, k] += wx_m1_y * wz
+        result[i_m1, j, k_p1] += wx_m1_y * wz_p1
+        result[i_m1, j_p1, k_m1] += wx_m1_y_p1 * wz_m1
+        result[i_m1, j_p1, k] += wx_m1_y_p1 * wz
+        result[i_m1, j_p1, k_p1] += wx_m1_y_p1 * wz_p1
+        result[i, j_m1, k_m1] += wx_y_m1 * wz_m1
+        result[i, j_m1, k] += wx_y_m1 * wz
+        result[i, j_m1, k_p1] += wx_y_m1 * wz_p1
+        result[i, j, k_m1] += wx_y * wz_m1
+        result[i, j, k] += wx_y * wz
+        result[i, j, k_p1] += wx_y * wz_p1
+        result[i, j_p1, k_m1] += wx_y_p1 * wz_m1
+        result[i, j_p1, k] += wx_y_p1 * wz
+        result[i, j_p1, k_p1] += wx_y_p1 * wz_p1
+        result[i_p1, j_m1, k_m1] += wx_p1_y_m1 * wz_m1
+        result[i_p1, j_m1, k] += wx_p1_y_m1 * wz
+        result[i_p1, j_m1, k_p1] += wx_p1_y_m1 * wz_p1
+        result[i_p1, j, k_m1] += wx_p1_y * wz_m1
+        result[i_p1, j, k] += wx_p1_y * wz
+        result[i_p1, j, k_p1] += wx_p1_y * wz_p1
+        result[i_p1, j_p1, k_m1] += wx_p1_y_p1 * wz_m1
+        result[i_p1, j_p1, k] += wx_p1_y_p1 * wz
+        result[i_p1, j_p1, k_p1] += wx_p1_y_p1 * wz_p1
     return result
 
 
@@ -1737,6 +1749,42 @@ def invTSC(
         wx_p1 = half * (half + dx) ** 2
         wy_p1 = half * (half + dy) ** 2
         wz_p1 = half * (half + dz) ** 2
+        wx_m1_y_m1 = wx_m1 * wy_m1
+        wx_m1_y = wx_m1 * wy
+        wx_m1_y_p1 = wx_m1 * wy_p1
+        wx_y_m1 = wx * wy_m1
+        wx_y = wx * wy
+        wx_y_p1 = wx * wy_p1
+        wx_p1_y_m1 = wx_p1 * wy_m1
+        wx_p1_y = wx_p1 * wy
+        wx_p1_y_p1 = wx_p1 * wy_p1
+        wx_m1_y_m1_z_m1 = wx_m1_y_m1 * wz_m1
+        wx_m1_y_m1_z = wx_m1_y_m1 * wz
+        wx_m1_y_m1_z_p1 = wx_m1_y_m1 * wz_p1
+        wx_m1_y_z_m1 = wx_m1_y * wz_m1
+        wx_m1_y_z = wx_m1_y * wz
+        wx_m1_y_z_p1 = wx_m1_y * wz_p1
+        wx_m1_y_p1_z_m1 = wx_m1_y_p1 * wz_m1
+        wx_m1_y_p1_z = wx_m1_y_p1 * wz
+        wx_m1_y_p1_z_p1 = wx_m1_y_p1 * wz_p1
+        wx_y_m1_z_m1 = wx_y_m1 * wz_m1
+        wx_y_m1_z = wx_y_m1 * wz
+        wx_y_m1_z_p1 = wx_y_m1 * wz_p1
+        wx_y_z_m1 = wx_y * wz_m1
+        wx_y_z = wx_y * wz
+        wx_y_z_p1 = wx_y * wz_p1
+        wx_y_p1_z_m1 = wx_y_p1 * wz_m1
+        wx_y_p1_z = wx_y_p1 * wz
+        wx_y_p1_z_p1 = wx_y_p1 * wz_p1
+        wx_p1_y_m1_z_m1 = wx_p1_y_m1 * wz_m1
+        wx_p1_y_m1_z = wx_p1_y_m1 * wz
+        wx_p1_y_m1_z_p1 = wx_p1_y_m1 * wz_p1
+        wx_p1_y_z_m1 = wx_p1_y * wz_m1
+        wx_p1_y_z = wx_p1_y * wz
+        wx_p1_y_z_p1 = wx_p1_y * wz_p1
+        wx_p1_y_p1_z_m1 = wx_p1_y_p1 * wz_m1
+        wx_p1_y_p1_z = wx_p1_y_p1 * wz
+        wx_p1_y_p1_z_p1 = wx_p1_y_p1 * wz_p1
         # Get other indices
         i_m1 = i - one
         j_m1 = j - one
@@ -1744,35 +1792,36 @@ def invTSC(
         i_p1 = i - ncells_1d_m1
         j_p1 = j - ncells_1d_m1
         k_p1 = k - ncells_1d_m1
+        # Weights
         # 27 neighbours
         result[n] = (
-            wx_m1 * wy_m1 * wz_m1 * grid[i_m1, j_m1, k_m1]
-            + wx_m1 * wy_m1 * wz * grid[i_m1, j_m1, k]
-            + wx_m1 * wy_m1 * wz_p1 * grid[i_m1, j_m1, k_p1]
-            + wx_m1 * wy * wz_m1 * grid[i_m1, j, k_m1]
-            + wx_m1 * wy * wz * grid[i_m1, j, k]
-            + wx_m1 * wy * wz_p1 * grid[i_m1, j, k_p1]
-            + wx_m1 * wy_p1 * wz_m1 * grid[i_m1, j_p1, k_m1]
-            + wx_m1 * wy_p1 * wz * grid[i_m1, j_p1, k]
-            + wx_m1 * wy_p1 * wz_p1 * grid[i_m1, j_p1, k_p1]
-            + wx * wy_m1 * wz_m1 * grid[i, j_m1, k_m1]
-            + wx * wy_m1 * wz * grid[i, j_m1, k]
-            + wx * wy_m1 * wz_p1 * grid[i, j_m1, k_p1]
-            + wx * wy * wz_m1 * grid[i, j, k_m1]
-            + wx * wy * wz * grid[i, j, k]
-            + wx * wy * wz_p1 * grid[i, j, k_p1]
-            + wx * wy_p1 * wz_m1 * grid[i, j_p1, k_m1]
-            + wx * wy_p1 * wz * grid[i, j_p1, k]
-            + wx * wy_p1 * wz_p1 * grid[i, j_p1, k_p1]
-            + wx_p1 * wy_m1 * wz_m1 * grid[i_p1, j_m1, k_m1]
-            + wx_p1 * wy_m1 * wz * grid[i_p1, j_m1, k]
-            + wx_p1 * wy_m1 * wz_p1 * grid[i_p1, j_m1, k_p1]
-            + wx_p1 * wy * wz_m1 * grid[i_p1, j, k_m1]
-            + wx_p1 * wy * wz * grid[i_p1, j, k]
-            + wx_p1 * wy * wz_p1 * grid[i_p1, j, k_p1]
-            + wx_p1 * wy_p1 * wz_m1 * grid[i_p1, j_p1, k_m1]
-            + wx_p1 * wy_p1 * wz * grid[i_p1, j_p1, k]
-            + wx_p1 * wy_p1 * wz_p1 * grid[i_p1, j_p1, k_p1]
+            wx_m1_y_m1_z_m1 * grid[i_m1, j_m1, k_m1]
+            + wx_m1_y_m1_z * grid[i_m1, j_m1, k]
+            + wx_m1_y_m1_z_p1 * grid[i_m1, j_m1, k_p1]
+            + wx_m1_y_z_m1 * grid[i_m1, j, k_m1]
+            + wx_m1_y_z * grid[i_m1, j, k]
+            + wx_m1_y_z_p1 * grid[i_m1, j, k_p1]
+            + wx_m1_y_p1_z_m1 * grid[i_m1, j_p1, k_m1]
+            + wx_m1_y_p1_z * grid[i_m1, j_p1, k]
+            + wx_m1_y_p1_z_p1 * grid[i_m1, j_p1, k_p1]
+            + wx_y_m1_z_m1 * grid[i, j_m1, k_m1]
+            + wx_y_m1_z * grid[i, j_m1, k]
+            + wx_y_m1_z_p1 * grid[i, j_m1, k_p1]
+            + wx_y_z_m1 * grid[i, j, k_m1]
+            + wx_y_z * grid[i, j, k]
+            + wx_y_z_p1 * grid[i, j, k_p1]
+            + wx_y_p1_z_m1 * grid[i, j_p1, k_m1]
+            + wx_y_p1_z * grid[i, j_p1, k]
+            + wx_y_p1_z_p1 * grid[i, j_p1, k_p1]
+            + wx_p1_y_m1_z_m1 * grid[i_p1, j_m1, k_m1]
+            + wx_p1_y_m1_z * grid[i_p1, j_m1, k]
+            + wx_p1_y_m1_z_p1 * grid[i_p1, j_m1, k_p1]
+            + wx_p1_y_z_m1 * grid[i_p1, j, k_m1]
+            + wx_p1_y_z * grid[i_p1, j, k]
+            + wx_p1_y_z_p1 * grid[i_p1, j, k_p1]
+            + wx_p1_y_p1_z_m1 * grid[i_p1, j_p1, k_m1]
+            + wx_p1_y_p1_z * grid[i_p1, j_p1, k]
+            + wx_p1_y_p1_z_p1 * grid[i_p1, j_p1, k_p1]
         )
     return result
 
@@ -1823,6 +1872,42 @@ def invTSC_vec(
         wx_p1 = half * (half + dx) ** 2
         wy_p1 = half * (half + dy) ** 2
         wz_p1 = half * (half + dz) ** 2
+        wx_m1_y_m1 = wx_m1 * wy_m1
+        wx_m1_y = wx_m1 * wy
+        wx_m1_y_p1 = wx_m1 * wy_p1
+        wx_y_m1 = wx * wy_m1
+        wx_y = wx * wy
+        wx_y_p1 = wx * wy_p1
+        wx_p1_y_m1 = wx_p1 * wy_m1
+        wx_p1_y = wx_p1 * wy
+        wx_p1_y_p1 = wx_p1 * wy_p1
+        wx_m1_y_m1_z_m1 = wx_m1_y_m1 * wz_m1
+        wx_m1_y_m1_z = wx_m1_y_m1 * wz
+        wx_m1_y_m1_z_p1 = wx_m1_y_m1 * wz_p1
+        wx_m1_y_z_m1 = wx_m1_y * wz_m1
+        wx_m1_y_z = wx_m1_y * wz
+        wx_m1_y_z_p1 = wx_m1_y * wz_p1
+        wx_m1_y_p1_z_m1 = wx_m1_y_p1 * wz_m1
+        wx_m1_y_p1_z = wx_m1_y_p1 * wz
+        wx_m1_y_p1_z_p1 = wx_m1_y_p1 * wz_p1
+        wx_y_m1_z_m1 = wx_y_m1 * wz_m1
+        wx_y_m1_z = wx_y_m1 * wz
+        wx_y_m1_z_p1 = wx_y_m1 * wz_p1
+        wx_y_z_m1 = wx_y * wz_m1
+        wx_y_z = wx_y * wz
+        wx_y_z_p1 = wx_y * wz_p1
+        wx_y_p1_z_m1 = wx_y_p1 * wz_m1
+        wx_y_p1_z = wx_y_p1 * wz
+        wx_y_p1_z_p1 = wx_y_p1 * wz_p1
+        wx_p1_y_m1_z_m1 = wx_p1_y_m1 * wz_m1
+        wx_p1_y_m1_z = wx_p1_y_m1 * wz
+        wx_p1_y_m1_z_p1 = wx_p1_y_m1 * wz_p1
+        wx_p1_y_z_m1 = wx_p1_y * wz_m1
+        wx_p1_y_z = wx_p1_y * wz
+        wx_p1_y_z_p1 = wx_p1_y * wz_p1
+        wx_p1_y_p1_z_m1 = wx_p1_y_p1 * wz_m1
+        wx_p1_y_p1_z = wx_p1_y_p1 * wz
+        wx_p1_y_p1_z_p1 = wx_p1_y_p1 * wz_p1
         # Get other indices
         i_m1 = i - one
         j_m1 = j - one
@@ -1833,32 +1918,32 @@ def invTSC_vec(
         for m in prange(grid.shape[0]):
             # 27 neighbours
             result[m, n] = (
-                wx_m1 * wy_m1 * wz_m1 * grid[m, i_m1, j_m1, k_m1]
-                + wx_m1 * wy_m1 * wz * grid[m, i_m1, j_m1, k]
-                + wx_m1 * wy_m1 * wz_p1 * grid[m, i_m1, j_m1, k_p1]
-                + wx_m1 * wy * wz_m1 * grid[m, i_m1, j, k_m1]
-                + wx_m1 * wy * wz * grid[m, i_m1, j, k]
-                + wx_m1 * wy * wz_p1 * grid[m, i_m1, j, k_p1]
-                + wx_m1 * wy_p1 * wz_m1 * grid[m, i_m1, j_p1, k_m1]
-                + wx_m1 * wy_p1 * wz * grid[m, i_m1, j_p1, k]
-                + wx_m1 * wy_p1 * wz_p1 * grid[m, i_m1, j_p1, k_p1]
-                + wx * wy_m1 * wz_m1 * grid[m, i, j_m1, k_m1]
-                + wx * wy_m1 * wz * grid[m, i, j_m1, k]
-                + wx * wy_m1 * wz_p1 * grid[m, i, j_m1, k_p1]
-                + wx * wy * wz_m1 * grid[m, i, j, k_m1]
-                + wx * wy * wz * grid[m, i, j, k]
-                + wx * wy * wz_p1 * grid[m, i, j, k_p1]
-                + wx * wy_p1 * wz_m1 * grid[m, i, j_p1, k_m1]
-                + wx * wy_p1 * wz * grid[m, i, j_p1, k]
-                + wx * wy_p1 * wz_p1 * grid[m, i, j_p1, k_p1]
-                + wx_p1 * wy_m1 * wz_m1 * grid[m, i_p1, j_m1, k_m1]
-                + wx_p1 * wy_m1 * wz * grid[m, i_p1, j_m1, k]
-                + wx_p1 * wy_m1 * wz_p1 * grid[m, i_p1, j_m1, k_p1]
-                + wx_p1 * wy * wz_m1 * grid[m, i_p1, j, k_m1]
-                + wx_p1 * wy * wz * grid[m, i_p1, j, k]
-                + wx_p1 * wy * wz_p1 * grid[m, i_p1, j, k_p1]
-                + wx_p1 * wy_p1 * wz_m1 * grid[m, i_p1, j_p1, k_m1]
-                + wx_p1 * wy_p1 * wz * grid[m, i_p1, j_p1, k]
-                + wx_p1 * wy_p1 * wz_p1 * grid[m, i_p1, j_p1, k_p1]
+                wx_m1_y_m1_z_m1 * grid[m, i_m1, j_m1, k_m1]
+                + wx_m1_y_m1_z * grid[m, i_m1, j_m1, k]
+                + wx_m1_y_m1_z_p1 * grid[m, i_m1, j_m1, k_p1]
+                + wx_m1_y_z_m1 * grid[m, i_m1, j, k_m1]
+                + wx_m1_y_z * grid[m, i_m1, j, k]
+                + wx_m1_y_z_p1 * grid[m, i_m1, j, k_p1]
+                + wx_m1_y_p1_z_m1 * grid[m, i_m1, j_p1, k_m1]
+                + wx_m1_y_p1_z * grid[m, i_m1, j_p1, k]
+                + wx_m1_y_p1_z_p1 * grid[m, i_m1, j_p1, k_p1]
+                + wx_y_m1_z_m1 * grid[m, i, j_m1, k_m1]
+                + wx_y_m1_z * grid[m, i, j_m1, k]
+                + wx_y_m1_z_p1 * grid[m, i, j_m1, k_p1]
+                + wx_y_z_m1 * grid[m, i, j, k_m1]
+                + wx_y_z * grid[m, i, j, k]
+                + wx_y_z_p1 * grid[m, i, j, k_p1]
+                + wx_y_p1_z_m1 * grid[m, i, j_p1, k_m1]
+                + wx_y_p1_z * grid[m, i, j_p1, k]
+                + wx_y_p1_z_p1 * grid[m, i, j_p1, k_p1]
+                + wx_p1_y_m1_z_m1 * grid[m, i_p1, j_m1, k_m1]
+                + wx_p1_y_m1_z * grid[m, i_p1, j_m1, k]
+                + wx_p1_y_m1_z_p1 * grid[m, i_p1, j_m1, k_p1]
+                + wx_p1_y_z_m1 * grid[m, i_p1, j, k_m1]
+                + wx_p1_y_z * grid[m, i_p1, j, k]
+                + wx_p1_y_z_p1 * grid[m, i_p1, j, k_p1]
+                + wx_p1_y_p1_z_m1 * grid[m, i_p1, j_p1, k_m1]
+                + wx_p1_y_p1_z * grid[m, i_p1, j_p1, k]
+                + wx_p1_y_p1_z_p1 * grid[m, i_p1, j_p1, k_p1]
             )
     return result
