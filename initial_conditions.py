@@ -103,8 +103,8 @@ def read_hdf5(
     utils.set_units(param)
     # Get positions
     npart = int(f["metadata/npart_file"][:])
-    position = np.empty((3, npart))
-    velocity = np.empty_like(position)
+    position = np.empty((3, npart), dtype=np.float32)
+    velocity = np.empty_like(position, dtype=np.float32)
     npart_grp_array = f["metadata/npart_grp_array"][:]
 
     print(f"{npart=}")

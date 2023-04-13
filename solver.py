@@ -119,15 +119,14 @@ def multigrid(
         param["tolerance"] = param["epsrel"] * mesh.truncation_error(rhs)
 
     # Main procedure: Multigrid
-    # Start with one Cycle
     for _ in range(param["n_cycles_max"]):
-        potential = mesh.V_cycle(x, rhs, 0, param)
-        residual_error = mesh.residual_error_half(potential, rhs, h)
+        mesh.V_cycle(x, rhs, 0, param)
+        residual_error = mesh.residual_error_half(x, rhs, h)
         print(f"{residual_error=} {param['tolerance']=}")
         if residual_error < param["tolerance"]:
             break
         # If not enough, continue with V cycles
-    return potential
+    return x
 
 
 @utils.time_me
@@ -142,7 +141,7 @@ def fft(rhs: npt.NDArray[np.float32], param: pd.Series) -> npt.NDArray[np.float3
     Returns:
         npt.NDArray[np.float32]: Potential [N_cells_1d, N_cells_1d,N_cells_1d]
     """
-    # TODO: Rewrite with pyFFTw
+    # TODO: Rewrite with pyFFTW
     logging.debug("In fft")
     # TO DO: - Only compute invk2 once...
     # FFT

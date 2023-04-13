@@ -22,7 +22,7 @@ def laplacian(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float
         npt.NDArray[np.float32]: Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
     """
 
-    invh2 = np.float32(1.0 / h**2)
+    invh2 = np.float32(h ** (-2))
     six = np.float32(6)
     # Initialise mesh
     result = np.empty((x.shape[0], x.shape[1], x.shape[2]), dtype=np.float32)
@@ -69,7 +69,7 @@ def residual(
     Returns:
         npt.NDArray[np.float32]: Residual of Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
     """
-    invh2 = np.float32(1.0 / h**2)
+    invh2 = np.float32(h ** (-2))
     six = np.float32(6)
     # Initialise mesh
     result = np.empty((x.shape[0], x.shape[1], x.shape[2]), dtype=np.float32)
@@ -1154,20 +1154,19 @@ def V_cycle(
     b: npt.NDArray[np.float32],
     nlevel: int,
     params: pd.Series,
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Multigrid V cycle
 
     Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+        x (npt.NDArray[np.float32]): Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
         b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
         nlevel (int): Grid level
         params (pd.Series): Parameter container
 
-    Returns:
-        npt.NDArray[np.float32]: Corrected Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     logging.debug("In V_cycle")
-    h = 1.0 / 2 ** (params["ncoarse"] - nlevel)
+    h = np.float32(0.5 ** (params["ncoarse"] - nlevel))
+    two = np.float32(2)
     smoothing(x, b, h, params["Npre"])
     res_c = restric_residual_half(x, b, h)
     # Compute correction to solution at coarser level
@@ -1175,12 +1174,11 @@ def V_cycle(
     x_corr_c = np.zeros_like(res_c)
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"])
     else:
-        x_corr_c = V_cycle(x_corr_c, res_c, nlevel + 1, params)
+        V_cycle(x_corr_c, res_c, nlevel + 1, params)
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npost"])
-    return x
 
 
 @utils.time_me
@@ -1189,20 +1187,18 @@ def F_cycle(
     b: npt.NDArray[np.float32],
     nlevel: int,
     params: pd.Series,
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Multigrid F cycle
 
     Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+        x (npt.NDArray[np.float32]): Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
         b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
         nlevel (int): Grid level
         params (pd.Series): Parameter container
 
-    Returns:
-        npt.NDArray[np.float32]: Corrected Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     logging.debug("In F_cycle")
-    h = 1.0 / 2 ** (params["ncoarse"] - nlevel)
+    h = 0.5 ** (params["ncoarse"] - nlevel)
     smoothing(x, b, h, params["Npre"])
     res_c = restric_residual_half(x, b, h)
     # Compute correction to solution at coarser level
@@ -1212,7 +1208,7 @@ def F_cycle(
     if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
-        x_corr_c = F_cycle(x_corr_c, res_c, nlevel + 1, params)
+        F_cycle(x_corr_c, res_c, nlevel + 1, params)
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npre"])
 
@@ -1226,11 +1222,9 @@ def F_cycle(
     if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
-        x_corr_c = V_cycle(x_corr_c, res_c, nlevel + 1, params)  # Careful, V_cycle here
+        V_cycle(x_corr_c, res_c, nlevel + 1, params)  # Careful, V_cycle here
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npost"])
-
-    return x
 
 
 @utils.time_me
@@ -1239,20 +1233,18 @@ def W_cycle(
     b: npt.NDArray[np.float32],
     nlevel: int,
     params: pd.Series,
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Multigrid W cycle
 
     Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+        x (npt.NDArray[np.float32]): Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
         b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
         nlevel (int): Grid level
         params (pd.Series): Parameter container
 
-    Returns:
-        npt.NDArray[np.float32]: Corrected Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     logging.debug("In W_cycle")
-    h = 1.0 / 2 ** (params["ncoarse"] - nlevel)  # nlevel = 0 is coarse level
+    h = 0.5 ** (params["ncoarse"] - nlevel)  # nlevel = 0 is coarse level
     smoothing(x, b, h, params["Npre"])
     res_c = restric_residual_half(x, b, h)
 
@@ -1263,7 +1255,7 @@ def W_cycle(
     if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
-        x_corr_c = W_cycle(x_corr_c, res_c, nlevel + 1, params)
+        W_cycle(x_corr_c, res_c, nlevel + 1, params)
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npre"])
 
@@ -1277,11 +1269,9 @@ def W_cycle(
     if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
-        x_corr_c = W_cycle(x_corr_c, res_c, nlevel + 1, params)
+        W_cycle(x_corr_c, res_c, nlevel + 1, params)
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npre"])
-
-    return x
 
 
 @njit(["f4[:,:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
