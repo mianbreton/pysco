@@ -32,7 +32,7 @@ def time_me(func: callable) -> callable:
         t1 = perf_counter()
         result = func(*args, **kw)
         print(
-            f"Function {func.__name__:->40} took {perf_counter() - t1} seconds{'':{'-'}<{10}}"
+            f"Function {func.__name__:->40} took {perf_counter() - t1:.12f} seconds{'':{'-'}<{10}}"
         )
         return result
 
@@ -50,7 +50,6 @@ def profile_me(func: callable) -> callable:
     """
 
     def profiling_func(*args: int, **kw: int):
-
         import cProfile
         import pstats
 
@@ -319,8 +318,15 @@ def add_vector_scalar_inplace(
     """
     y_ravel = y.ravel()
     x_ravel = x.ravel()
-    for i in prange(y_ravel.shape[0]):
-        y_ravel[i] += a * x_ravel[i]
+    if a == 1:
+        for i in prange(y_ravel.shape[0]):
+            y_ravel[i] += x_ravel[i]
+    elif a == -1:
+        for i in prange(y_ravel.shape[0]):
+            y_ravel[i] -= x_ravel[i]
+    else:
+        for i in prange(y_ravel.shape[0]):
+            y_ravel[i] += a * x_ravel[i]
 
 
 @njit(fastmath=True, cache=True, parallel=True)

@@ -154,7 +154,7 @@ def keys_to_positions(keys: npt.NDArray[np.int64]) -> npt.NDArray[np.float32]:
         npt.NDArray[np.float32]: Position [3, N_part]
     """
     size = keys.shape[0]
-    positions = np.empty((3, size))
+    positions = np.empty((3, size), dtype=np.float32)
     for i in prange(size):
         key = keys[i]
         positions[0, i] = key_to_position(key >> 2)

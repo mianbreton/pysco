@@ -1169,14 +1169,25 @@ def V_cycle(
     two = np.float32(2)
     smoothing(x, b, h, params["Npre"])
     res_c = restric_residual_half(x, b, h)
+
     # Compute correction to solution at coarser level
-    # Initialise array (initial guess is no correction needed)
-    x_corr_c = np.zeros_like(res_c)
+    if params["theory"].casefold() != "newton".casefold():
+        # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
+        x_c = restriction(x)
+        x_corr_c = x_c.copy()
+        utils.add_vector_scalar_inplace(res_c, laplacian(x_c, 2 * h), np.float32(1))
+    else:
+        # Initialise array to zero because we solve the error field for linear Poisson equation
+        x_corr_c = np.zeros_like(res_c)
+
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, two * h, params["Npre"])
     else:
         V_cycle(x_corr_c, res_c, nlevel + 1, params)
+
+    if params["theory"].casefold() != "newton".casefold():
+        utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npost"])
 
@@ -1202,27 +1213,43 @@ def F_cycle(
     smoothing(x, b, h, params["Npre"])
     res_c = restric_residual_half(x, b, h)
     # Compute correction to solution at coarser level
-    # Initialise array (initial guess is no correction needed)
-    x_corr_c = np.zeros_like(res_c)
+    if params["theory"].casefold() != "newton".casefold():
+        # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
+        x_c = restriction(x)
+        x_corr_c = x_c.copy()
+        utils.add_vector_scalar_inplace(res_c, laplacian(x_c, 2 * h), np.float32(1))
+    else:
+        # Initialise array to zero because we solve the error field for linear Poisson equation
+        x_corr_c = np.zeros_like(res_c)
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
         F_cycle(x_corr_c, res_c, nlevel + 1, params)
+    if params["theory"].casefold() != "newton".casefold():
+        utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npre"])
 
     ### Now compute again corrections (almost exactly same as the first part) ###
     res_c = restric_residual_half(x, b, h)
     # Compute correction to solution at coarser level
-    # Initialise array (initial guess is no correction needed)
-    x_corr_c = np.zeros_like(res_c)
+    if params["theory"].casefold() != "newton".casefold():
+        # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
+        x_c = restriction(x)
+        x_corr_c = x_c.copy()
+        utils.add_vector_scalar_inplace(res_c, laplacian(x_c, 2 * h), np.float32(1))
+    else:
+        # Initialise array to zero because we solve the error field for linear Poisson equation
+        x_corr_c = np.zeros_like(res_c)
 
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
         V_cycle(x_corr_c, res_c, nlevel + 1, params)  # Careful, V_cycle here
+    if params["theory"].casefold() != "newton".casefold():
+        utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npost"])
 
@@ -1249,27 +1276,43 @@ def W_cycle(
     res_c = restric_residual_half(x, b, h)
 
     # Compute correction to solution at coarser level
-    # Initialise array (initial guess is no correction needed)
-    x_corr_c = np.zeros_like(res_c)
+    if params["theory"].casefold() != "newton".casefold():
+        # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
+        x_c = restriction(x)
+        x_corr_c = x_c.copy()
+        utils.add_vector_scalar_inplace(res_c, laplacian(x_c, 2 * h), np.float32(1))
+    else:
+        # Initialise array to zero because we solve the error field for linear Poisson equation
+        x_corr_c = np.zeros_like(res_c)
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
         W_cycle(x_corr_c, res_c, nlevel + 1, params)
+    if params["theory"].casefold() != "newton".casefold():
+        utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npre"])
 
     ### Now compute again corrections (almost exactly same as the first part) ###
     res_c = restric_residual_half(x, b, h)
     # Compute correction to solution at coarser level
-    # Initialise array (initial guess is no correction needed)
-    x_corr_c = np.zeros_like(res_c)
+    if params["theory"].casefold() != "newton".casefold():
+        # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
+        x_c = restriction(x)
+        x_corr_c = x_c.copy()
+        utils.add_vector_scalar_inplace(res_c, laplacian(x_c, 2 * h), np.float32(1))
+    else:
+        # Initialise array to zero because we solve the error field for linear Poisson equation
+        x_corr_c = np.zeros_like(res_c)
 
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
     else:
         W_cycle(x_corr_c, res_c, nlevel + 1, params)
+    if params["theory"].casefold() != "newton".casefold():
+        utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npre"])
 
@@ -1307,6 +1350,7 @@ def derivative2(
     return result
 
 
+@utils.time_me
 @njit(["f4[:,:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
 def derivative(
     a: npt.NDArray[np.float32],
@@ -1439,6 +1483,7 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     return result
 
 
+@utils.time_me
 @njit(
     ["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=False
 )  # FIXME: NOT THREAD SAFE
@@ -1834,6 +1879,7 @@ def invTSC(
     return result
 
 
+@utils.time_me
 @njit(["f4[:,::1](f4[:,:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
 def invTSC_vec(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
@@ -1848,7 +1894,7 @@ def invTSC_vec(
     Returns:
         npt.NDArray[np.float32]: interpolated Field [3, N_part]
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid size
     ncells_1d_m1 = np.int16(ncells_1d - 1)
     one = np.int16(1)
     ncells_1d_f = np.float32(ncells_1d)
