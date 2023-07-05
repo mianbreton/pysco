@@ -3,20 +3,25 @@ import logging
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+from typing import Tuple
 
 import utils
 
 
 def generate(
     param: pd.Series,
-) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Generate initial conditions
 
-    Args:
-        param (pd.Series): Parameters
+    Parameters
+    ----------
+    param : pd.Series
+        Parameter container
 
-    Returns:
-        tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]: 3D position, velocity
+    Returns
+    -------
+    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+        Position, Velocity [3, Npart]
     """
     if param["initial_conditions"].casefold() == "random".casefold():
         position, velocity = random(param)
@@ -35,14 +40,18 @@ def generate(
     return position, velocity
 
 
-def random(param: pd.Series) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+def random(param: pd.Series) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Generate random initial conditions
 
-    Args:
-        param (pd.Series): Parameters containing "ncoarse" key
+    Parameters
+    ----------
+    param : pd.Series
+        Parameter container
 
-    Returns:
-        tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]: 3D position, velocity
+    Returns
+    -------
+    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+        Position, Velocity [3, Npart]
     """
     np.random.seed(42)  # set the random number generator seed
     npart = 8 ** param["ncoarse"]
@@ -54,14 +63,18 @@ def random(param: pd.Series) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.fl
     return position, velocity
 
 
-def sphere(param: pd.Series) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+def sphere(param: pd.Series) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Generate spherical initial conditions
 
-    Args:
-        param (pd.Series): Parameters containing "ncoarse" key
+    Parameters
+    ----------
+    param : pd.Series
+        Parameter container
 
-    Returns:
-        tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]: 3D position, velocity
+    Returns
+    -------
+    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+        Position, Velocity [3, Npart]
     """
     logging.debug("Spherical initial conditions")
     np.random.seed(42)  # set the random number generator seed
@@ -78,19 +91,23 @@ def sphere(param: pd.Series) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.fl
     utils.periodic_wrap(x)
     utils.periodic_wrap(y)
     utils.periodic_wrap(z)
-    return np.vstack([x, y, z]), np.zeros((3, npart))
+    return (np.vstack([x, y, z]), np.zeros((3, npart)))
 
 
 def read_hdf5(
     param: pd.Series,
-) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Read initial conditions from HDF5 Ramses snapshot
 
-    Args:
-        param (pd.Series): Parameters, will be modified for "aexp" key
+    Parameters
+    ----------
+    param : pd.Series
+        Parameter container
 
-    Returns:
-        tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]: 3D position, velocity
+    Returns
+    -------
+    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+        Position, Velocity [3, Npart]
     """
     import h5py
 
@@ -99,7 +116,7 @@ def read_hdf5(
     f = h5py.File(param["initial_conditions"], "r")
     # Get scale factor
     param["aexp"] = f["metadata/ramses_info"].attrs["aexp"][0]
-    print(f"Initial redshift snapshot {1./param['aexp'] - 1}")
+    print(f"Initial redshift snapshot at z = {1./param['aexp'] - 1}")
     utils.set_units(param)
     # Get positions
     npart = int(f["metadata/npart_file"][:])
@@ -111,7 +128,7 @@ def read_hdf5(
     data = f["data"]
     istart = 0
     for i in range(npart_grp_array.shape[0]):
-        name = "group" + str(i + 1).zfill(8)
+        name = f"group{(i + 1):08d}"
         position[:, istart : istart + npart_grp_array[i]] = data[
             name + "/position_part"
         ][:].T
@@ -120,4 +137,4 @@ def read_hdf5(
         ][:].T
         istart += npart_grp_array[i]
 
-    return position.astype(np.float32), velocity.astype(np.float32)
+    return position, velocity

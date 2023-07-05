@@ -17,6 +17,7 @@
 # https://www.vision-tools.com/h-tropf/multidimensionalrangequery.pdf
 
 import math
+from typing import Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -35,7 +36,9 @@ _YZ_MASK = _Y_MASK | _Z_MASK
 @njit(fastmath=True, cache=True)
 def interleaving_64bits(
     x: np.int64,
-) -> np.int64:  # Return 64-bits integer, x is 21-bits integer (even if int32 or int64...)
+) -> (
+    np.int64
+):  # Return 64-bits integer, x is 21-bits integer (even if int32 or int64...)
     """Interleaves 21-bits integer into 64-bits
     Takes an integer which represents the position in 21 bits. \\
     For example: let x, a float between 0 and 1. The 21-bits integer equivalent will be x_i = x* 2^21 \\
@@ -45,11 +48,15 @@ def interleaving_64bits(
     x_i = 3 = 11  will be interleaved as    100100 \\
     x_i = 4 = 100 will be interleaved as 100000000
 
-    Args:
-        x (np.int64): Spatial position along one direction (21-bits integer)
+    Parameters
+    ----------
+    x : np.int64,
+        Spatial position along one direction (21-bits integer)
 
-    Returns:
-        np.int64: Interleaved 64-bits integer
+    Returns
+    -------
+    np.int64
+        Interleaved 64-bits integer
     """
     x &= 0x1FFFFF  # Keep only the last 21-bits. Useful for Periodic Boundary Conditions as positions are automatically wrapped
     x = (x | x << 32) & 0x1F00000000FFFF
@@ -64,13 +71,19 @@ def interleaving_64bits(
 def key(x: np.float32, y: np.float32, z: np.float32) -> np.int64:
     """Compute Morton index from position
 
-    Args:
-        x (np.float32): Position along the x axis
-        y (np.float32): Position along the y axis
-        z (np.float32): Position along the z axis
+    Parameters
+    ----------
+    x : np.float32
+        Position along the x axis
+    y : np.float32
+        Position along the y axis
+    z : np.float32
+        Position along the z axis
 
-    Returns:
-        np.int64: Morton index
+    Returns
+    -------
+    np.int64
+        Morton index
     """
     xx = interleaving_64bits(
         math.floor(x * 2**21)
@@ -84,11 +97,15 @@ def key(x: np.float32, y: np.float32, z: np.float32) -> np.int64:
 def positions_to_keys(positions: npt.NDArray[np.float32]) -> npt.NDArray[np.int64]:
     """Compute Morton index array from position array
 
-    Args:
-        positions (npt.NDArray[np.float32]): Position [3, N_part]
+    Parameters
+    ----------
+    positions : npt.NDArray[np.float32]
+        Position [3, N_part]
 
-    Returns:
-        npt.NDArray[np.int64]: Morton indices [3, N_part]
+    Returns
+    -------
+    npt.NDArray[np.int64]
+        Morton indices [3, N_part]
     """
     size = positions.shape[-1]
     keys = np.empty(size, dtype=np.int64)
@@ -101,11 +118,15 @@ def positions_to_keys(positions: npt.NDArray[np.float32]) -> npt.NDArray[np.int6
 def compactify_64bits(key: np.int64) -> np.int64:
     """Compactify 64-bits integer to 21-bits integer coordinate
 
-    Args:
-        key (np.int64): Interleaved 64-bits integer
+    Parameters
+    ----------
+    key : np.int64
+        Interleaved 64-bits integer
 
-    Returns:
-        np.int64: Spatial position along one direction (21-bits integer)
+    Returns
+    -------
+    np.int64
+        Spatial position along one direction (21-bits integer)
     """
     key &= 0x1249249249249249
     # Only select z bits (or shift x by two or y by one)
@@ -121,24 +142,32 @@ def compactify_64bits(key: np.int64) -> np.int64:
 def key_to_position(key: np.int64) -> np.float32:
     """Converts 21-bit integer to float position
 
-    Args:
-        key (np.int64): Spatial position along one direction (21-bits integer)
+    Parameters
+    ----------
+    key : np.int64
+        Spatial position along one direction (21-bits integer)
 
-    Returns:
-        np.float32: Position along one direction in the [0,1[ range
+    Returns
+    -------
+    np.float32
+        Position along one direction in the [0,1[ range
     """
     return np.float32(0.5**21 * compactify_64bits(key))
 
 
 @njit(fastmath=True, cache=True)
-def key_to_position3d(key: np.int64) -> tuple[np.float32, np.float32, np.float32]:
+def key_to_position3d(key: np.int64) -> Tuple[np.float32, np.float32, np.float32]:
     """Converts interleaved 64-bit integer to float 3D-position
 
-    Args:
-        key (np.int64): Interleaved 64-bits integer
+    Parameters
+    ----------
+    key : np.int64
+        Interleaved 64-bits integer
 
-    Returns:
-        tuple[np.float32, np.float32, np.float32]: Position
+    Returns
+    -------
+    Tuple[np.float32, np.float32, np.float32]
+        Position
     """
     return (key_to_position(key >> 2), key_to_position(key >> 1), key_to_position(key))
 
@@ -147,11 +176,15 @@ def key_to_position3d(key: np.int64) -> tuple[np.float32, np.float32, np.float32
 def keys_to_positions(keys: npt.NDArray[np.int64]) -> npt.NDArray[np.float32]:
     """Compute position array from Morton indices
 
-    Args:
-        keys (npt.NDArray[np.int64]): Morton indices [3, N_part]
+    Parameters
+    ----------
+    keys : npt.NDArray[np.int64]
+        Morton indices [3, N_part]
 
-    Returns:
-        npt.NDArray[np.float32]: Position [3, N_part]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Position [3, N_part]
     """
     size = keys.shape[0]
     positions = np.empty((3, size), dtype=np.float32)
@@ -167,12 +200,17 @@ def keys_to_positions(keys: npt.NDArray[np.int64]) -> npt.NDArray[np.float32]:
 def cell_ijk_to_21bits(i: np.int64, nlevel: np.int64) -> np.int64:
     """Convert cell index along one direction to 21-bit integer
 
-    Args:
-        i (np.int64): cell index along one direction
-        nlevel (np.int64): Grid level
+    Parameters
+    ----------
+    i : np.int64
+        Cell index along one direction
+    nlevel : np.int64
+        Grid level
 
-    Returns:
-        np.int64: 21-bit integer
+    Returns
+    -------
+    np.int64
+        21-bit integer
     """
     return i << (21 - nlevel)
 
@@ -181,12 +219,17 @@ def cell_ijk_to_21bits(i: np.int64, nlevel: np.int64) -> np.int64:
 def key_to_ijk(key: np.int64, nlevel: np.int64) -> np.int64:
     """Convert 21-bit integer to cell index along one direction
 
-    Args:
-        key (np.int64): 21-bit integer
-        nlevel (np.int64): Grid level
+    Parameters
+    ----------
+    key : np.int64
+        21-bit integer
+    nlevel : np.int64
+        Grid level
 
-    Returns:
-        np.int64: Cell index along one direction
+    Returns
+    -------
+    np.int64
+        Cell index along one direction
     """
     return compactify_64bits(key) >> (21 - nlevel)
 
@@ -195,12 +238,17 @@ def key_to_ijk(key: np.int64, nlevel: np.int64) -> np.int64:
 def add(key1: np.int64, key2: np.int64) -> np.int64:  # Wraps in the [0, 1] range
     """Add two Morton indices
 
-    Args:
-        key1 (np.int64): First Morton index
-        key2 (np.int64): Second Morton index
+    Parameters
+    ----------
+    key1 : np.int64
+        First Morton index
+    key2 : np.int64
+        Second Morton index
 
-    Returns:
-        np.int64: summed Morton index
+    Returns
+    -------
+    np.int64
+        Summed Morton index
     """
     x_sum = (key1 | _YZ_MASK) + (key2 & _X_MASK)
     y_sum = (key1 | _XZ_MASK) + (key2 & _Y_MASK)
@@ -212,12 +260,17 @@ def add(key1: np.int64, key2: np.int64) -> np.int64:  # Wraps in the [0, 1] rang
 def subtract(key1: np.int64, key2: np.int64) -> np.int64:  # Wraps in the [0, 1] range
     """Subtract two Morton indices
 
-    Args:
-        key1 (np.int64): First Morton index
-        key2 (np.int64): Second Morton index
+    Parameters
+    ----------
+    key1 : np.int64
+        First Morton index
+    key2 : np.int64
+        Second Morton index
 
-    Returns:
-        np.int64: subtracted Morton index
+    Returns
+    -------
+    np.int64
+        Subtracted Morton index
     """
     x_diff = (key1 & _X_MASK) - (key2 & _X_MASK)
     y_diff = (key1 & _Y_MASK) - (key2 & _Y_MASK)
@@ -229,12 +282,17 @@ def subtract(key1: np.int64, key2: np.int64) -> np.int64:  # Wraps in the [0, 1]
 def incX(key: np.int64, level: np.int64) -> np.int64:
     """Increment Morton index by one along x axis
 
-    Args:
-        key (np.int64): Morton index
-        level (np.int64): Grid level
+    Parameters
+    ----------
+    key : np.int64
+        Morton index
+    level : np.int64
+        Grid level
 
-    Returns:
-        np.int64: Incremented Morton index
+    Returns
+    -------
+    np.int64
+        Incremented Morton index
     """
     x_sum = (key | _YZ_MASK) + (4 << (62 - 3 * level))
     return (x_sum & _X_MASK) | (key & _YZ_MASK)
@@ -244,12 +302,17 @@ def incX(key: np.int64, level: np.int64) -> np.int64:
 def incY(key: np.int64, level: np.int64) -> np.int64:
     """Increase Morton index by one along y axis
 
-    Args:
-        key (np.int64): Morton index
-        level (np.int64): Grid level
+    Parameters
+    ----------
+    key : np.int64
+        Morton index
+    level : np.int64
+        Grid level
 
-    Returns:
-        np.int64: Increased Morton index
+    Returns
+    -------
+    np.int64
+        Incremented Morton index
     """
     y_sum = (key | _XZ_MASK) + (2 << (62 - 3 * level))
     return (y_sum & _Y_MASK) | (key & _XZ_MASK)
@@ -259,12 +322,17 @@ def incY(key: np.int64, level: np.int64) -> np.int64:
 def incZ(key: np.int64, level: np.int64) -> np.int64:
     """Increase Morton index by one along z axis
 
-    Args:
-        key (np.int64): Morton index
-        level (np.int64): Grid level
+    Parameters
+    ----------
+    key : np.int64
+        Morton index
+    level : np.int64
+        Grid level
 
-    Returns:
-        np.int64: Increased Morton index
+    Returns
+    -------
+    np.int64
+        Incremented Morton index
     """
     z_sum = (key | _XY_MASK) + (1 << (62 - 3 * level))
     return (z_sum & _Z_MASK) | (key & _XY_MASK)
@@ -274,12 +342,17 @@ def incZ(key: np.int64, level: np.int64) -> np.int64:
 def decX(key: np.int64, level: np.int64) -> np.int64:
     """Decrease Morton index by one along x axis
 
-    Args:
-        key (np.int64): Morton index
-        level (np.int64): Grid level
+    Parameters
+    ----------
+    key : np.int64
+        Morton index
+    level : np.int64
+        Grid level
 
-    Returns:
-        np.int64: Increased Morton index
+    Returns
+    -------
+    np.int64
+        Decremented Morton index
     """
     x_diff = (key & _X_MASK) - (4 << (62 - 3 * level))
     return (x_diff & _X_MASK) | (key & _YZ_MASK)
@@ -289,12 +362,17 @@ def decX(key: np.int64, level: np.int64) -> np.int64:
 def decY(key: np.int64, level: np.int64) -> np.int64:
     """Decrease Morton index by one along y axis
 
-    Args:
-        key (np.int64): Morton index
-        level (np.int64): Grid level
+    Parameters
+    ----------
+    key : np.int64
+        Morton index
+    level : np.int64
+        Grid level
 
-    Returns:
-        np.int64: Decreased Morton index
+    Returns
+    -------
+    np.int64
+        Decremented Morton index
     """
     y_diff = (key & _Y_MASK) - (2 << (62 - 3 * level))
     return (y_diff & _Y_MASK) | (key & _XZ_MASK)
@@ -304,12 +382,17 @@ def decY(key: np.int64, level: np.int64) -> np.int64:
 def decZ(key: np.int64, level: np.int64) -> np.int64:
     """Decrease Morton index by one along z axis
 
-    Args:
-        key (np.int64): Morton index
-        level (np.int64): Grid level
+    Parameters
+    ----------
+    key : np.int64
+        Morton index
+    level : np.int64
+        Grid level
 
-    Returns:
-        np.int64: Decreased Morton index
+    Returns
+    -------
+    np.int64
+        Decremented Morton index
     """
     z_diff = (key & _Z_MASK) - (1 << (62 - 3 * level))
     return (z_diff & _Z_MASK) | (key & _XY_MASK)

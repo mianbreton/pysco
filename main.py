@@ -1,3 +1,15 @@
+#!/usr/bin/env python
+"""\
+Main executable module to run cosmological N-body simulations
+
+Usage: python main.py param.ini
+"""
+__author__ = "Michel-Andrès Breton"
+__copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
+__version__ = "0.1.1"
+__email__ = "michel-andres.breton@obspm.fr"
+__status__ = "Production"
+
 import ast
 import logging
 import sys
@@ -58,7 +70,9 @@ def run(param):
             print(f"Write snapshot...{snap_name=} {param['aexp']=}")
             utils.write_snapshot_particles_parquet(f"{snap_name}", position, velocity)
             param.to_csv(
-                f"{param['base']}/output_{i_snap:05d}/param.txt", sep="=", header=False
+                f"{param['base']}/output_{i_snap:05d}/param_{i_snap:05d}.txt",
+                sep="=",
+                header=False,
             )
 
             i_snap += 1
@@ -72,8 +86,24 @@ def main():
     param = utils.read_param_file(sys.argv[1])
     print(param)
     run(param)
-    print("Run Completed!")
 
 
 if __name__ == "__main__":
+    print(
+        r"""
+        _______           _______  _______  _______ 
+        (  ____ )|\     /|(  ____ \(  ____ \(  ___  )
+        | (    )|( \   / )| (    \/| (    \/| (   ) |
+        | (____)| \ (_) / | (_____ | |      | |   | |
+        |  _____)  \   /  (_____  )| |      | |   | |
+        | (         ) (         ) || |      | |   | |
+        | )         | |   /\____) || (____/\| (___) |
+        |/          \_/   \_______)(_______/(_______)
+                                                    
+        """
+    )
+    print(f"VERSION: {__version__}")
+    print(f"{__copyright__}")
+    print(f"{'':{'-'}<{71}}\n")
     main()
+    print("Run Completed!")

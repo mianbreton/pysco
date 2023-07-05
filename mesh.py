@@ -14,14 +14,18 @@ import utils
 def laplacian(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float32]:
     """Laplacian operator
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        h (np.float32): Grid size
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
 
-    Returns:
-        npt.NDArray[np.float32]: Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
     """
-
     invh2 = np.float32(h ** (-2))
     six = np.float32(6)
     # Initialise mesh
@@ -61,13 +65,19 @@ def residual(
     """Residual of Laplacian operator \\
     residual = b - Ax
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-        h (np.float32): Grid size
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
 
-    Returns:
-        npt.NDArray[np.float32]: Residual of Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Residual of Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     invh2 = np.float32(h ** (-2))
     six = np.float32(6)
@@ -114,15 +124,20 @@ def restric_residual_half(
     residual = b - Ax  \\
     This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
     in this case we can compute the residual and restriction for only half the points.
-    
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-        h (np.float32): Grid size
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
 
-    Returns:
-        npt.NDArray[np.float32]: Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
     """
     inveight = np.float32(0.125)
     three = np.float32(3.0)
@@ -195,15 +210,20 @@ def residual_error_half(
     error = sqrt[sum(residual**2)] \\
     This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
     in this case we can compute the residual for only half the points.
-    
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-        h (np.float32): Grid size
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
 
-    Returns:
-        npt.NDArray[np.float32]: Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+    Returns
+    -------
+    np.float32
+        Residual error
     """
     six = np.float32(6.0)
     invh2 = np.float32(h ** (-2))
@@ -288,10 +308,14 @@ def jacobi(
     """Jacobi iteration \\
     Smooths x in Laplacian(x) = b
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-        h (np.float32): Grid size
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
     """
     h2 = np.float32(h**2)
     invsix = np.float32(1.0 / 6)
@@ -329,11 +353,16 @@ def gauss_seidel(
     """Gauss-Seidel iteration using red-black ordering with over-relaxation \\
     Smooths x in Laplacian(x) = b
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-        h (np.float32): Grid size
-        f_relax: Relaxation factor
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+    f_relax : np.float32
+        Relaxation factor
     """
     # WARNING: If I replace the arguments in prange by some constant values (for example, doing imax = int(0.5*x.shape[0]), then prange(imax)...),
     #          then LLVM tries to fuse the red and black loops! And we really don't want that...
@@ -522,10 +551,14 @@ def gauss_seidel_no_overrelaxation(
     """Gauss-Seidel iteration using red-black ordering without over-relaxation \\
     Smooths x in Laplacian(x) = b
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-        h (np.float32): Grid size
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
     """
     # WARNING: If I replace the arguments in prange by some constant values (for example, doing imax = int(0.5*x.shape[0]), then prange(imax)...),
     #          then LLVM tries to fuse the red and black loops! And we really don't want that...
@@ -659,11 +692,16 @@ def smoothing(
     """Smooth field with several Gauss-Seidel iterations \\
     First and last iterations does not have over-relaxation to ensure compatibility with optimized function before and after the use of smoothing(...)
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-        h (np.float32): Grid size
-        n_smoothing (int): Number of smoothing iterations
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+    n_smoothing : int
+        Number of smoothing iterations
     """
     # No over-relaxation because half prolongated
     gauss_seidel_no_overrelaxation(x, b, h)
@@ -682,11 +720,15 @@ def restriction(
     """Restriction operator \\
     Interpolate field to coarser level.
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
 
-    Returns:
-        npt.NDArray[np.float32]: Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
     """
     inveighth = np.float32(0.125)
     result = np.empty(
@@ -721,11 +763,15 @@ def prolongation0(
     """Prolongation operator (zeroth order) \\
     Interpolate field to finer level by straight injection (zeroth-order interpolation)
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
 
-    Returns:
-        npt.NDArray[np.float32]: Finer Potential [2*N_cells_1d, 2*N_cells_1d, 2*N_cells_1d]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Finer Potential [2*N_cells_1d, 2*N_cells_1d, 2*N_cells_1d]
     """
     x_fine = np.empty(
         (x.shape[0] << 1, x.shape[1] << 1, x.shape[2] << 1), dtype=np.float32
@@ -760,11 +806,15 @@ def prolongation(
     """Prolongation operator \\
     Interpolate field to finer level
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
 
-    Returns:
-        npt.NDArray[np.float32]: Finer Potential [2*N_cells_1d, 2*N_cells_1d, 2*N_cells_1d]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Finer Potential [2*N_cells_1d, 2*N_cells_1d, 2*N_cells_1d]
     """
     f0 = np.float32(27.0 / 64)
     f1 = np.float32(9.0 / 64)
@@ -876,11 +926,14 @@ def add_prolongation_half(
     x: npt.NDArray[np.float32],
     corr_c: npt.NDArray[np.float32],
 ) -> None:
-    """Add prolongation operator on half the array \\
+    """Add prolongation operator on half the array
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        corr_c (npt.NDArray[np.float32]): Correction field at coarser level [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    corr_c : npt.NDArray[np.float32]
+        Correction field at coarser level [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
     """
     f0 = np.float32(27.0 / 64)
     f1 = np.float32(9.0 / 64)
@@ -962,12 +1015,17 @@ def truncation2(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.flo
     As in Knebe et al. (2001), we estimate the truncation error as \\
     t = Prolongation(Laplacian(Restriction(Phi))) - Laplacian(Phi)
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        h (np.float32): Grid size
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
 
-    Returns:
-        npt.NDArray[np.float32]: Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     return prolongation(laplacian(restriction(x), 2 * h)) - laplacian(x, h)
 
@@ -981,11 +1039,15 @@ def truncation(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     t = Prolongation(Restriction(b)) - b \\
     which gives roughly the same results.
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    Parameters
+    ----------
+    b : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
 
-    Returns:
-        npt.NDArray[np.float32]: Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     return prolongation(restriction(b)) - b
 
@@ -1002,11 +1064,15 @@ def truncation_error(b: npt.NDArray[np.float32]) -> np.float32:
     The final trunction error is given by \\
     truncation_error = Sqrt(Sum(t**2))
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    Parameters
+    ----------
+    b : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
 
-    Returns:
-        np.float32: Truncation error
+    Returns
+    -------
+    np.float32
+         Truncation error
     """
     truncation = np.float32(0)
     f0 = np.float32(27.0 / 64)
@@ -1157,37 +1223,69 @@ def V_cycle(
 ) -> None:
     """Multigrid V cycle
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
-        b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-        nlevel (int): Grid level
-        params (pd.Series): Parameter container
-
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    nlevel : int
+        Grid level (positive, equal to zero at coarse level)
+    params : pd.Series
+        Parameter container
     """
     logging.debug("In V_cycle")
     h = np.float32(0.5 ** (params["ncoarse"] - nlevel))
     two = np.float32(2)
     smoothing(x, b, h, params["Npre"])
     res_c = restric_residual_half(x, b, h)
-
-    # Compute correction to solution at coarser level
-    if params["theory"].casefold() != "newton".casefold():
-        # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
-        x_c = restriction(x)
-        x_corr_c = x_c.copy()
-        utils.add_vector_scalar_inplace(res_c, laplacian(x_c, 2 * h), np.float32(1))
-    else:
-        # Initialise array to zero because we solve the error field for linear Poisson equation
-        x_corr_c = np.zeros_like(res_c)
-
+    # Initialise array to x_ijk = -b_ijk*h^2/6 (one Jacobi sweep)
+    x_corr_c = utils.prod_vector_scalar(res_c, (-4.0 / 6 * h**2))
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, two * h, params["Npre"])
     else:
         V_cycle(x_corr_c, res_c, nlevel + 1, params)
+    add_prolongation_half(x, x_corr_c)
+    smoothing(x, b, h, params["Npost"])
 
-    if params["theory"].casefold() != "newton".casefold():
-        utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
+
+@utils.time_me
+def V_cycle_FAS(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    nlevel: int,
+    params: pd.Series,
+) -> None:
+    """Multigrid V cycle with Full Approximation Scheme
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    nlevel : int
+        Grid level (positive, equal to zero at coarse level)
+    params : pd.Series
+        Parameter container
+    """
+    logging.debug("In V_cycle")
+    h = np.float32(0.5 ** (params["ncoarse"] - nlevel))
+    two = np.float32(2)
+    smoothing(x, b, h, params["Npre"])
+    res_c = restric_residual_half(x, b, h)
+    # Compute correction to solution at coarser level
+    # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
+    x_c = restriction(x)
+    x_corr_c = x_c.copy()
+    utils.add_vector_scalar_inplace(res_c, laplacian(x_c, two * h), np.float32(1))
+    # Stop if we are at coarse enough level
+    if nlevel >= (params["ncoarse"] - 2):
+        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+    else:
+        V_cycle_FAS(x_corr_c, res_c, nlevel + 1, params)
+    utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npost"])
 
@@ -1201,55 +1299,99 @@ def F_cycle(
 ) -> None:
     """Multigrid F cycle
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
-        b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-        nlevel (int): Grid level
-        params (pd.Series): Parameter container
-
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    nlevel : int
+        Grid level (positive, equal to zero at coarse level)
+    params : pd.Series
+        Parameter container
     """
     logging.debug("In F_cycle")
     h = 0.5 ** (params["ncoarse"] - nlevel)
+    two = np.float32(2)
     smoothing(x, b, h, params["Npre"])
     res_c = restric_residual_half(x, b, h)
     # Compute correction to solution at coarser level
-    if params["theory"].casefold() != "newton".casefold():
-        # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
-        x_c = restriction(x)
-        x_corr_c = x_c.copy()
-        utils.add_vector_scalar_inplace(res_c, laplacian(x_c, 2 * h), np.float32(1))
-    else:
-        # Initialise array to zero because we solve the error field for linear Poisson equation
-        x_corr_c = np.zeros_like(res_c)
+    # Initialise array to x_ijk = -b_ijk*h^2/6 (one Jacobi sweep)
+    x_corr_c = utils.prod_vector_scalar(res_c, (-4.0 / 6 * h**2))
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"])
     else:
         F_cycle(x_corr_c, res_c, nlevel + 1, params)
-    if params["theory"].casefold() != "newton".casefold():
-        utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npre"])
-
     ### Now compute again corrections (almost exactly same as the first part) ###
     res_c = restric_residual_half(x, b, h)
     # Compute correction to solution at coarser level
-    if params["theory"].casefold() != "newton".casefold():
-        # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
-        x_c = restriction(x)
-        x_corr_c = x_c.copy()
-        utils.add_vector_scalar_inplace(res_c, laplacian(x_c, 2 * h), np.float32(1))
+    # Initialise array to x_ijk = -b_ijk*h^2/6 (one Jacobi sweep)
+    x_corr_c = utils.prod_vector_scalar(res_c, (-4.0 / 6 * h**2))
+    # Stop if we are at coarse enough level
+    if nlevel >= (params["ncoarse"] - 2):
+        smoothing(x_corr_c, res_c, two * h, params["Npre"])
     else:
-        # Initialise array to zero because we solve the error field for linear Poisson equation
-        x_corr_c = np.zeros_like(res_c)
+        V_cycle(x_corr_c, res_c, nlevel + 1, params)  # Careful, V_cycle here
+
+    add_prolongation_half(x, x_corr_c)
+    smoothing(x, b, h, params["Npost"])
+
+
+@utils.time_me
+def F_cycle_FAS(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    nlevel: int,
+    params: pd.Series,
+) -> None:
+    """Multigrid F cycle with Full Approximation Scheme
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    nlevel : int
+        Grid level (positive, equal to zero at coarse level)
+    params : pd.Series
+        Parameter container
+    """
+    logging.debug("In F_cycle")
+    h = 0.5 ** (params["ncoarse"] - nlevel)
+    two = np.float32(2)
+    smoothing(x, b, h, params["Npre"])
+    res_c = restric_residual_half(x, b, h)
+    # Compute correction to solution at coarser level
+    # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
+    x_c = restriction(x)
+    x_corr_c = x_c.copy()
+    utils.add_vector_scalar_inplace(res_c, laplacian(x_c, two * h), np.float32(1))
+    # Stop if we are at coarse enough level
+    if nlevel >= (params["ncoarse"] - 2):
+        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+    else:
+        F_cycle_FAS(x_corr_c, res_c, nlevel + 1, params)
+    utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
+    add_prolongation_half(x, x_corr_c)
+    smoothing(x, b, h, params["Npre"])
+    ### Now compute again corrections (almost exactly same as the first part) ###
+    res_c = restric_residual_half(x, b, h)
+    # Compute correction to solution at coarser level
+    # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
+    x_c = restriction(x)
+    x_corr_c = x_c.copy()
+    utils.add_vector_scalar_inplace(res_c, laplacian(x_c, two * h), np.float32(1))
 
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"])
     else:
-        V_cycle(x_corr_c, res_c, nlevel + 1, params)  # Careful, V_cycle here
-    if params["theory"].casefold() != "newton".casefold():
-        utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
+        V_cycle_FAS(x_corr_c, res_c, nlevel + 1, params)  # Careful, V_cycle here
+    utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npost"])
 
@@ -1263,56 +1405,108 @@ def W_cycle(
 ) -> None:
     """Multigrid W cycle
 
-    Args:
-        x (npt.NDArray[np.float32]): Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
-        b (npt.NDArray[np.float32]): Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-        nlevel (int): Grid level
-        params (pd.Series): Parameter container
-
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    nlevel : int
+        Grid level (positive, equal to zero at coarse level)
+    params : pd.Series
+        Parameter container
     """
     logging.debug("In W_cycle")
     h = 0.5 ** (params["ncoarse"] - nlevel)  # nlevel = 0 is coarse level
+    two = np.float32(2)
     smoothing(x, b, h, params["Npre"])
     res_c = restric_residual_half(x, b, h)
 
     # Compute correction to solution at coarser level
-    if params["theory"].casefold() != "newton".casefold():
-        # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
-        x_c = restriction(x)
-        x_corr_c = x_c.copy()
-        utils.add_vector_scalar_inplace(res_c, laplacian(x_c, 2 * h), np.float32(1))
-    else:
-        # Initialise array to zero because we solve the error field for linear Poisson equation
-        x_corr_c = np.zeros_like(res_c)
+    # Initialise array to x_ijk = -b_ijk*h^2/6 (one Jacobi sweep)
+    x_corr_c = utils.prod_vector_scalar(res_c, (-4.0 / 6 * h**2))
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"])
     else:
         W_cycle(x_corr_c, res_c, nlevel + 1, params)
-    if params["theory"].casefold() != "newton".casefold():
-        utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
+
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npre"])
 
     ### Now compute again corrections (almost exactly same as the first part) ###
     res_c = restric_residual_half(x, b, h)
     # Compute correction to solution at coarser level
-    if params["theory"].casefold() != "newton".casefold():
-        # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
-        x_c = restriction(x)
-        x_corr_c = x_c.copy()
-        utils.add_vector_scalar_inplace(res_c, laplacian(x_c, 2 * h), np.float32(1))
-    else:
-        # Initialise array to zero because we solve the error field for linear Poisson equation
-        x_corr_c = np.zeros_like(res_c)
+    # Initialise array to x_ijk = -b_ijk*h^2/6 (one Jacobi sweep)
+    x_corr_c = utils.prod_vector_scalar(res_c, (-4.0 / 6 * h**2))
 
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, 2 * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"])
     else:
         W_cycle(x_corr_c, res_c, nlevel + 1, params)
-    if params["theory"].casefold() != "newton".casefold():
-        utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
+
+    add_prolongation_half(x, x_corr_c)
+    smoothing(x, b, h, params["Npre"])
+
+
+@utils.time_me
+def W_cycle_FAS(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    nlevel: int,
+    params: pd.Series,
+) -> None:
+    """Multigrid W cycle with Full Approximation Scheme
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    nlevel : int
+        Grid level (positive, equal to zero at coarse level)
+    params : pd.Series
+        Parameter container
+    """
+    logging.debug("In W_cycle")
+    h = 0.5 ** (params["ncoarse"] - nlevel)  # nlevel = 0 is coarse level
+    two = np.float32(2)
+    smoothing(x, b, h, params["Npre"])
+    res_c = restric_residual_half(x, b, h)
+
+    # Compute correction to solution at coarser level
+    # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
+    x_c = restriction(x)
+    x_corr_c = x_c.copy()
+    utils.add_vector_scalar_inplace(res_c, laplacian(x_c, two * h), np.float32(1))
+
+    # Stop if we are at coarse enough level
+    if nlevel >= (params["ncoarse"] - 2):
+        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+    else:
+        W_cycle_FAS(x_corr_c, res_c, nlevel + 1, params)
+
+    utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
+    add_prolongation_half(x, x_corr_c)
+    smoothing(x, b, h, params["Npre"])
+
+    ### Now compute again corrections (almost exactly same as the first part) ###
+    res_c = restric_residual_half(x, b, h)
+    # Compute correction to solution at coarser level
+    # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
+    x_c = restriction(x)
+    x_corr_c = x_c.copy()
+    utils.add_vector_scalar_inplace(res_c, laplacian(x_c, two * h), np.float32(1))
+
+    # Stop if we are at coarse enough level
+    if nlevel >= (params["ncoarse"] - 2):
+        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+    else:
+        W_cycle_FAS(x_corr_c, res_c, nlevel + 1, params)
+
+    utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npre"])
 
@@ -1324,11 +1518,15 @@ def derivative2(
     """Spatial derivatives of a scalar field on a grid \\
     Second-order derivative with finite differences
 
-    Args:
-        a (npt.NDArray[np.float32]): Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
 
-    Returns:
-        npt.NDArray[np.float32]: Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
     """
     halfinvh = np.float32(0.5 * a.shape[-1])
     ncells_1d = a.shape[-1]
@@ -1355,14 +1553,18 @@ def derivative2(
 def derivative(
     a: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
-    """Spatial derivatives of a scalar field on a grid
+    """Spatial derivatives of a scalar field on a grid \\
     Fourth-order derivative with finite differences
 
-    Args:
-        a (npt.NDArray[np.float32]): Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
 
-    Returns:
-        npt.NDArray[np.float32]: Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
     """
     eight = np.float32(8)
     inv12h = np.float32(a.shape[-1] / 12.0)
@@ -1404,12 +1606,17 @@ def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     """Nearest Grid Point interpolation \\
     Computes density on a grid from particle distribution
 
-    Args:
-        position (npt.NDArray[np.float32]): Position [3, N_part]
-        ncells_1d (int): Number of cells along one direction
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Position [3, N_part]
+    ncells_1d : int
+        Number of cells along one direction
 
-    Returns:
-        npt.NDArray[np.float32]: Density [N_cells_1d, N_cells_1d, N_cells_1d]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Density [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     ncells_1d_f = np.float32(ncells_1d)
     one = np.float32(1)
@@ -1431,12 +1638,17 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     """Cloud-in-Cell interpolation \\
     Computes density on a grid from particle distribution
 
-    Args:
-        position (npt.NDArray[np.float32]): Position [3, N_part]
-        ncells_1d (int): Number of cells along one direction
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Position [3, N_part]
+    ncells_1d : int
+        Number of cells along one direction
 
-    Returns:
-        npt.NDArray[np.float32]: Density [N_cells_1d, N_cells_1d, N_cells_1d]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Density [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     ncells_1d_f = np.float32(ncells_1d)
     one = np.float32(1)
@@ -1491,12 +1703,17 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     """Triangular-Shaped Cloud interpolation \\
     Computes density on a grid from particle distribution
 
-    Args:
-        position (npt.NDArray[np.float32]): Position [3, N_part]
-        ncells_1d (int): Number of cells along one direction
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Position [3, N_part]
+    ncells_1d : int
+        Number of cells along one direction
 
-    Returns:
-        npt.NDArray[np.float32]: Density [N_cells_1d, N_cells_1d, N_cells_1d]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Density [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     ncells_1d_m1 = np.int16(ncells_1d - 1)
     one = np.int16(1)
@@ -1583,12 +1800,17 @@ def invNGP(
     """Inverse Nearest-Grid Point interpolation \\
     Interpolates field values on a grid onto particle positions
 
-    Args:
-        grid (npt.NDArray[np.float32]): Field [N_cells_1d, N_cells_1d, N_cells_1d]
-        position (npt.NDArray[np.float32]): Position [3, N_part]
+    Parameters
+    ----------
+    grid : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    position : npt.NDArray[np.float32]
+        Position [3, N_part]
 
-    Returns:
-        npt.NDArray[np.float32]: interpolated Field [N_part]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Interpolated Field [N_part]
     """
     ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
@@ -1610,12 +1832,17 @@ def invNGP_vec(
     """Inverse Nearest-Grid Point interpolation for vector field \\
     Interpolates vector field values on a grid onto particle positions
 
-    Args:
-        grid (npt.NDArray[np.float32]): Field [3, N_cells_1d, N_cells_1d, N_cells_1d]
-        position (npt.NDArray[np.float32]): Position [3, N_part]
+    Parameters
+    ----------
+    grid : npt.NDArray[np.float32]
+        Field [3, N_cells_1d, N_cells_1d, N_cells_1d]
+    position : npt.NDArray[np.float32]
+        Position [3, N_part]
 
-    Returns:
-        npt.NDArray[np.float32]: interpolated Field [3, N_part]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Interpolated Field [3, N_part]
     """
     ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
@@ -1638,12 +1865,17 @@ def invCIC(
     """Inverse Cloud-in-Cell interpolation \\
     Interpolates field values on a grid onto particle positions
 
-    Args:
-        grid (npt.NDArray[np.float32]): Field [N_cells_1d, N_cells_1d, N_cells_1d]
-        position (npt.NDArray[np.float32]): Position [3, N_part]
+    Parameters
+    ----------
+    grid : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    position : npt.NDArray[np.float32]
+        Position [3, N_part]
 
-    Returns:
-        npt.NDArray[np.float32]: interpolated Field [N_part]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Interpolated Field [N_part]
     """
     ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
@@ -1700,12 +1932,17 @@ def invCIC_vec(
     """Inverse Cloud-in-Cell interpolation for vector field\\
     Interpolates vector field values on a grid onto particle positions
 
-    Args:
-        grid (npt.NDArray[np.float32]): Field [3, N_cells_1d, N_cells_1d, N_cells_1d]
-        position (npt.NDArray[np.float32]): Position [3, N_part]
+    Parameters
+    ----------
+    grid : npt.NDArray[np.float32]
+        Field [3, N_cells_1d, N_cells_1d, N_cells_1d]
+    position : npt.NDArray[np.float32]
+        Position [3, N_part]
 
-    Returns:
-        npt.NDArray[np.float32]: interpolated Field [3, N_part]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Interpolated Field [3, N_part]
     """
     ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
@@ -1763,12 +2000,17 @@ def invTSC(
     """Inverse Triangular-Shaped Cloud interpolation \\
     Interpolates field values on a grid onto particle positions
 
-    Args:
-        grid (npt.NDArray[np.float32]): Field [N_cells_1d, N_cells_1d, N_cells_1d]
-        position (npt.NDArray[np.float32]): Position [3, N_part]
+    Parameters
+    ----------
+    grid : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    position : npt.NDArray[np.float32]
+        Position [3, N_part]
 
-    Returns:
-        npt.NDArray[np.float32]: interpolated Field [N_part]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Interpolated Field [N_part]
     """
     ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
     ncells_1d_m1 = np.int16(ncells_1d - 1)
@@ -1887,12 +2129,17 @@ def invTSC_vec(
     """Inverse Triangular-Shaped Cloud interpolation for vector field\\
     Interpolates vector field values on a grid onto particle positions
 
-    Args:
-        grid (npt.NDArray[np.float32]): Field [3, N_cells_1d, N_cells_1d, N_cells_1d]
-        position (npt.NDArray[np.float32]): Position [3, N_part]
+    Parameters
+    ----------
+    grid : npt.NDArray[np.float32]
+        Field [3, N_cells_1d, N_cells_1d, N_cells_1d]
+    position : npt.NDArray[np.float32]
+        Position [3, N_part]
 
-    Returns:
-        npt.NDArray[np.float32]: interpolated Field [3, N_part]
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Interpolated Field [3, N_part]
     """
     ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid size
     ncells_1d_m1 = np.int16(ncells_1d - 1)

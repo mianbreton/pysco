@@ -2,6 +2,7 @@ import ast
 import logging
 import sys
 from time import perf_counter
+from typing import Tuple, Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,21 +14,28 @@ from numba import njit, prange
 import morton
 
 
-def time_me(func: callable) -> callable:
+def time_me(func: Callable) -> Callable:
     """Decorator time
 
-    Args:
-        func (callable): Function to time
+    Parameters
+    ----------
+    func : Callable
+        Function to time
 
-    Returns:
-        callable: Function
+
+    Returns
+    -------
+    Callable
+        Function wrapper which prints time (in seconds)
     """
 
     def time_func(*args, **kw):
         """Wrapper
 
-        Returns:
-            _type_: Print time (in seconds)
+        Returns
+        -------
+        _type_
+            Print time (in seconds)
         """
         t1 = perf_counter()
         result = func(*args, **kw)
@@ -39,13 +47,17 @@ def time_me(func: callable) -> callable:
     return time_func
 
 
-def profile_me(func: callable) -> callable:
+def profile_me(func: Callable) -> Callable:
     """Decorator profiling
 
-    Args:
-        func (callable): Function to profile
+    Parameters
+    ----------
+    func : Callable
+        Function to profile
 
-    Returns:
+    Returns
+    -------
+    Callable
         Exit system
     """
 
@@ -64,17 +76,20 @@ def profile_me(func: callable) -> callable:
         stats.dump_stats(f"{func.__name__}.prof")
 
         print(f"Function '{func.__name__}' profiled in {func.__name__}.prof")
-        exit(1)
+        raise SystemExit("Function profiled, now quitting the program")
 
     return profiling_func
 
 
-def profiling(filename: str, Function: callable, *args: float) -> None:
+def profiling(filename: str, Function: Callable, *args: float) -> None:
     """Profiling routine
 
-    Args:
-        filename (str): Output file containing the profiling
-        Function (callable): Function to profile
+    Parameters
+    ----------
+    filename : str
+        Output file containing the profiling
+    Function : Callable
+        Function to profile
     """
     import cProfile
     import pstats
@@ -87,62 +102,31 @@ def profiling(filename: str, Function: callable, *args: float) -> None:
     stats.dump_stats(filename)
 
 
-# Imshow
-
-
-def imshow(n, label, grid):
-    if not hasattr(grid, "__len__"):
-        sys.exit(f"ERROR: {label} should not be a scalar")
-    elif grid.ndim == 1:
-        sys.exit(f"ERROR: {label} should not be a vector")
-    else:
-        size = grid.ndim - 2
-        plt.figure(n)
-        plt.imshow(grid[(0,) * size])
-        plt.colorbar()
-        plt.ylabel(label)
-
-
-def imshow_oneplot(labels, grids):
-    stot = len(labels)
-    s2 = int(np.sqrt(stot))
-    s1 = stot - s2
-    i = 1
-    for label, grid in zip(labels, grids):
-        if not hasattr(grid, "__len__"):
-            sys.exit(f"ERROR: {label} should not be a scalar")
-        elif grid.ndim == 1:
-            sys.exit(f"ERROR: {label} should not be a vector")
-        else:
-            size = grid.ndim - 2
-            plt.subplot(s1, s2, i)
-            plt.imshow(grid[(0,) * size])
-            plt.colorbar()
-            plt.ylabel(label)
-            i += 1
-
-
 def index_linear(ijk: npt.NDArray[np.int32], ncells_1d: int) -> npt.NDArray[np.int64]:
     """Generate Linear index for particles
 
-    Args:
-        ijk (npt.NDArray[np.int32]): i,j,k array [3, N_part]
-        ncells_1d (int): Number of cells along one direction
+    Parameters
+    ----------
+    ijk : npt.NDArray[np.int32]
+         i,j,k array [3, N_part]
+    ncells_1d : int
+        Number of cells along one direction
 
-    Returns:
-        npt.NDArray[np.int64]: Linear index [3, N_part]
+    Returns
+    -------
+    npt.NDArray[np.int64]
+        Linear index [3, N_part]
     """
     return (ijk[0] * ncells_1d**2 + ijk[1] * ncells_1d + ijk[2]).astype(np.int64)
-
-
-# Units
 
 
 def set_units(param: pd.Series) -> None:
     """Compute dimensions in SI units
 
-    Args:
-        param (pd.Series): Parameter container
+    Parameters
+    ----------
+    param : pd.Series
+        Parameter container
     """
     # Put in good units (Box Units to km,kg,s)
     npart = 8 ** param["ncoarse"]
@@ -159,17 +143,18 @@ def set_units(param: pd.Series) -> None:
     param["mpart"] = param["unit_d"] * param["unit_l"] ** 3 / npart  # In kg
 
 
-# Reading routines
-
-
 def read_param_file(name: str) -> pd.Series:
     """Read parameter file into Pandas Series
 
-    Args:
-        name (str): Parameter file name
+    Parameters
+    ----------
+    name : str
+        Parameter file name
 
-    Returns:
-        pd.Series: Parameters container
+    Returns
+    -------
+    pd.Series
+        Parameters container
     """
     param = pd.read_csv(
         name,
@@ -214,14 +199,18 @@ def read_param_file(name: str) -> pd.Series:
 
 def read_snapshot_particles_parquet(
     filename: str,
-) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Read particles in snapshot from parquet file
 
-    Args:
-        filename (str): Filename
+    Parameters
+    ----------
+    filename : str
+        Filename
 
-    Returns:
-        tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]: Position, velocity [3, N_part]
+    Returns
+    -------
+    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+        Position, Velocity [3, N_part]
     """
     import pyarrow as pa
     import pyarrow.parquet as pq
@@ -234,7 +223,7 @@ def read_snapshot_particles_parquet(
 
 def read_snapshot_particles_hdf5(
     filename: str,
-) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     # TODO: Write routine!
     import h5py
 
@@ -255,10 +244,14 @@ def write_snapshot_particles_parquet(
 ) -> None:  # TODO: do better, perhaps multithread this?
     """Write snapshot with particle information in parquet format
 
-    Args:
-        filename (str): Filename
-        position (npt.NDArray[np.float32]): Position [3, N_part]
-        velocity (npt.NDArray[np.float32]): Velocity [3, N_part]
+    Parameters
+    ----------
+    filename : str
+        Filename
+    position : npt.NDArray[np.float32]
+        Position [3, N_part]
+    velocity : npt.NDArray[np.float32]
+        Velocity [3, N_part]
     """
     import pyarrow as pa
     import pyarrow.parquet as pq
@@ -282,11 +275,15 @@ def write_snapshot_particles_parquet(
 def min_abs(x: npt.NDArray[np.float32]) -> np.float32:
     """Minimum absolute value of array
 
-    Args:
-        x (npt.NDArray[np.float32]): Array
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Array
 
-    Returns:
-        np.float32: Min value
+    Returns
+    -------
+    np.float32
+        Min absolute value
     """
     return np.min(np.abs(x))
 
@@ -295,11 +292,15 @@ def min_abs(x: npt.NDArray[np.float32]) -> np.float32:
 def max_abs(x: npt.NDArray[np.float32]) -> np.float32:
     """Maximum absolute value of array
 
-    Args:
-        x (npt.NDArray[np.float32]): Array
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Array
 
-    Returns:
-        np.float32: Max value
+    Returns
+    -------
+    np.float32
+        Max absolute value
     """
     return np.max(np.abs(x))
 
@@ -311,10 +312,14 @@ def add_vector_scalar_inplace(
     """Add vector times scalar inplace \\
     y += a*x
 
-    Args:
-        y (npt.NDArray[np.float32]): Mutable array
-        x (npt.NDArray[np.float32]): Array to add (same shape as y)
-        a (np.float32): Scalar
+    Parameters
+    ----------
+    y : npt.NDArray[np.float32]
+        Mutable array
+    x : npt.NDArray[np.float32]
+        Array to add (same shape as y)
+    a : np.float32
+        Scalar
     """
     y_ravel = y.ravel()
     x_ravel = x.ravel()
@@ -334,9 +339,12 @@ def prod_vector_scalar_inplace(y: npt.NDArray[np.float32], a: np.float32) -> Non
     """Multiply vector by scalar inplace \\
     y *= a
 
-    Args:
-        y (npt.NDArray[np.float32]): Mutable array
-        a (np.float32): Scalar
+    Parameters
+    ----------
+    y : npt.NDArray[np.float32]
+        Mutable array
+    a : np.float32
+        Scalar
     """
     y_ravel = y.ravel()
     for i in prange(y_ravel.shape[0]):
@@ -350,12 +358,17 @@ def prod_vector_scalar(
     """Vector times scalar \\
     return a*x
 
-    Args:
-        x (npt.NDArray[np.float32]): Array
-        a (np.float32): Scalar
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Array
+    a : np.float32
+        Array
 
-    Returns:
-        npt.NDArray[np.float32]: Multiplied array
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Product array
     """
     result = np.empty_like(x)
     result_ravel = result.ravel()
@@ -366,18 +379,85 @@ def prod_vector_scalar(
 
 
 @njit(fastmath=True, cache=True, parallel=True)
+def prod_add_vector_scalar_scalar(
+    x: npt.NDArray[np.float32],
+    a: np.float32,
+    b: np.float32,
+) -> npt.NDArray[np.float32]:
+    """Vector times scalar plus scalar \\
+    return a*x + b
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Array
+    a : np.float32
+        Scalar
+    b : np.float32
+        Scalar
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Multiplied and added array
+    """
+    result = np.empty_like(x)
+    result_ravel = result.ravel()
+    x_ravel = x.ravel()
+    for i in prange(result_ravel.shape[0]):
+        result_ravel[i] = a * x_ravel[i] + b
+    return result
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def prod_add_vector_scalar_vector(
+    x: npt.NDArray[np.float32],
+    a: np.float32,
+    b: np.float32,
+) -> npt.NDArray[np.float32]:
+    """Vector times scalar plus vector \\
+    return a*x + b
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Array
+    a : np.float32
+        Scalar
+    b : np.float32
+        Array
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Multiplied and added array
+    """
+    result = np.empty_like(x)
+    result_ravel = result.ravel()
+    x_ravel = x.ravel()
+    b_ravel = b.ravel()
+    for i in prange(result_ravel.shape[0]):
+        result_ravel[i] = a * x_ravel[i] + b_ravel[i]
+    return result
+
+
+@njit(fastmath=True, cache=True, parallel=True)
 def density_renormalize(
     x: npt.NDArray[np.float32], f1: np.float32, f2: np.float32
 ) -> None:
     """Normalise density counts to right-hand side of Poisson equation \\
     x = f1 * (f2 * x - 1) \\
-    f1 = 1.5 * aexp * Om_m" \\
+    f1 = 1.5 * aexp * Om_m \\
     f2 = mpart*ncells_1d**3/(unit_l ** 3 * unit_d)
 
-    Args:
-        x (npt.NDArray[np.float32]): Grid counts from interpolation
-        f1 (np.float32): Scalar factor 1
-        f2 (np.float32): Scalar factor 2
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Grid counts from interpolation
+    f1 : np.float32
+        Scalar factor 1
+    f2 : np.float32
+        Scalar factor 2
     """
     x_ravel = x.ravel()
     one = np.float32(1)
@@ -392,10 +472,14 @@ def reorder_particles(
 ) -> None:
     """Reorder particles inplace with Morton indices
 
-    Args:
-        position (npt.NDArray[np.float32]): Position [3, N_part]
-        velocity (npt.NDArray[np.float32]): Velocity [3, N_part]
-        acceleration (npt.NDArray[np.float32]): Acceleration [3, N_part]. Defaults to None.
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Position [3, N_part]
+    velocity : npt.NDArray[np.float32]
+        Velocity [3, N_part]
+    acceleration : npt.NDArray[np.float32], optional
+        Acceleration [3, N_part], by default None
     """
     logging.debug(f"Re-order particles and acceleration")
     index = morton.positions_to_keys(position)
@@ -411,8 +495,10 @@ def reorder_particles(
 def periodic_wrap(position: npt.NDArray[np.float32]) -> None:
     """Wrap Particle positions in the [0,1[ range
 
-    Args:
-        position (npt.NDArray[np.float32]): Position [Any]
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Position [Any]
     """
     zero = np.float32(0)
     one = np.float32(1)

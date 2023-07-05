@@ -5,16 +5,21 @@ from astropy.cosmology import w0waCDM, FlatLambdaCDM
 from scipy.interpolate import interp1d
 import numpy.typing as npt
 from scipy import integrate
+from typing import List
 
 
-def generate(param: pd.Series) -> list[interp1d]:
+def generate(param: pd.Series) -> List[interp1d]:
     """Generate time and scale factor interpolators from cosmological parameters or RAMSES files
 
-    Args:
-        param (pd.Series): Parameter container
+    Parameters
+    ----------
+    param : pd.Series
+        Parameter container
 
-    Returns:
-        list[interp1d]: Interpolated functions [a(t), t(a), Dplus(a)]
+    Returns
+    -------
+    List[interp1d]
+        Interpolated functions [a(t), t(a), Dplus(a)]
     """
     # Get cosmo
     # TODO: Add Standard cosmologies (Planck18 etc...)
@@ -63,13 +68,19 @@ def Dplus(
 ) -> npt.NDArray[np.float64]:
     """Computes growth factor
 
-    Args:
-        cosmo (w0waCDM): Astropy cosmo object
-        z (npt.NDArray[np.float64]): Redshifts
-        t (int, optional): Flag to now if z = 0 or not. Defaults to 0.
+    Parameters
+    ----------
+    cosmo : w0waCDM
+        astropy.cosmology class
+    z : npt.NDArray[np.float64]
+        Redshifts
+    t : int, optional
+        Flag to now if z = 0 or not. Defaults to 0.
 
-    Returns:
-        npt.NDArray[np.float64]: Growth factor array
+    Returns
+    -------
+    npt.NDArray[np.float64]
+        Growth factor array
     """
     omega = cosmo.Om(z)
     lamb = 1 - omega

@@ -1,6 +1,6 @@
 import logging
 import sys
-
+from typing import List, Tuple
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
@@ -16,9 +16,9 @@ def integrate(
     velocity: npt.NDArray[np.float32],
     acceleration: npt.NDArray[np.float32],
     potential: npt.NDArray[np.float32],
-    tables: list[interp1d],
+    tables: List[interp1d],
     param: pd.Series,
-) -> tuple[
+) -> Tuple[
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
@@ -26,17 +26,30 @@ def integrate(
 ]:
     """Computes one integration step
 
-    Args:
-        position (npt.NDArray[np.float32]): Positions [3, N_part]
-        velocity (npt.NDArray[np.float32]): Velocities [3, N_part]
-        acceleration (npt.NDArray[np.float32]): Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
-        potential (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        tables list[interp1d]: Interpolated functions [a(t), t(a), Dplus(a)]
-        param (pd.Series): Parameter container
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Positions [3, N_part]
+    velocity : npt.NDArray[np.float32]
+        Velocities [3, N_part]
+    acceleration : npt.NDArray[np.float32]
+        Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
+    potential : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    tables : List[interp1d]
+        Interpolated functions [a(t), t(a), Dplus(a)]
+    param : pd.Series
+        Parameter container
 
-    Returns:
-        tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]:
+    Returns
+    -------
+    Tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]
         position, velocity, acceleration, potential [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Raises
+    ------
+    ValueError
+        Integrator must be Euler or Leapfrog
     """
     logging.debug("In integrate")
     dt1 = dt_CFL_maxacc(acceleration, param)
@@ -62,9 +75,9 @@ def euler(
     acceleration: npt.NDArray[np.float32],
     potential: npt.NDArray[np.float32],
     dt: np.float32,
-    tables: list[interp1d],
+    tables: List[interp1d],
     param: pd.Series,
-) -> tuple[
+) -> Tuple[
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
@@ -72,17 +85,26 @@ def euler(
 ]:
     """Euler integrator
 
-    Args:
-        position (npt.NDArray[np.float32]): Positions [3, N_part]
-        velocity (npt.NDArray[np.float32]): Velocities [3, N_part]
-        acceleration (npt.NDArray[np.float32]): Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
-        potential (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        dt (np.float32): Time step
-        tables list[interp1d]: Interpolated functions [a(t), t(a), Dplus(a)]
-        param (pd.Series): Parameter container
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Positions [3, N_part]
+    velocity : npt.NDArray[np.float32]
+        Velocities [3, N_part]
+    acceleration : npt.NDArray[np.float32]
+        Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
+    potential : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    dt : np.float32
+        Time step
+    tables : List[interp1d]
+        Interpolated functions [a(t), t(a), Dplus(a)]
+    param : pd.Series
+        Parameter container
 
-    Returns:
-        tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]:
+    Returns
+    -------
+    Tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]
         position, velocity, acceleration, potential [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     # Drift
@@ -107,9 +129,9 @@ def leapfrog(
     acceleration: npt.NDArray[np.float32],
     potential: npt.NDArray[np.float32],
     dt: np.float32,
-    tables: list[interp1d],
+    tables: List[interp1d],
     param: pd.Series,
-) -> tuple[
+) -> Tuple[
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
@@ -117,17 +139,26 @@ def leapfrog(
 ]:
     """Leapfrog integrator
 
-    Args:
-        position (npt.NDArray[np.float32]): Positions [3, N_part]
-        velocity (npt.NDArray[np.float32]): Velocities [3, N_part]
-        acceleration (npt.NDArray[np.float32]): Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
-        potential (npt.NDArray[np.float32]): Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-        dt (np.float32): Time step
-        tables list[interp1d]: Interpolated functions [a(t), t(a), Dplus(a)]
-        param (pd.Series): Parameter container
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Positions [3, N_part]
+    velocity : npt.NDArray[np.float32]
+        Velocities [3, N_part]
+    acceleration : npt.NDArray[np.float32]
+        Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
+    potential : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    dt : np.float32
+        Time step
+    tables : List[interp1d]
+        Interpolated functions [a(t), t(a), Dplus(a)]
+    param : pd.Series
+        Parameter container
 
-    Returns:
-        tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]:
+    Returns
+    -------
+    Tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]
         position, velocity, acceleration, potential [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     half_dt = np.float32(0.5 * dt)
@@ -155,6 +186,20 @@ def leapfrog(
 def dt_CFL_maxacc(
     acceleration: npt.NDArray[np.float32], param: pd.Series
 ) -> np.float32:  # Angulo & Hahn 2021 (review), Merz et al. 2005 (PMFAST)
+    """Time stepping: free fall
+
+    Parameters
+    ----------
+    acceleration : npt.NDArray[np.float32]
+        Acceleration [3, N_part]
+    param : pd.Series
+        Parameter container
+
+    Returns
+    -------
+    np.float32
+        Time step
+    """
     dx = np.float32(0.5 ** param["ncoarse"])
     max_acc = utils.max_abs(acceleration)
     return np.float32(param["Courant_factor"]) * np.sqrt(dx / max_acc)
@@ -164,6 +209,20 @@ def dt_CFL_maxacc(
 def dt_CFL_maxvel(
     velocity: npt.NDArray[np.float32], param: pd.Series
 ) -> np.float32:  # Angulo & Hahn 2021 (review), Teyssier 2002 (RAMSES)
+    """Time stepping: maximum velocity
+
+    Parameters
+    ----------
+    velocity : npt.NDArray[np.float32]
+        Velocity [3, N_part]
+    param : pd.Series
+        Parameter container
+
+    Returns
+    -------
+    np.float32
+        Time step
+    """
     dx = np.float32(0.5 ** param["ncoarse"])
     max_vel = utils.max_abs(velocity)
     return np.float32(param["Courant_factor"]) * dx / max_vel
@@ -172,6 +231,19 @@ def dt_CFL_maxvel(
 def dt_weak_variation(
     func_t_a: interp1d, param: pd.Series
 ) -> np.float32:  # Teyssier 2002 (RAMSES)
-    return np.float32(
-        func_t_a(1.1 * param["aexp"]) - func_t_a(param["aexp"])
-    )  # dt which gives a 10% variation of the scale factor
+    """Time stepping: maximum scale factor variation \\
+    Time step which gives a 10% variation of the scale factor
+    
+    Parameters
+    ----------
+    func_t_a : interp1d
+        Tnterpolation function t(a)
+    param : pd.Series
+        Parameter container
+
+    Returns
+    -------
+    np.float32
+        Time step
+    """
+    return np.float32(func_t_a(1.1 * param["aexp"]) - func_t_a(param["aexp"]))
