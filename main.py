@@ -12,7 +12,6 @@ __status__ = "Production"
 
 import ast
 import logging
-import sys
 
 import numba
 import numpy as np
@@ -80,10 +79,13 @@ def run(param):
 
 
 def main():
-    print("Read parameter file")
-    if len(sys.argv) < 2:
-        raise ValueError("usage: " + sys.argv[0] + " <param_file>")
-    param = utils.read_param_file(sys.argv[1])
+    import argparse
+
+    print("Read configuration file")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config_file", help="Configuration file", required=True)
+    args = parser.parse_args()
+    param = utils.read_param_file(args.config_file)
     print(param)
     run(param)
 
