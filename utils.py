@@ -129,7 +129,6 @@ def set_units(param: pd.Series) -> None:
         Parameter container
     """
     # Put in good units (Box Units to km,kg,s)
-    npart = 8 ** param["ncoarse"]
     # Get constants
     mpc_to_km = 1e3 * pc.value  #   Mpc -> km
     g = G.value * 1e-9  # m3/kg/s2 -> km3/kg/s2
@@ -140,7 +139,7 @@ def set_units(param: pd.Series) -> None:
     param["unit_l"] = param["aexp"] * param["boxlen"] * 100.0 / H0  # BU to proper km
     param["unit_t"] = param["aexp"] ** 2 / H0  # BU to lookback seconds
     param["unit_d"] = param["Om_m"] * rhoc / param["aexp"] ** 3  # BU to kg/km3
-    param["mpart"] = param["unit_d"] * param["unit_l"] ** 3 / npart  # In kg
+    param["mpart"] = param["unit_d"] * param["unit_l"] ** 3 / param["npart"]  # In kg
 
 
 def read_param_file(name: str) -> pd.Series:
@@ -173,6 +172,9 @@ def read_param_file(name: str) -> pd.Series:
     )
     # Convert all to string
     param = param.astype("string")
+    param["npart"] = eval(
+        param["npart"].item()
+    )  # Can put an operation in parameter file
     # Convert some data to other types
     param = param.astype(
         {
@@ -185,6 +187,7 @@ def read_param_file(name: str) -> pd.Series:
             "z_start": float,
             "boxlen": float,
             "ncoarse": int,
+            "npart": int,
             "n_reorder": int,
             "Npre": int,
             "Npost": int,

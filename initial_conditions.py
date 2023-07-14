@@ -54,12 +54,11 @@ def random(param: pd.Series) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.fl
         Position, Velocity [3, Npart]
     """
     np.random.seed(42)  # set the random number generator seed
-    npart = 8 ** param["ncoarse"]
     # Generate positions (Uniform random between [0,1])
-    position = np.random.rand(3, npart).astype(np.float32)
+    position = np.random.rand(3, param["npart"]).astype(np.float32)
     utils.periodic_wrap(position)
     # Generate velocities
-    velocity = 0.007 * np.random.randn(3, npart).astype(np.float32)
+    velocity = 0.007 * np.random.randn(3, param["npart"]).astype(np.float32)
     return position, velocity
 
 
@@ -78,11 +77,10 @@ def sphere(param: pd.Series) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.fl
     """
     logging.debug("Spherical initial conditions")
     np.random.seed(42)  # set the random number generator seed
-    npart = 8 ** param["ncoarse"]
     center = [0.01, 0.5, 0.5]
     radius = 0.15
-    phi = 2 * np.pi * np.random.rand(npart)
-    cth = np.random.rand(npart) * 2 - 1
+    phi = 2 * np.pi * np.random.rand(param["npart"])
+    cth = np.random.rand(param["npart"]) * 2 - 1
     sth = np.sin(np.arccos(cth))
     x = center[0] + radius * np.cos(phi) * sth
     y = center[1] + radius * np.sin(phi) * sth
@@ -91,7 +89,7 @@ def sphere(param: pd.Series) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.fl
     utils.periodic_wrap(x)
     utils.periodic_wrap(y)
     utils.periodic_wrap(z)
-    return (np.vstack([x, y, z]), np.zeros((3, npart)))
+    return (np.vstack([x, y, z]), np.zeros((3, param["npart"])))
 
 
 def read_hdf5(
@@ -120,6 +118,8 @@ def read_hdf5(
     utils.set_units(param)
     # Get positions
     npart = int(f["metadata/npart_file"][:])
+    if npart != param["npart"]:
+        raise ValueError(f"{npart=} and {param['npart']} should be equal.")
     position = np.empty((3, npart), dtype=np.float32)
     velocity = np.empty_like(position, dtype=np.float32)
     npart_grp_array = f["metadata/npart_grp_array"][:]
