@@ -1,5 +1,6 @@
 import logging
 import sys
+from typing import List, Tuple, Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,6 +9,238 @@ import pandas as pd
 from numba import config, njit, prange
 
 import utils
+
+
+@njit(
+    ["f4(f4, f4)"],
+    fastmath=True,
+    cache=True,
+)
+def solution_fR_cubic_equation(
+    p: np.float32,
+    d1: np.float32,
+) -> np.float32:
+    """Solution of the depressed cubic equation \\
+    u^3 + pu + q = 0
+
+    Parameters
+    ----------
+    p : np.float32
+        Depressed cubic equation parameter
+    d1 : np.float32
+        d1 = 27*q, with q the constant depressed cubic equation term
+
+    Returns
+    -------
+    np.float32
+        Solution of the cubic equation
+    """
+    d0 = -3 * p
+    if p > 0:
+        C = np.cbrt(0.5 - d1 + np.sqrt(d1**2 - 4 * d0**3))
+        return -(C + d0 / C) / 3
+    elif p < 0:
+        theta = d1 / (2 * d0 ** (1.5))
+        return -np.cos(theta + 2 * np.pi / 3)
+    return (-d1 / 27.0) ** (1 / 3)
+
+
+@njit(
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4, f4, f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def gauss_seidel_fR_cubic_roots(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f1: np.float32,
+    f2: np.float32,
+    q: np.float32,
+) -> npt.NDArray[np.float32]:
+    """Gauss-Seidel depressed cubic equation solver \\
+    Solve the roots of u in the equation: \\
+    u^3 + pu + q = 0 \\
+    with, in f(R) gravity [Bose et al. 2017]\\
+    p = f1*b + f2 - 1/6 * (u_{i+1,j,k}**2+u_{i-1,j,k}**2+u_{i,j+1,k}**2+u_{i,j-1,k}**2+u_{i,j,k+1}**2+u_{i,j,k-1}**2)
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Density [N_cells_1d, N_cells_1d, N_cells_1d]
+    f1 : np.float32
+        prefactor on the density term
+    f1 : np.float32
+        additional constant
+    q : np.float32
+        Constant value in the cubic equation
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+         [N_cells_1d, N_cells_1d, N_cells_1d]
+    """
+    invsix = np.float32(1.0 / 6)
+    d1 = 27 * q
+    # Initialise mesh
+    result = np.empty((x.shape[0], x.shape[1], x.shape[2]), dtype=np.float32)
+    # Computation Red
+    for i in prange(x.shape[0] >> 1):
+        ii = 2 * i
+        iim2 = ii - 2
+        iim1 = ii - 1
+        iip1 = ii + 1
+        for j in prange(x.shape[1] >> 1):
+            jj = 2 * j
+            jjm2 = jj - 2
+            jjm1 = jj - 1
+            jjp1 = jj + 1
+            for k in prange(x.shape[2] >> 1):
+                kk = 2 * k
+                kkm2 = kk - 2
+                kkm1 = kk - 1
+                kkp1 = kk + 1
+                # Put in array
+                p = (
+                    f1 * b[iim1, jjm1, kkm1]
+                    + f2
+                    - invsix
+                    * (
+                        x[iim2, jjm1, kkm1] ** 2
+                        + x[ii, jjm1, kkm1] ** 2
+                        + x[iim1, jjm2, kkm1] ** 2
+                        + x[iim1, jj, kkm1] ** 2
+                        + x[iim1, jjm1, kkm2] ** 2
+                        + x[iim1, jjm1, kk] ** 2
+                    )
+                )
+                x[iim1, jjm1, kkm1] = solution_fR_cubic_equation(p, d1)
+                # Put in array
+                p = (
+                    f1 * b[ii, jj, kkm1]
+                    + f2
+                    - invsix
+                    * (
+                        x[iim1, jj, kkm1] ** 2
+                        + x[iip1, jj, kkm1] ** 2
+                        + x[ii, jjm1, kkm1] ** 2
+                        + x[ii, jjp1, kkm1] ** 2
+                        + x[ii, jj, kkm2] ** 2
+                        + x[ii, jj, kk] ** 2
+                    )
+                )
+                x[ii, jj, kkm1] = solution_fR_cubic_equation(p, d1)
+                # Put in array
+                p = (
+                    f1 * b[ii, jjm1, kk]
+                    + f2
+                    - invsix
+                    * (
+                        x[iim1, jjm1, kk]
+                        + x[iip1, jjm1, kk]
+                        + x[ii, jjm2, kk]
+                        + x[ii, jj, kk]
+                        + x[ii, jjm1, kkm1]
+                        + x[ii, jjm1, kkp1]
+                    )
+                )
+                x[ii, jjm1, kk] = solution_fR_cubic_equation(p, d1)
+                # Put in array
+                p = (
+                    f1 * b[iim1, jj, kk]
+                    + f2
+                    - invsix
+                    * (
+                        x[iim2, jj, kk]
+                        + x[ii, jj, kk]
+                        + x[iim1, jjm1, kk]
+                        + x[iim1, jjp1, kk]
+                        + x[iim1, jj, kkm1]
+                        + x[iim1, jj, kkp1]
+                    )
+                )
+                x[iim1, jj, kk] = solution_fR_cubic_equation(p, d1)
+
+    # Computation Black
+    for i in prange(x.shape[0] >> 1):
+        ii = 2 * i
+        iim2 = ii - 2
+        iim1 = ii - 1
+        iip1 = ii + 1
+        for j in prange(x.shape[1] >> 1):
+            jj = 2 * j
+            jjm2 = jj - 2
+            jjm1 = jj - 1
+            jjp1 = jj + 1
+            for k in prange(x.shape[2] >> 1):
+                kk = 2 * k
+                kkm2 = kk - 2
+                kkm1 = kk - 1
+                kkp1 = kk + 1
+                # Put in array
+                p = (
+                    f1 * b[ii, jj, kk]
+                    + f2
+                    - invsix
+                    * (
+                        x[iim1, jj, kk]
+                        + x[iip1, jj, kk]
+                        + x[ii, jjm1, kk]
+                        + x[ii, jjp1, kk]
+                        + x[ii, jj, kkm1]
+                        + x[ii, jj, kkp1]
+                    )
+                )
+                x[ii, jj, kk] = solution_fR_cubic_equation(p, d1)
+                # Put in array
+                p = (
+                    f1 * b[iim1, jjm1, kk]
+                    + f2
+                    - invsix
+                    * (
+                        x[iim2, jjm1, kk]
+                        + x[ii, jjm1, kk]
+                        + x[iim1, jjm2, kk]
+                        + x[iim1, jj, kk]
+                        + x[iim1, jjm1, kkm1]
+                        + x[iim1, jjm1, kkp1]
+                    )
+                    * invsix
+                )
+                x[iim1, jjm1, kk] = solution_fR_cubic_equation(p, d1)
+                # Put in array
+                p = (
+                    f1 * b[iim1, jj, kkm1]
+                    + f2
+                    - invsix
+                    * (
+                        x[iim2, jj, kkm1]
+                        + x[ii, jj, kkm1]
+                        + x[iim1, jjm1, kkm1]
+                        + x[iim1, jjp1, kkm1]
+                        + x[iim1, jj, kkm2]
+                        + x[iim1, jj, kk]
+                    )
+                )
+                x[iim1, jj, kkm1] = solution_fR_cubic_equation(p, d1)
+                # Put in array
+                p = (
+                    f1 * b[ii, jjm1, kkm1]
+                    + f2
+                    - invsix
+                    * (
+                        x[iim1, jjm1, kkm1]
+                        + x[iip1, jjm1, kkm1]
+                        + x[ii, jjm2, kkm1]
+                        + x[ii, jj, kkm1]
+                        + x[ii, jjm1, kkm2]
+                        + x[ii, jjm1, kk]
+                    )
+                )
+                x[ii, jjm1, kkm1] = solution_fR_cubic_equation(p, d1)
+    return result
 
 
 @njit(["f4[:,:,::1](f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
@@ -683,11 +916,41 @@ def gauss_seidel_no_overrelaxation(
 
 
 # @njit(fastmath=True, cache=True)
-def smoothing(
+def smoothing_fR(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     h: np.float32,
     n_smoothing: int,
+    *args,
+) -> None:
+    """Smooth scalaron field with several Gauss-Seidel iterations \\
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+    n_smoothing : int
+        Number of smoothing iterations
+    *args : 
+        Additional arguments (see function gauss_seidel_fR_cubic_roots)
+    """
+    f1 = np.float32(args[0]) * h**2
+    f2 = np.float32(args[1]) * h**2
+    q = np.float32(args[2])
+    for _ in range(n_smoothing):
+        gauss_seidel_fR_cubic_roots(x, b, f1, f2, q)
+
+
+def smoothing_linear(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    h: np.float32,
+    n_smoothing: int,
+    *args,
 ) -> None:
     """Smooth field with several Gauss-Seidel iterations \\
     First and last iterations does not have over-relaxation to ensure compatibility with optimized function before and after the use of smoothing(...)
@@ -702,6 +965,8 @@ def smoothing(
         Grid size
     n_smoothing : int
         Number of smoothing iterations
+    *args : 
+        Additional arguments (unused)
     """
     # No over-relaxation because half prolongated
     gauss_seidel_no_overrelaxation(x, b, h)
@@ -1220,6 +1485,7 @@ def V_cycle(
     b: npt.NDArray[np.float32],
     nlevel: int,
     params: pd.Series,
+    *args,
 ) -> None:
     """Multigrid V cycle
 
@@ -1233,21 +1499,25 @@ def V_cycle(
         Grid level (positive, equal to zero at coarse level)
     params : pd.Series
         Parameter container
+    *args :
+        Additional arguments (contains smoothing functions and possible additional parameters)
     """
     logging.debug("In V_cycle")
+    # smoothing = args[0]
+    # smoothing = smoothing_linear
     h = np.float32(0.5 ** (params["ncoarse"] - nlevel))
     two = np.float32(2)
-    smoothing(x, b, h, params["Npre"])
+    smoothing_linear(x, b, h, params["Npre"])
     res_c = restric_residual_half(x, b, h)
     # Initialise array to x_ijk = -b_ijk*h^2/6 (one Jacobi sweep)
     x_corr_c = utils.prod_vector_scalar(res_c, (-4.0 / 6 * h**2))
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+        smoothing_linear(x_corr_c, res_c, two * h, params["Npre"])
     else:
-        V_cycle(x_corr_c, res_c, nlevel + 1, params)
+        V_cycle(x_corr_c, res_c, nlevel + 1, params, args[0])
     add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, params["Npost"])
+    smoothing_linear(x, b, h, params["Npost"])
 
 
 @utils.time_me
@@ -1256,6 +1526,7 @@ def V_cycle_FAS(
     b: npt.NDArray[np.float32],
     nlevel: int,
     params: pd.Series,
+    *args,
 ) -> None:
     """Multigrid V cycle with Full Approximation Scheme
 
@@ -1269,11 +1540,14 @@ def V_cycle_FAS(
         Grid level (positive, equal to zero at coarse level)
     params : pd.Series
         Parameter container
+    *args :
+        Additional arguments (contains smoothing functions and possible additional parameters)
     """
     logging.debug("In V_cycle")
+    smoothing = args[0]
     h = np.float32(0.5 ** (params["ncoarse"] - nlevel))
     two = np.float32(2)
-    smoothing(x, b, h, params["Npre"])
+    smoothing(x, b, h, params["Npre"], args[1:])
     res_c = restric_residual_half(x, b, h)
     # Compute correction to solution at coarser level
     # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
@@ -1282,12 +1556,12 @@ def V_cycle_FAS(
     utils.add_vector_scalar_inplace(res_c, laplacian(x_c, two * h), np.float32(1))
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"], args[1:])
     else:
-        V_cycle_FAS(x_corr_c, res_c, nlevel + 1, params)
+        V_cycle_FAS(x_corr_c, res_c, nlevel + 1, params, args[0])
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, params["Npost"])
+    smoothing(x, b, h, params["Npost"], args[1:])
 
 
 @utils.time_me
@@ -1296,6 +1570,7 @@ def F_cycle(
     b: npt.NDArray[np.float32],
     nlevel: int,
     params: pd.Series,
+    *args,
 ) -> None:
     """Multigrid F cycle
 
@@ -1309,20 +1584,23 @@ def F_cycle(
         Grid level (positive, equal to zero at coarse level)
     params : pd.Series
         Parameter container
+    *args :
+        Additional arguments (contains smoothing functions and possible additional parameters)
     """
     logging.debug("In F_cycle")
+    smoothing = args[0]
     h = 0.5 ** (params["ncoarse"] - nlevel)
     two = np.float32(2)
-    smoothing(x, b, h, params["Npre"])
+    smoothing(x, b, h, params["Npre"], args[1:])
     res_c = restric_residual_half(x, b, h)
     # Compute correction to solution at coarser level
     # Initialise array to x_ijk = -b_ijk*h^2/6 (one Jacobi sweep)
     x_corr_c = utils.prod_vector_scalar(res_c, (-4.0 / 6 * h**2))
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"], args[1:])
     else:
-        F_cycle(x_corr_c, res_c, nlevel + 1, params)
+        F_cycle(x_corr_c, res_c, nlevel + 1, params, args[0])
     add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, params["Npre"])
     ### Now compute again corrections (almost exactly same as the first part) ###
@@ -1332,12 +1610,12 @@ def F_cycle(
     x_corr_c = utils.prod_vector_scalar(res_c, (-4.0 / 6 * h**2))
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"], args[1:])
     else:
-        V_cycle(x_corr_c, res_c, nlevel + 1, params)  # Careful, V_cycle here
+        V_cycle(x_corr_c, res_c, nlevel + 1, params, args[0])  # Careful, V_cycle here
 
     add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, params["Npost"])
+    smoothing(x, b, h, params["Npost"], args[1:])
 
 
 @utils.time_me
@@ -1346,6 +1624,7 @@ def F_cycle_FAS(
     b: npt.NDArray[np.float32],
     nlevel: int,
     params: pd.Series,
+    *args,
 ) -> None:
     """Multigrid F cycle with Full Approximation Scheme
 
@@ -1359,11 +1638,14 @@ def F_cycle_FAS(
         Grid level (positive, equal to zero at coarse level)
     params : pd.Series
         Parameter container
+    *args :
+        Additional arguments (contains smoothing functions and possible additional parameters)
     """
     logging.debug("In F_cycle")
+    smoothing = args[0]
     h = 0.5 ** (params["ncoarse"] - nlevel)
     two = np.float32(2)
-    smoothing(x, b, h, params["Npre"])
+    smoothing(x, b, h, params["Npre"], args[1:])
     res_c = restric_residual_half(x, b, h)
     # Compute correction to solution at coarser level
     # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
@@ -1372,12 +1654,12 @@ def F_cycle_FAS(
     utils.add_vector_scalar_inplace(res_c, laplacian(x_c, two * h), np.float32(1))
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"], args[1:])
     else:
-        F_cycle_FAS(x_corr_c, res_c, nlevel + 1, params)
+        F_cycle_FAS(x_corr_c, res_c, nlevel + 1, params, args[0])
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, params["Npre"])
+    smoothing(x, b, h, params["Npre"], args[1:])
     ### Now compute again corrections (almost exactly same as the first part) ###
     res_c = restric_residual_half(x, b, h)
     # Compute correction to solution at coarser level
@@ -1388,12 +1670,14 @@ def F_cycle_FAS(
 
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"], args[1:])
     else:
-        V_cycle_FAS(x_corr_c, res_c, nlevel + 1, params)  # Careful, V_cycle here
+        V_cycle_FAS(
+            x_corr_c, res_c, nlevel + 1, params, args[0]
+        )  # Careful, V_cycle here
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, params["Npost"])
+    smoothing(x, b, h, params["Npost"], args[1:])
 
 
 @utils.time_me
@@ -1402,6 +1686,7 @@ def W_cycle(
     b: npt.NDArray[np.float32],
     nlevel: int,
     params: pd.Series,
+    *args,
 ) -> None:
     """Multigrid W cycle
 
@@ -1415,11 +1700,14 @@ def W_cycle(
         Grid level (positive, equal to zero at coarse level)
     params : pd.Series
         Parameter container
+    *args :
+        Additional arguments (contains smoothing functions and possible additional parameters)
     """
     logging.debug("In W_cycle")
+    smoothing = args[0]
     h = 0.5 ** (params["ncoarse"] - nlevel)  # nlevel = 0 is coarse level
     two = np.float32(2)
-    smoothing(x, b, h, params["Npre"])
+    smoothing(x, b, h, params["Npre"], args[1:])
     res_c = restric_residual_half(x, b, h)
 
     # Compute correction to solution at coarser level
@@ -1427,12 +1715,12 @@ def W_cycle(
     x_corr_c = utils.prod_vector_scalar(res_c, (-4.0 / 6 * h**2))
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"], args[1:])
     else:
-        W_cycle(x_corr_c, res_c, nlevel + 1, params)
+        W_cycle(x_corr_c, res_c, nlevel + 1, params, args[0])
 
     add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, params["Npre"])
+    smoothing(x, b, h, params["Npre"], args[1:])
 
     ### Now compute again corrections (almost exactly same as the first part) ###
     res_c = restric_residual_half(x, b, h)
@@ -1442,12 +1730,12 @@ def W_cycle(
 
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"], args[1:])
     else:
-        W_cycle(x_corr_c, res_c, nlevel + 1, params)
+        W_cycle(x_corr_c, res_c, nlevel + 1, params, args[0])
 
     add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, params["Npre"])
+    smoothing(x, b, h, params["Npre"], args[1:])
 
 
 @utils.time_me
@@ -1456,6 +1744,7 @@ def W_cycle_FAS(
     b: npt.NDArray[np.float32],
     nlevel: int,
     params: pd.Series,
+    *args,
 ) -> None:
     """Multigrid W cycle with Full Approximation Scheme
 
@@ -1469,11 +1758,14 @@ def W_cycle_FAS(
         Grid level (positive, equal to zero at coarse level)
     params : pd.Series
         Parameter container
+    *args :
+        Additional arguments (contains smoothing functions and possible additional parameters)
     """
     logging.debug("In W_cycle")
+    smoothing = args[0]
     h = 0.5 ** (params["ncoarse"] - nlevel)  # nlevel = 0 is coarse level
     two = np.float32(2)
-    smoothing(x, b, h, params["Npre"])
+    smoothing(x, b, h, params["Npre"], args[1:])
     res_c = restric_residual_half(x, b, h)
 
     # Compute correction to solution at coarser level
@@ -1484,13 +1776,13 @@ def W_cycle_FAS(
 
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"], args[1:])
     else:
-        W_cycle_FAS(x_corr_c, res_c, nlevel + 1, params)
+        W_cycle_FAS(x_corr_c, res_c, nlevel + 1, params, args[0])
 
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, params["Npre"])
+    smoothing(x, b, h, params["Npre"], args[1:])
 
     ### Now compute again corrections (almost exactly same as the first part) ###
     res_c = restric_residual_half(x, b, h)
@@ -1502,13 +1794,13 @@ def W_cycle_FAS(
 
     # Stop if we are at coarse enough level
     if nlevel >= (params["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, params["Npre"])
+        smoothing(x_corr_c, res_c, two * h, params["Npre"], args[1:])
     else:
-        W_cycle_FAS(x_corr_c, res_c, nlevel + 1, params)
+        W_cycle_FAS(x_corr_c, res_c, nlevel + 1, params, args[0])
 
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, params["Npre"])
+    smoothing(x, b, h, params["Npre"], args[1:])
 
 
 @njit(["f4[:,:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)

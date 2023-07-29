@@ -2,11 +2,11 @@
 """\
 Main executable module to run cosmological N-body simulations
 
-Usage: python main.py param.ini
+Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.1.1"
+__version__ = "0.1.3"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Production"
 

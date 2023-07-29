@@ -1,5 +1,5 @@
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Callable
 
 import numpy as np
 import numpy.typing as npt
@@ -40,8 +40,6 @@ def pm(
     # Get RHS
     ncells_1d = 2 ** (param["ncoarse"])
     h = np.float32(1.0 / ncells_1d)
-
-    # Compute gravitational potential
     # Compute density mesh from particles
     f1 = np.float32(1.5 * param["aexp"] * param["Om_m"])
     f2 = np.float32(
@@ -53,9 +51,12 @@ def pm(
     # Compute additional field
     if param["theory"].casefold() == "fr".casefold():
         c_light = c.value * 1e-3 * param["unit_t"] / param["unit_l"]  # m -> km -> BU
-        f_first_rhs = np.float32(2.0 / (3.0 * c_light**2))
-        fR_first_rhs = utils.prod_vector_scalar(rhs, f_first_rhs)
-        fR = 0  # multigrid_FAS(...)
+        f1 = 0
+        f2 = 0
+        q = 0
+        args = [mesh.smoothing_fR, f1, f2, q]
+        uR = 0  # multigrid_FAS(...)
+        fR = -(uR**2)
 
     # Initialise Potential if there is no previous step. Else, rescale the potential using growth and scale factors
     if potential is None:
@@ -71,9 +72,11 @@ def pm(
         utils.prod_vector_scalar_inplace(potential, scaling)
     # Main procedure: Poisson solver
     if param["theory"].casefold() == "newton".casefold():
-        potential = multigrid(potential, rhs, h, param)
+        args = mesh.smoothing_linear
+        potential = multigrid(potential, rhs, h, param, args)
     else:
-        potential = multigrid_FAS(potential, rhs, h, param)
+        args = mesh.smoothing_linear
+        potential = multigrid_FAS(potential, rhs, h, param, args)
     rhs = 0
     # Compute Force
     force = mesh.derivative(potential)
@@ -88,6 +91,7 @@ def multigrid(
     rhs: npt.NDArray[np.float32],
     h: np.float32,
     param: pd.Series,
+    *args,
 ) -> npt.NDArray[np.float32]:
     """Compute Multigrid
 
@@ -108,12 +112,8 @@ def multigrid(
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
     """
     # TODO:  - Check w_relax
-    #        - Inplace instead of returning function
+    #        - Inplace instead of returning array from function
     #        - Parallelize (test PyOMP)
-    #        - Output Energy ! Check conservation
-    #        - Define types in decorator
-    #        - Check if we get better initial residual with scaled potential from previous step
-    # Compute tolerance
     # If tolerance not yet assigned or every 3 time steps, compute truncation error
     if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
         print("Compute Truncation error")
@@ -121,7 +121,7 @@ def multigrid(
 
     # Main procedure: Multigrid
     for _ in range(param["n_cycles_max"]):
-        mesh.V_cycle(x, rhs, 0, param)
+        mesh.V_cycle(x, rhs, 0, param, args[0])
         residual_error = mesh.residual_error_half(x, rhs, h)
         print(f"{residual_error=} {param['tolerance']=}")
         if residual_error < param["tolerance"]:
@@ -136,6 +136,7 @@ def multigrid_FAS(
     rhs: npt.NDArray[np.float32],
     h: np.float32,
     param: pd.Series,
+    *args,
 ) -> npt.NDArray[np.float32]:
     """Compute Multigrid with Full Approximation Scheme
 
@@ -155,13 +156,6 @@ def multigrid_FAS(
     npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
     """
-    # TODO:  - Check w_relax
-    #        - Inplace instead of returning function
-    #        - Parallelize (test PyOMP)
-    #        - Output Energy ! Check conservation
-    #        - Define types in decorator
-    #        - Check if we get better initial residual with scaled potential from previous step
-    # Compute tolerance
     # If tolerance not yet assigned or every 3 time steps, compute truncation error
     if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
         print("Compute Truncation error")
@@ -169,7 +163,7 @@ def multigrid_FAS(
 
     # Main procedure: Multigrid
     for _ in range(param["n_cycles_max"]):
-        mesh.V_cycle_FAS(x, rhs, 0, param)
+        mesh.V_cycle_FAS(x, rhs, 0, param, args[0])
         residual_error = mesh.residual_error_half(x, rhs, h)
         print(f"{residual_error=} {param['tolerance']=}")
         if residual_error < param["tolerance"]:
