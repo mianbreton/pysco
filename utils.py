@@ -196,6 +196,8 @@ def read_param_file(name: str) -> pd.Series:
             "Courant_factor": float,
         }
     )
+    if param["theory"].item().casefold() == "fr".casefold():
+        param = param.astype({"fR_fR0": float, "fR_n": int})
     # Return Series
     return param.T.iloc[:, 0]
 
@@ -445,13 +447,49 @@ def prod_add_vector_scalar_vector(
 
 
 @njit(fastmath=True, cache=True, parallel=True)
-def density_renormalize(
+def linear_operator(
+    x: npt.NDArray[np.float32], f1: np.float32, f2: np.float32
+) -> npt.NDArray[np.float32]:
+    """Linear operator on array
+    
+    result = f1 * x + f2
+
+    Example: Normalise density counts to right-hand side of Poisson equation
+    
+    x = density \\
+    f1 = 1.5 * aexp * Om_m * mpart * ncells_1d**3 / (unit_l ** 3 * unit_d)\\
+    f2 = - 1.5 * aexp * Om_m
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Grid counts from interpolation
+    f1 : np.float32
+        Scalar factor 1
+    f2 : np.float32
+        Scalar factor 2
+    """
+    result = np.empty_like(x)
+    x_ravel = x.ravel()
+    result_ravel = result.ravel()
+    for i in prange(result_ravel.shape[0]):
+        result_ravel[i] = f1 * x_ravel[i] + f2
+    return result
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def linear_operator_inplace(
     x: npt.NDArray[np.float32], f1: np.float32, f2: np.float32
 ) -> None:
-    """Normalise density counts to right-hand side of Poisson equation \\
-    x = f1 * (f2 * x - 1) \\
-    f1 = 1.5 * aexp * Om_m \\
-    f2 = mpart*ncells_1d**3/(unit_l ** 3 * unit_d)
+    """Inplace Linear operator on array
+
+    result = f1 * x + f2
+
+    Example: Normalise density counts to right-hand side of Poisson equation
+
+    x = density \\
+    f1 = 1.5 * aexp * Om_m * mpart * ncells_1d**3 / (unit_l ** 3 * unit_d) \\
+    f2 = - 1.5 * aexp * Om_m
 
     Parameters
     ----------
@@ -463,9 +501,45 @@ def density_renormalize(
         Scalar factor 2
     """
     x_ravel = x.ravel()
-    one = np.float32(1)
     for i in prange(x_ravel.shape[0]):
-        x_ravel[i] = f1 * (f2 * x_ravel[i] - one)
+        x_ravel[i] = f1 * x_ravel[i] + f2
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def operator_fR_inplace(
+    density: npt.NDArray[np.float32],
+    u_scalaron: npt.NDArray[np.float32],
+    f1: np.float32,
+    f2: np.float32,
+    f3: np.float32,
+) -> None:
+    """Inplace f(R) operator
+
+    result = f1 * density + f2/u_scalaron + f3
+
+    Example: Normalise density counts to right-hand side of Poisson equation in f(R) gravity
+
+    f1 = 2 * Om_m
+    f1 = 1.5 * aexp * Om_m * mpart * ncells_1d**3 / (unit_l ** 3 * unit_d) \\
+    f2 = - 1.5 * aexp * Om_m
+
+    Parameters
+    ----------
+    density : npt.NDArray[np.float32]
+        Density field
+    u_scalaron : npt.NDArray[np.float32]
+        Reduced scalaron field u = (-fR)^1/2
+    f1 : np.float32
+        Scalar factor 1
+    f2 : np.float32
+        Scalar factor 2
+    f3 : np.float32
+        Scalar factor 3
+    """
+    density_ravel = density.ravel()
+    u_scalaron_ravel = u_scalaron.ravel()
+    for i in prange(density_ravel.shape[0]):
+        density_ravel[i] = f1 * density_ravel[i] + f2 / u_scalaron_ravel[i] + f3
 
 
 def reorder_particles(
