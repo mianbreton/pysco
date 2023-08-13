@@ -16,9 +16,11 @@ def integrate(
     velocity: npt.NDArray[np.float32],
     acceleration: npt.NDArray[np.float32],
     potential: npt.NDArray[np.float32],
+    additional_field: npt.NDArray[np.float32],
     tables: List[interp1d],
     param: pd.Series,
 ) -> Tuple[
+    npt.NDArray[np.float32],
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
@@ -36,6 +38,8 @@ def integrate(
         Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
     potential : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    additional_field : npt.NDArray[np.float32]
+        Additional potential [N_cells_1d, N_cells_1d, N_cells_1d]
     tables : List[interp1d]
         Interpolated functions [a(t), t(a), Dplus(a)]
     param : pd.Series
@@ -44,7 +48,7 @@ def integrate(
     Returns
     -------
     Tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]
-        position, velocity, acceleration, potential [N_cells_1d, N_cells_1d, N_cells_1d]
+        position, velocity, acceleration, potential, additional_field [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Raises
     ------
@@ -62,9 +66,27 @@ def integrate(
     logging.debug(f"{dt1=} {dt2=} {dt3=}")
     # Integrate
     if param.integrator == "leapfrog":
-        return leapfrog(position, velocity, acceleration, potential, dt, tables, param)
+        return leapfrog(
+            position,
+            velocity,
+            acceleration,
+            potential,
+            additional_field,
+            dt,
+            tables,
+            param,
+        )
     elif param.integrator == "euler":
-        return euler(position, velocity, acceleration, potential, dt, tables, param)
+        return euler(
+            position,
+            velocity,
+            acceleration,
+            potential,
+            additional_field,
+            dt,
+            tables,
+            param,
+        )
     else:
         raise ValueError("ERROR: Integrator must be 'leapfrog' or 'euler'")
 
@@ -74,10 +96,12 @@ def euler(
     velocity: npt.NDArray[np.float32],
     acceleration: npt.NDArray[np.float32],
     potential: npt.NDArray[np.float32],
+    additional_field: npt.NDArray[np.float32],
     dt: np.float32,
     tables: List[interp1d],
     param: pd.Series,
 ) -> Tuple[
+    npt.NDArray[np.float32],
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
@@ -95,6 +119,8 @@ def euler(
         Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
     potential : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    additional_field : npt.NDArray[np.float32]
+        Additional potential [N_cells_1d, N_cells_1d, N_cells_1d]
     dt : np.float32
         Time step
     tables : List[interp1d]
@@ -105,7 +131,7 @@ def euler(
     Returns
     -------
     Tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]
-        position, velocity, acceleration, potential [N_cells_1d, N_cells_1d, N_cells_1d]
+        position, velocity, acceleration, potential, additional_field [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     # Drift
     utils.add_vector_scalar_inplace(position, velocity, dt)
@@ -119,8 +145,10 @@ def euler(
     # Kick
     utils.add_vector_scalar_inplace(velocity, acceleration, dt)
     # Solver
-    acceleration, potential = solver.pm(position, param, potential, tables)
-    return (position, velocity, acceleration, potential)
+    acceleration, potential, additional_field = solver.pm(
+        position, param, potential, additional_field, tables
+    )
+    return (position, velocity, acceleration, potential, additional_field)
 
 
 def leapfrog(
@@ -128,10 +156,12 @@ def leapfrog(
     velocity: npt.NDArray[np.float32],
     acceleration: npt.NDArray[np.float32],
     potential: npt.NDArray[np.float32],
+    additional_field: npt.NDArray[np.float32],
     dt: np.float32,
     tables: List[interp1d],
     param: pd.Series,
 ) -> Tuple[
+    npt.NDArray[np.float32],
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
@@ -149,6 +179,8 @@ def leapfrog(
         Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
     potential : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    additional_field : npt.NDArray[np.float32]
+        Additional potential [N_cells_1d, N_cells_1d, N_cells_1d]
     dt : np.float32
         Time step
     tables : List[interp1d]
@@ -159,7 +191,7 @@ def leapfrog(
     Returns
     -------
     Tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]
-        position, velocity, acceleration, potential [N_cells_1d, N_cells_1d, N_cells_1d]
+        position, velocity, acceleration, potential, additional_field [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     half_dt = np.float32(0.5 * dt)
     # Kick
@@ -176,11 +208,13 @@ def leapfrog(
     # Periodic boundary conditions
     utils.periodic_wrap(position)
     # Solver
-    acceleration, potential = solver.pm(position, param, potential, tables)
+    acceleration, potential, additional_field = solver.pm(
+        position, param, potential, additional_field, tables
+    )
     # Kick
     utils.add_vector_scalar_inplace(velocity, acceleration, half_dt)
 
-    return position, velocity, acceleration, potential
+    return position, velocity, acceleration, potential, additional_field
 
 
 def dt_CFL_maxacc(

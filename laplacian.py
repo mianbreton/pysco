@@ -7,7 +7,7 @@ import utils
 
 
 @njit(["f4[:,:,::1](f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
-def laplacian(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float32]:
+def operator(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float32]:
     """Laplacian operator
 
     Parameters
@@ -39,12 +39,12 @@ def laplacian(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float
                 # Put in array
                 result[i, j, k] = (
                     x[im1, j, k]
-                    + x[ip1, j, k]
                     + x[i, jm1, k]
-                    + x[i, jp1, k]
                     + x[i, j, km1]
-                    + x[i, j, kp1]
                     - six * x[i, j, k]
+                    + x[i, j, kp1]
+                    + x[i, jp1, k]
+                    + x[ip1, j, k]
                 ) * invh2
     return result
 
@@ -94,10 +94,10 @@ def residual(
                     -(
                         x[im1, j, k]
                         + x[i, jm1, k]
-                        + x[i, jp1, k]
                         + x[i, j, km1]
                         - six * x[i, j, k]
                         + x[i, j, kp1]
+                        + x[i, jp1, k]
                         + x[ip1, j, k]
                     )
                     * invh2
@@ -117,7 +117,7 @@ def restrict_residual_half(
     x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
 ) -> npt.NDArray[np.float32]:
     """Restriction operator on half of the residual of Laplacian operator \\
-    residual = b - Ax  \\
+    residual = -(Ax - b)  \\
     This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
     in this case we can compute the residual and restriction for only half the points.
 
@@ -175,9 +175,9 @@ def restrict_residual_half(
                         + three
                         * (
                             x[ii, jj, kk]
+                            + x[ii, jjp1, kkp1]
                             + x[iip1, jj, kkp1]
                             + x[iip1, jjp1, kk]
-                            + x[ii, jjp1, kkp1]
                         )
                         - six
                         * (
@@ -244,10 +244,10 @@ def residual_error_half(
                     -(
                         x[iim1, jj, kkp1]
                         + x[ii, jjm1, kkp1]
-                        + x[ii, jjp1, kkp1]
                         + x[ii, jj, kk]
                         - six * x[ii, jj, kkp1]
                         + x[ii, jj, kkp2]
+                        + x[ii, jjp1, kkp1]
                         + x[iip1, jj, kkp1]
                     )
                     * invh2
@@ -257,10 +257,10 @@ def residual_error_half(
                     -(
                         x[iim1, jjp1, kk]
                         + x[ii, jj, kk]
-                        + x[ii, jjp2, kk]
                         + x[ii, jjp1, kkm1]
                         - six * x[ii, jjp1, kk]
                         + x[ii, jjp1, kkp1]
+                        + x[ii, jjp2, kk]
                         + x[iip1, jjp1, kk]
                     )
                     * invh2
@@ -270,10 +270,10 @@ def residual_error_half(
                     -(
                         x[ii, jj, kk]
                         + x[iip1, jjm1, kk]
-                        + x[iip1, jjp1, kk]
                         + x[iip1, jj, kkm1]
                         - six * x[iip1, jj, kk]
                         + x[iip1, jj, kkp1]
+                        + x[iip1, jjp1, kk]
                         + x[iip2, jj, kk]
                     )
                     * invh2
@@ -283,10 +283,10 @@ def residual_error_half(
                     -(
                         x[ii, jjp1, kkp1]
                         + x[iip1, jj, kkp1]
-                        + x[iip1, jjp2, kkp1]
                         + x[iip1, jjp1, kk]
                         - six * x[iip1, jjp1, kkp1]
                         + x[iip1, jjp1, kkp2]
+                        + x[iip1, jjp2, kkp1]
                         + x[iip2, jjp1, kkp1]
                     )
                     * invh2
@@ -298,7 +298,9 @@ def residual_error_half(
 
 
 @njit(["f4[:,:,::1](f4[:,:,::1], f4)"], fastmath=True, cache=True)
-def truncation2(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float32]:
+def truncation_knebe2(
+    x: npt.NDArray[np.float32], h: np.float32
+) -> npt.NDArray[np.float32]:
     """Truncation error estimator \\
     As in Knebe et al. (2001), we estimate the truncation error as \\
     t = Prolongation(Laplacian(Restriction(Phi))) - Laplacian(Phi)
@@ -315,11 +317,11 @@ def truncation2(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.flo
     npt.NDArray[np.float32]
         Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
     """
-    return mesh.prolongation(laplacian(mesh.restriction(x), 2 * h)) - laplacian(x, h)
+    return mesh.prolongation(operator(mesh.restriction(x), 2 * h)) - operator(x, h)
 
 
 @njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True)
-def truncation(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+def truncation_knebe(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     """Truncation error estimator \\
     In Knebe et al. (2001), the authors estimate the truncation error as \\
     t = Prolongation(Laplacian(Restriction(Phi))) - Laplacian(Phi) \\
@@ -341,7 +343,7 @@ def truncation(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
 
 
 @njit(["f4(f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
-def truncation_error(b: npt.NDArray[np.float32]) -> np.float32:
+def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
     """Truncation error estimator \\
     In Knebe et al. (2001), the authors estimate the truncation error as \\
     t = Prolongation(Laplacian(Restriction(Phi))) - Laplacian(Phi) \\
@@ -533,12 +535,12 @@ def jacobi(
                 # Put in array
                 x[i, j, k] = (
                     x[im1, j, k]
-                    + x[ip1, j, k]
                     + x[i, jm1, k]
-                    + x[i, jp1, k]
                     + x[i, j, km1]
-                    + x[i, j, kp1]
                     - h2 * b[i, j, k]
+                    + x[i, j, kp1]
+                    + x[i, jp1, k]
+                    + x[ip1, j, k]
                 ) * invsix
 
 
@@ -592,12 +594,12 @@ def gauss_seidel(
                     * (
                         (
                             x[iim2, jjm1, kkm1]
-                            + x[ii, jjm1, kkm1]
                             + x[iim1, jjm2, kkm1]
-                            + x[iim1, jj, kkm1]
                             + x[iim1, jjm1, kkm2]
-                            + x[iim1, jjm1, kk]
                             - h2 * b[iim1, jjm1, kkm1]
+                            + x[iim1, jjm1, kk]
+                            + x[iim1, jj, kkm1]
+                            + x[ii, jjm1, kkm1]
                         )
                         * invsix
                     )
@@ -610,12 +612,12 @@ def gauss_seidel(
                     * (
                         (
                             x[iim1, jj, kkm1]
-                            + x[iip1, jj, kkm1]
                             + x[ii, jjm1, kkm1]
-                            + x[ii, jjp1, kkm1]
                             + x[ii, jj, kkm2]
-                            + x[ii, jj, kk]
                             - h2 * b[ii, jj, kkm1]
+                            + x[ii, jj, kk]
+                            + x[ii, jjp1, kkm1]
+                            + x[iip1, jj, kkm1]
                         )
                         * invsix
                     )
@@ -645,12 +647,12 @@ def gauss_seidel(
                     * (
                         (
                             x[iim2, jj, kk]
-                            + x[ii, jj, kk]
                             + x[iim1, jjm1, kk]
-                            + x[iim1, jjp1, kk]
                             + x[iim1, jj, kkm1]
-                            + x[iim1, jj, kkp1]
                             - h2 * b[iim1, jj, kk]
+                            + x[iim1, jj, kkp1]
+                            + x[iim1, jjp1, kk]
+                            + x[ii, jj, kk]
                         )
                         * invsix
                     )
@@ -679,12 +681,12 @@ def gauss_seidel(
                     * (
                         (
                             x[iim1, jj, kk]
-                            + x[iip1, jj, kk]
                             + x[ii, jjm1, kk]
-                            + x[ii, jjp1, kk]
                             + x[ii, jj, kkm1]
-                            + x[ii, jj, kkp1]
                             - h2 * b[ii, jj, kk]
+                            + x[ii, jj, kkp1]
+                            + x[ii, jjp1, kk]
+                            + x[iip1, jj, kk]
                         )
                         * invsix
                     )
@@ -696,12 +698,12 @@ def gauss_seidel(
                     * (
                         (
                             x[iim2, jjm1, kk]
-                            + x[ii, jjm1, kk]
                             + x[iim1, jjm2, kk]
-                            + x[iim1, jj, kk]
                             + x[iim1, jjm1, kkm1]
-                            + x[iim1, jjm1, kkp1]
                             - h2 * b[iim1, jjm1, kk]
+                            + x[iim1, jjm1, kkp1]
+                            + x[iim1, jj, kk]
+                            + x[ii, jjm1, kk]
                         )
                         * invsix
                     )
@@ -713,12 +715,12 @@ def gauss_seidel(
                     * (
                         (
                             x[iim2, jj, kkm1]
-                            + x[ii, jj, kkm1]
                             + x[iim1, jjm1, kkm1]
-                            + x[iim1, jjp1, kkm1]
                             + x[iim1, jj, kkm2]
-                            + x[iim1, jj, kk]
                             - h2 * b[iim1, jj, kkm1]
+                            + x[iim1, jj, kk]
+                            + x[iim1, jjp1, kkm1]
+                            + x[ii, jj, kkm1]
                         )
                         * invsix
                     )
@@ -730,12 +732,12 @@ def gauss_seidel(
                     * (
                         (
                             x[iim1, jjm1, kkm1]
-                            + x[iip1, jjm1, kkm1]
                             + x[ii, jjm2, kkm1]
-                            + x[ii, jj, kkm1]
                             + x[ii, jjm1, kkm2]
-                            + x[ii, jjm1, kk]
                             - h2 * b[ii, jjm1, kkm1]
+                            + x[ii, jjm1, kk]
+                            + x[ii, jj, kkm1]
+                            + x[iip1, jjm1, kkm1]
                         )
                         * invsix
                     )
@@ -743,7 +745,7 @@ def gauss_seidel(
                 )
 
 
-@utils.time_me
+# @utils.time_me
 @njit(["void(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
 def gauss_seidel_no_overrelaxation(
     x: npt.NDArray[np.float32],
@@ -786,44 +788,44 @@ def gauss_seidel_no_overrelaxation(
                 # Put in array
                 x[iim1, jjm1, kkm1] = (
                     x[iim2, jjm1, kkm1]
-                    + x[ii, jjm1, kkm1]
                     + x[iim1, jjm2, kkm1]
-                    + x[iim1, jj, kkm1]
                     + x[iim1, jjm1, kkm2]
-                    + x[iim1, jjm1, kk]
                     - h2 * b[iim1, jjm1, kkm1]
+                    + x[iim1, jjm1, kk]
+                    + x[iim1, jj, kkm1]
+                    + x[ii, jjm1, kkm1]
                 ) * invsix
 
                 # Put in array
                 x[ii, jj, kkm1] = (
                     x[iim1, jj, kkm1]
-                    + x[iip1, jj, kkm1]
                     + x[ii, jjm1, kkm1]
-                    + x[ii, jjp1, kkm1]
                     + x[ii, jj, kkm2]
-                    + x[ii, jj, kk]
                     - h2 * b[ii, jj, kkm1]
+                    + x[ii, jj, kk]
+                    + x[ii, jjp1, kkm1]
+                    + x[iip1, jj, kkm1]
                 ) * invsix
 
                 # Put in array
                 x[ii, jjm1, kk] = (
                     x[iim1, jjm1, kk]
-                    + x[iip1, jjm1, kk]
                     + x[ii, jjm2, kk]
-                    + x[ii, jj, kk]
                     + x[ii, jjm1, kkm1]
-                    + x[ii, jjm1, kkp1]
                     - h2 * b[ii, jjm1, kk]
+                    + x[ii, jjm1, kkp1]
+                    + x[ii, jj, kk]
+                    + x[iip1, jjm1, kk]
                 ) * invsix
                 # Put in array
                 x[iim1, jj, kk] = (
                     x[iim2, jj, kk]
-                    + x[ii, jj, kk]
                     + x[iim1, jjm1, kk]
-                    + x[iim1, jjp1, kk]
                     + x[iim1, jj, kkm1]
-                    + x[iim1, jj, kkp1]
                     - h2 * b[iim1, jj, kk]
+                    + x[iim1, jj, kkp1]
+                    + x[iim1, jjp1, kk]
+                    + x[ii, jj, kk]
                 ) * invsix
 
     # Computation Black
@@ -845,46 +847,46 @@ def gauss_seidel_no_overrelaxation(
                 # Put in array
                 x[ii, jj, kk] = (
                     x[iim1, jj, kk]
-                    + x[iip1, jj, kk]
                     + x[ii, jjm1, kk]
-                    + x[ii, jjp1, kk]
                     + x[ii, jj, kkm1]
-                    + x[ii, jj, kkp1]
                     - h2 * b[ii, jj, kk]
+                    + x[ii, jj, kkp1]
+                    + x[ii, jjp1, kk]
+                    + x[iip1, jj, kk]
                 ) * invsix
                 # Put in array
                 x[iim1, jjm1, kk] = (
                     x[iim2, jjm1, kk]
-                    + x[ii, jjm1, kk]
                     + x[iim1, jjm2, kk]
-                    + x[iim1, jj, kk]
                     + x[iim1, jjm1, kkm1]
-                    + x[iim1, jjm1, kkp1]
                     - h2 * b[iim1, jjm1, kk]
+                    + x[iim1, jjm1, kkp1]
+                    + x[iim1, jj, kk]
+                    + x[ii, jjm1, kk]
                 ) * invsix
                 # Put in array
                 x[iim1, jj, kkm1] = (
                     x[iim2, jj, kkm1]
-                    + x[ii, jj, kkm1]
                     + x[iim1, jjm1, kkm1]
-                    + x[iim1, jjp1, kkm1]
                     + x[iim1, jj, kkm2]
-                    + x[iim1, jj, kk]
                     - h2 * b[iim1, jj, kkm1]
+                    + x[iim1, jj, kk]
+                    + x[iim1, jjp1, kkm1]
+                    + x[ii, jj, kkm1]
                 ) * invsix
                 # Put in array
                 x[ii, jjm1, kkm1] = (
                     x[iim1, jjm1, kkm1]
-                    + x[iip1, jjm1, kkm1]
                     + x[ii, jjm2, kkm1]
-                    + x[ii, jj, kkm1]
                     + x[ii, jjm1, kkm2]
-                    + x[ii, jjm1, kk]
                     - h2 * b[ii, jjm1, kkm1]
+                    + x[ii, jjm1, kk]
+                    + x[ii, jj, kkm1]
+                    + x[iip1, jjm1, kkm1]
                 ) * invsix
 
 
-@utils.time_me
+# @utils.time_me
 def smoothing(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],

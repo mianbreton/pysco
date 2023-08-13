@@ -47,7 +47,7 @@ def run(param):
     # Compute acceleration
     logging.debug("Compute initial acceleration")
     param["nsteps"] = 0
-    acceleration, potential = solver.pm(position, param)
+    acceleration, potential, additional_field = solver.pm(position, param)
     z_out = ast.literal_eval(param["z_out"])
     aexp_out = 1.0 / (np.array(z_out) + 1)
     aexp_out.sort()
@@ -55,8 +55,14 @@ def run(param):
     i_snap = 1
     # Get output redshifts
     while param["aexp"] < 1.0:
-        position, velocity, acceleration, potential = integration.integrate(
-            position, velocity, acceleration, potential, tables, param
+        (
+            position,
+            velocity,
+            acceleration,
+            potential,
+            additional_field,
+        ) = integration.integrate(
+            position, velocity, acceleration, potential, additional_field, tables, param
         )  # Put None instead of potential if you don't want to use previous step
         param["nsteps"] += 1
         # plt.imshow(potential[0])
@@ -65,11 +71,11 @@ def run(param):
             print("Reordering particles")
             utils.reorder_particles(position, velocity, acceleration)
         if param["aexp"] >= aexp_out[i_snap - 1]:
-            snap_name = f"{param['base']}/output_{i_snap:05d}/particles.parquet"
+            snap_name = f"{param['base']}/output_{i_snap:05d}/particles_{param['theory'].casefold()}.parquet"
             print(f"Write snapshot...{snap_name=} {param['aexp']=}")
             utils.write_snapshot_particles_parquet(f"{snap_name}", position, velocity)
             param.to_csv(
-                f"{param['base']}/output_{i_snap:05d}/param_{i_snap:05d}.txt",
+                f"{param['base']}/output_{i_snap:05d}/param_{param['theory'].casefold()}_{i_snap:05d}.txt",
                 sep="=",
                 header=False,
             )

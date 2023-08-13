@@ -55,6 +55,45 @@ def restriction(
 
 
 @njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+def restriction_half(
+    x: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Restriction operator using half the cells (after GS sweep) \\
+    Interpolate field to coarser level.
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+    """
+    inveighth = np.float32(0.125)
+    result = np.empty(
+        (x.shape[0] >> 1, x.shape[1] >> 1, x.shape[2] >> 1), dtype=np.float32
+    )
+    for i in prange(result.shape[0]):
+        ii = 2 * i
+        iip1 = ii + 1
+        for j in prange(result.shape[1]):
+            jj = 2 * j
+            jjp1 = jj + 1
+            for k in prange(result.shape[2]):
+                kk = 2 * k
+                kkp1 = kk + 1
+                result[i, j, k] = inveighth * (
+                    x[ii, jj, kkp1]
+                    + x[ii, jjp1, kk]
+                    + x[iip1, jj, kk]
+                    + x[iip1, jjp1, kkp1]
+                )
+    return result
+
+
+@njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
 def prolongation0(
     x: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
@@ -225,6 +264,8 @@ def add_prolongation_half(
     corr_c: npt.NDArray[np.float32],
 ) -> None:
     """Add prolongation operator on half the array
+
+    x += P(corr_c)
 
     Parameters
     ----------

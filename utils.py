@@ -519,9 +519,9 @@ def operator_fR_inplace(
 
     Example: Normalise density counts to right-hand side of Poisson equation in f(R) gravity
 
-    f1 = 2 * Om_m
-    f1 = 1.5 * aexp * Om_m * mpart * ncells_1d**3 / (unit_l ** 3 * unit_d) \\
-    f2 = - 1.5 * aexp * Om_m
+    f1 = 2 * aexp * Om_m \\
+    f2 = - Om_m * aexp ** 5 * sqrt_xi / 6 \\
+    f3 = - f1 - Om_m * aexp ** 4 / 6 + 0.5 * Om_m * aexp + 2 * Om_lambda * aexp ** 4
 
     Parameters
     ----------

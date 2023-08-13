@@ -1,6 +1,6 @@
 import logging
 from typing import List, Tuple, Callable
-
+import matplotlib.pyplot as plt
 import laplacian
 import cubic
 import numpy as np
@@ -8,10 +8,6 @@ import numpy.typing as npt
 import pandas as pd
 import mesh
 import utils
-
-# TODO: write restriction_half in mesh.py
-# write cubic.cubic
-# in linear(), FAS() and all cycles, no explicit call to either laplacian or cubic
 
 
 # @utils.profile_me
@@ -44,16 +40,25 @@ def linear(
     #        - Inplace instead of returning array from function
     #        - Parallelize (test PyOMP)
     # If tolerance not yet assigned or every 3 time steps, compute truncation error
-    if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
-        print("Compute Truncation error")
-        param["tolerance"] = param["epsrel"] * laplacian.truncation_error(rhs)
+    if param["compute_additional_field"]:
+        if (not "tolerance_additional_field" in param) or (param["nsteps"] % 3) == 0:
+            print("Compute Truncation error for additional field")
+            param["tolerance_additional_field"] = param["epsrel"] * truncation_error(
+                x, h, param, rhs
+            )
+        tolerance = param["tolerance_additional_field"]
+    else:
+        if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
+            print("Compute Truncation error")
+            param["tolerance"] = param["epsrel"] * truncation_error(x, h, param, rhs)
+        tolerance = param["tolerance"]
 
     # Main procedure: Multigrid
     for _ in range(param["n_cycles_max"]):
-        V_cycle(x, rhs, 0, param)
-        residual_error = laplacian.residual_error_half(x, rhs, h)
-        print(f"{residual_error=} {param['tolerance']=}")
-        if residual_error < param["tolerance"]:
+        V_cycle(x, rhs, param)
+        residual_error = residual_error_half(x, rhs, h, param)
+        print(f"{residual_error=} {tolerance=}")
+        if residual_error < tolerance:
             break
     return x
 
@@ -62,7 +67,7 @@ def linear(
 @utils.time_me
 def FAS(
     x: npt.NDArray[np.float32],
-    rhs: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
     h: np.float32,
     param: pd.Series,
 ) -> npt.NDArray[np.float32]:
@@ -72,8 +77,8 @@ def FAS(
     ----------
     x : npt.NDArray[np.float32]
         Potential (first guess) [N_cells_1d, N_cells_1d,N_cells_1d]
-    rhs : npt.NDArray[np.float32]
-        Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Density term (can be Right-hand side of Poisson Equation) [N_cells_1d, N_cells_1d,N_cells_1d]
     h : np.float32
         Grid size
     param : pd.Series
@@ -85,18 +90,112 @@ def FAS(
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
     """
     # If tolerance not yet assigned or every 3 time steps, compute truncation error
-    if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
-        print("Compute Truncation error")
-        param["tolerance"] = param["epsrel"] * laplacian.truncation_error(rhs)
+    if param["compute_additional_field"]:
+        if (not "tolerance_additional_field" in param) or (param["nsteps"] % 1) == 0:
+            print("Compute Truncation error for additional field")
+            param["tolerance_additional_field"] = param["epsrel"] * truncation_error(
+                x, h, param, b
+            )
+        tolerance = param["tolerance_additional_field"]
+    else:
+        if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
+            print("Compute Truncation error")
+            param["tolerance"] = param["epsrel"] * truncation_error(x, h, param, b)
+        tolerance = param["tolerance"]
 
     # Main procedure: Multigrid
     for _ in range(param["n_cycles_max"]):
-        V_cycle_FAS(x, rhs, 0, param)
-        residual_error = laplacian.residual_error_half(x, rhs, h)
-        print(f"{residual_error=} {param['tolerance']=}")
-        if residual_error < param["tolerance"]:
+        # TODO: Verifier pourquoi F marche mieux que V et W pour scalaron
+        F_cycle_FAS(x, b, param)
+        residual_error = residual_error_half(x, b, h, param)
+        print(f"{residual_error=} {tolerance=}")
+        if residual_error < tolerance:
             break
     return x
+
+
+def truncation_error(
+    x: npt.NDArray[np.float32],
+    h: np.float32,
+    param: pd.Series,
+    b: npt.NDArray[np.float32] = np.empty(0, dtype=np.float32),
+) -> np.float32:
+    # TODO: Try instead the definition from Numerical recipes: t = R(L(u)) - L(R(u))
+    """Truncation error estimator \\
+    As in Knebe et al. (2001), we estimate the truncation error as \\
+    t = Prolongation(Laplacian(Restriction(Phi))) - Laplacian(Phi)
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+    param : pd.Series
+        Parameter container
+    b : npt.NDArray[np.float32], optional
+        Density term [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Returns
+    -------
+    np.float32
+        Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
+    """
+    # TODO: optimize these computations
+    if param["compute_additional_field"]:
+        b_c = mesh.restriction(b)
+        return np.sqrt(
+            np.sum(
+                (
+                    (operator(mesh.restriction(x), 2 * h, param, b_c))
+                    - mesh.restriction(operator(x, h, param, b))
+                )
+                ** 2
+            )
+        )
+    else:
+        return np.sqrt(
+            np.sum(
+                (
+                    (operator(mesh.restriction(x), 2 * h, param))
+                    - mesh.restriction(operator(x, h, param))
+                )
+                ** 2
+            )
+        )
+
+
+def residual_error_half(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    h: np.float32,
+    param: pd.Series,
+) -> np.float32:
+    """Error on half of the residual (the other half is zero by construction)\\
+    For residuals, we use the opposite convention compared to Numerical Recipes\\
+    residual = f_h - L(u_h)
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Density term [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+    param : pd.Series
+        Parameter container
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Error on residual: sqrt[Sum(residual^2)]
+    """
+    if param["compute_additional_field"]:
+        q = np.float32(param["fR_q"])
+        return cubic.residual_error_half(x, b, h, q)
+    else:
+        return laplacian.residual_error_half(x, b, h)
 
 
 def restrict_residual(
@@ -112,7 +211,7 @@ def restrict_residual(
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
     b : npt.NDArray[np.float32]
-        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+        Density term (can be Right-hand side of Poisson equation) [N_cells_1d, N_cells_1d, N_cells_1d]
     h : np.float32
         Grid size
     param : pd.Series
@@ -125,8 +224,7 @@ def restrict_residual(
     """
     if param["compute_additional_field"]:
         q = np.float32(param["fR_q"])
-        res = cubic.residual_half(x, b, h, q)
-        return mesh.restriction(res)
+        return -mesh.restriction(cubic.operator(x, b, h, q))
     else:
         return laplacian.restrict_residual_half(x, b, h)
 
@@ -137,6 +235,7 @@ def smoothing(
     h: np.float32,
     n_smoothing: int,
     param: pd.Series,
+    rhs: npt.NDArray[np.float32] = np.empty(0, dtype=np.float32),
 ) -> None:
     """Smooth field with several Gauss-Seidel iterations \\
     Depending on the theory of gravity and if we compute the additional field or the main field
@@ -147,27 +246,65 @@ def smoothing(
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
-        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+        Density term [N_cells_1d, N_cells_1d, N_cells_1d], by default np.empty(0, dtype=np.float32)
     h : np.float32
         Grid size
     n_smoothing : int
         Number of smoothing iterations
     param : pd.Series
-        Parameter container (unused)
+        Parameter container
+    rhs : npt.NDArray[np.float32], optional
+        Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     if param["compute_additional_field"]:
         q = np.float32(param["fR_q"])
-        cubic.smoothing(x, b, h, q, n_smoothing)
+        if len(rhs) == 0:
+            cubic.smoothing(x, b, h, q, n_smoothing)
+        else:
+            cubic.smoothing_with_rhs(x, b, h, q, n_smoothing, rhs)
     else:
         laplacian.smoothing(x, b, h, n_smoothing)
+
+
+def operator(
+    x: npt.NDArray[np.float32],
+    h: np.float32,
+    param: pd.Series,
+    b: npt.NDArray[np.float32] = np.empty(0, dtype=np.float32),
+) -> npt.NDArray[np.float32]:
+    """Smooth field with several Gauss-Seidel iterations \\
+    Depending on the theory of gravity and if we compute the additional field or the main field
+    (used in the equations of motion), the smoothing procedure will be different
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+    param : pd.Series
+        Parameter container
+    b : npt.NDArray[np.float32], optional
+        Density term [N_cells_1d, N_cells_1d, N_cells_1d]
+    
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Operator
+    """
+    if param["compute_additional_field"]:
+        q = np.float32(param["fR_q"])
+        return cubic.operator(x, b, h, q)
+    else:
+        return laplacian.operator(x, h)
 
 
 @utils.time_me
 def V_cycle(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    nlevel: int,
     param: pd.Series,
+    nlevel: int = 0,
 ) -> None:
     """Multigrid V cycle
 
@@ -177,10 +314,10 @@ def V_cycle(
         Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    nlevel : int
-        Grid level (positive, equal to zero at coarse level)
     param : pd.Series
         Parameter container
+    nlevel : int, optional
+        Grid level (positive, equal to zero at coarse level), by default 0
     """
     logging.debug("In V_cycle")
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
@@ -193,7 +330,7 @@ def V_cycle(
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
-        V_cycle(x_corr_c, res_c, nlevel + 1, param)
+        V_cycle(x_corr_c, res_c, param, nlevel + 1)
     mesh.add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, param["Npost"], param)
 
@@ -202,8 +339,9 @@ def V_cycle(
 def V_cycle_FAS(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    nlevel: int,
     param: pd.Series,
+    nlevel: int = 0,
+    rhs: npt.NDArray[np.float32] = np.empty(0, dtype=np.float32),
 ) -> None:
     """Multigrid V cycle with Full Approximation Scheme
 
@@ -212,40 +350,47 @@ def V_cycle_FAS(
     x : npt.NDArray[np.float32]
         Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
-        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    nlevel : int
-        Grid level (positive, equal to zero at coarse level)
+        Density term of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d]
     params : pd.Series
         Parameter container
+    nlevel : int, optional
+        Grid level (positive, equal to zero at coarse level), by default 0
+    rhs : npt.NDArray[np.float32], optional
+        Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d], by default np.empty(0, dtype=np.float32)
     """
     logging.debug("In V_cycle")
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
-    smoothing(x, b, h, param["Npre"], param)
+    smoothing(x, b, h, param["Npre"], param, rhs)
     res_c = restrict_residual(x, b, h, param)
     # Compute correction to solution at coarser level
     # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
-    utils.add_vector_scalar_inplace(
-        res_c, laplacian.laplacian(x_c, two * h), np.float32(1)
-    )
+    b_c = mesh.restriction(b)
+    L_c = operator(x_c, two * h, param, b_c)
+    """ print(f"{res_c.ravel()[:5]=}")
+    print(f"{x_c.ravel()[:5]=}")
+    print(f"{L_c.ravel()[:5]=}")
+    print(f"{operator(x, h, param, b).ravel()[:5]=}") """
+    utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
+    L_c = 0
     # Stop if we are at coarse enough level
     if nlevel >= (param["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
+        smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
-        V_cycle_FAS(x_corr_c, res_c, nlevel + 1, param)
+        V_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     mesh.add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, param["Npost"], param)
+    smoothing(x, b, h, param["Npost"], param, rhs)
 
 
 @utils.time_me
 def F_cycle(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    nlevel: int,
     param: pd.Series,
+    nlevel: int = 0,
 ) -> None:
     """Multigrid F cycle
 
@@ -255,10 +400,10 @@ def F_cycle(
         Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    nlevel : int
-        Grid level (positive, equal to zero at coarse level)
     param : pd.Series
         Parameter container
+    nlevel : int, optional
+        Grid level (positive, equal to zero at coarse level), by default 0
     """
     logging.debug("In F_cycle")
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
@@ -272,7 +417,7 @@ def F_cycle(
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
-        F_cycle(x_corr_c, res_c, nlevel + 1, param)
+        F_cycle(x_corr_c, res_c, param, nlevel + 1)
     mesh.add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, param["Npre"], param)
     ### Now compute again corrections (almost exactly same as the first part) ###
@@ -284,7 +429,7 @@ def F_cycle(
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
-        V_cycle(x_corr_c, res_c, nlevel + 1, param)  # Careful, V_cycle here
+        V_cycle(x_corr_c, res_c, param, nlevel + 1)  # Careful, V_cycle here
 
     mesh.add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, param["Npost"], param)
@@ -294,8 +439,9 @@ def F_cycle(
 def F_cycle_FAS(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    nlevel: int,
     param: pd.Series,
+    nlevel: int = 0,
+    rhs: npt.NDArray[np.float32] = np.empty(0, dtype=np.float32),
 ) -> None:
     """Multigrid F cycle with Full Approximation Scheme
 
@@ -304,58 +450,61 @@ def F_cycle_FAS(
     x : npt.NDArray[np.float32]
         Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
-        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    nlevel : int
-        Grid level (positive, equal to zero at coarse level)
+        Density term of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d]
     params : pd.Series
         Parameter container
+    nlevel : int, optional
+        Grid level (positive, equal to zero at coarse level), by default 0
+    rhs : npt.NDArray[np.float32], optional
+        Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d], by default np.empty(0, dtype=np.float32)
     """
     logging.debug("In F_cycle")
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
-    smoothing(x, b, h, param["Npre"], param)
+    smoothing(x, b, h, param["Npre"], param, rhs)
     res_c = restrict_residual(x, b, h, param)
     # Compute correction to solution at coarser level
     # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
-    utils.add_vector_scalar_inplace(
-        res_c, laplacian.laplacian(x_c, two * h), np.float32(1)
-    )
+    b_c = mesh.restriction(b)
+    L_c = operator(x_c, two * h, param, b_c)
+    utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
+    L_c = 0
     # Stop if we are at coarse enough level
     if nlevel >= (param["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
+        smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
-        F_cycle_FAS(x_corr_c, res_c, nlevel + 1, param)
+        F_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     mesh.add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, param["Npre"], param)
+    smoothing(x, b, h, param["Npre"], param, rhs)
     ### Now compute again corrections (almost exactly same as the first part) ###
     res_c = restrict_residual(x, b, h, param)
     # Compute correction to solution at coarser level
     # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
-    utils.add_vector_scalar_inplace(
-        res_c, laplacian.laplacian(x_c, two * h), np.float32(1)
-    )
+    L_c = operator(x_c, two * h, param, b_c)
+    utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
+    L_c = 0
 
     # Stop if we are at coarse enough level
     if nlevel >= (param["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
+        smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
-        V_cycle_FAS(x_corr_c, res_c, nlevel + 1, param)  # Careful, V_cycle here
+        V_cycle_FAS(x_corr_c, b_c, param, nlevel + 1)  # Careful, V_cycle here
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     mesh.add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, param["Npost"], param)
+    smoothing(x, b, h, param["Npost"], param, rhs)
 
 
 @utils.time_me
 def W_cycle(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    nlevel: int,
     param: pd.Series,
+    nlevel: int = 0,
 ) -> None:
     """Multigrid W cycle
 
@@ -365,10 +514,10 @@ def W_cycle(
         Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    nlevel : int
-        Grid level (positive, equal to zero at coarse level)
     params : pd.Series
         Parameter container
+    nlevel : int, optional
+        Grid level (positive, equal to zero at coarse level), by default 0
     """
     logging.debug("In W_cycle")
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))  # nlevel = 0 is coarse level
@@ -383,7 +532,7 @@ def W_cycle(
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
-        W_cycle(x_corr_c, res_c, nlevel + 1, param)
+        W_cycle(x_corr_c, res_c, param, nlevel + 1)
 
     mesh.add_prolongation_half(x, x_corr_c)
     smoothing(x, b, h, param["Npre"], param)
@@ -398,18 +547,19 @@ def W_cycle(
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
-        W_cycle(x_corr_c, res_c, nlevel + 1, param)
+        W_cycle(x_corr_c, res_c, param, nlevel + 1)
 
     mesh.add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, param["Npre"], param)
+    smoothing(x, b, h, param["Npost"], param)
 
 
 @utils.time_me
 def W_cycle_FAS(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    nlevel: int,
     param: pd.Series,
+    nlevel: int = 0,
+    rhs: npt.NDArray[np.float32] = np.empty(0, dtype=np.float32),
 ) -> None:
     """Multigrid W cycle with Full Approximation Scheme
 
@@ -418,35 +568,38 @@ def W_cycle_FAS(
     x : npt.NDArray[np.float32]
         Potential (mutable) [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
-        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    nlevel : int
-        Grid level (positive, equal to zero at coarse level)
+        Density term of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d]
     params : pd.Series
         Parameter container
+    nlevel : int, optional
+        Grid level (positive, equal to zero at coarse level), by default 0
+    rhs : npt.NDArray[np.float32], optional
+        Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d], by default np.empty(0, dtype=np.float32)
     """
     logging.debug("In W_cycle")
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))  # nlevel = 0 is coarse level
     two = np.float32(2)
-    smoothing(x, b, h, param["Npre"], param)
+    smoothing(x, b, h, param["Npre"], param, rhs)
     res_c = restrict_residual(x, b, h, param)
 
     # Compute correction to solution at coarser level
     # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
-    utils.add_vector_scalar_inplace(
-        res_c, laplacian.laplacian(x_c, two * h), np.float32(1)
-    )
+    b_c = mesh.restriction(b)
+    L_c = operator(x_c, two * h, param, b_c)
+    utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
+    L_c = 0
 
     # Stop if we are at coarse enough level
     if nlevel >= (param["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
+        smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
-        W_cycle_FAS(x_corr_c, res_c, nlevel + 1, param)
+        W_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
 
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     mesh.add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, param["Npre"], param)
+    smoothing(x, b, h, param["Npre"], param, rhs)
 
     ### Now compute again corrections (almost exactly same as the first part) ###
     res_c = restrict_residual(x, b, h, param)
@@ -454,16 +607,16 @@ def W_cycle_FAS(
     # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
-    utils.add_vector_scalar_inplace(
-        res_c, laplacian.laplacian(x_c, two * h), np.float32(1)
-    )
+    L_c = operator(x_c, two * h, param, b_c)
+    utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
+    L_c = 0
 
     # Stop if we are at coarse enough level
     if nlevel >= (param["ncoarse"] - 2):
-        smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
+        smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
-        W_cycle_FAS(x_corr_c, res_c, nlevel + 1, param)
+        W_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
 
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     mesh.add_prolongation_half(x, x_corr_c)
-    smoothing(x, b, h, param["Npre"], param)
+    smoothing(x, b, h, param["Npost"], param, rhs)
