@@ -94,30 +94,14 @@ def solution_quartic_equation(
     d1 = np.float64(27 * pf**2)
     if p > 0:
         Q = (0.5 * (d1 + np.sqrt(d1**2 - 4 * d0**3))) ** (1.0 / 3)
-        if d1**2 - 4 * d0**3 < 0:
-            print(10, d1**2 - 4 * d0**3)
-        if Q == 0:
-            print(-1, p, q, Q)
         S = 0.5 * np.sqrt((Q + d0 / Q) / 3)
-        if (Q + d0 / Q) / 3 < 0:
-            print(11, (Q + d0 / Q) / 3)
-        if S == 0:
-            print(-2, p, q, Q, S)
         return np.float32(-S + 0.5 * np.sqrt(-4 * S**2 + pf / S))
     elif p < 0:
         Q = (0.5 * (d1 + np.sqrt(d1**2 - 4 * d0**3))) ** (1.0 / 3)
-        if d1**2 - 4 * d0**3 < 0:
-            print(20, d1, d0, d1**2 - 4 * d0**3)
-        if Q == 0:
-            print(-3, p, q, Q)
         S = 0.5 * np.sqrt((Q + d0 / Q) / 3)
-        if (Q + d0 / Q) / 3 < 0:
-            print(21, (Q + d0 / Q) / 3)
-        if S == 0:
-            print(-4, p, q, Q, S)
         return np.float32(S + 0.5 * np.sqrt(-4 * S**2 - pf / S))
     else:
-        return (-q) ** (1.0 / 4)
+        return (-q) ** np.float32(1.0 / 4)
 
 
 # @utils.time_me
