@@ -191,13 +191,12 @@ def read_param_file(name: str) -> pd.Series:
             "n_reorder": int,
             "Npre": int,
             "Npost": int,
-            "n_cycles_max": int,
             "epsrel": float,
             "Courant_factor": float,
         }
     )
     if param["theory"].item().casefold() == "fr".casefold():
-        param = param.astype({"fR_fR0": float, "fR_n": int})
+        param = param.astype({"fR_logfR0": float, "fR_n": int})
     # Return Series
     return param.T.iloc[:, 0]
 

@@ -6,7 +6,7 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.1.4"
+__version__ = "0.1.6"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Production"
 
@@ -31,6 +31,10 @@ def run(param):
     # Debug verbose
     if param["DEBUG"].casefold() == "True".casefold():
         logging.basicConfig(level=logging.DEBUG)
+    extra = param["theory"].casefold()
+    if extra.casefold() == "fr".casefold():
+        extra += f"{param['fR_logfR0']}_n{param['fR_n']}"
+    extra += f"_ncoarse{param['ncoarse']}"
     ###################################################
     # Get cosmological table
     logging.debug("Get table...")
@@ -71,11 +75,11 @@ def run(param):
             print("Reordering particles")
             utils.reorder_particles(position, velocity, acceleration)
         if param["aexp"] >= aexp_out[i_snap - 1]:
-            snap_name = f"{param['base']}/output_{i_snap:05d}/particles_{param['theory'].casefold()}.parquet"
+            snap_name = f"{param['base']}/output_{i_snap:05d}/particles_{extra}.parquet"
             print(f"Write snapshot...{snap_name=} {param['aexp']=}")
             utils.write_snapshot_particles_parquet(f"{snap_name}", position, velocity)
             param.to_csv(
-                f"{param['base']}/output_{i_snap:05d}/param_{param['theory'].casefold()}_{i_snap:05d}.txt",
+                f"{param['base']}/output_{i_snap:05d}/param_{extra}_{i_snap:05d}.txt",
                 sep="=",
                 header=False,
             )

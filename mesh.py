@@ -436,6 +436,182 @@ def derivative(
     return result
 
 
+@utils.time_me
+@njit(
+    ["f4[:,:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def derivative_with_fR_n1(
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid \\
+    Fourth-order derivative with finite differences
+
+    D(a) + f*D(b^2) // For f(R) n = 1
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+    """
+    eight = np.float32(8)
+    inv12h = np.float32(a.shape[-1] / 12.0)
+    ncells_1d = a.shape[-1]
+    # Initialise mesh
+    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    # Compute
+    for i in prange(-2, a.shape[-3] - 2):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        for j in prange(-2, a.shape[-2] - 2):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            for k in prange(-2, a.shape[-1] - 2):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+                result[0, i, j, k] = inv12h * (
+                    eight
+                    * (
+                        a[im1, j, k]
+                        - a[ip1, j, k]
+                        + f * (b[im1, j, k] ** 2 - b[ip1, j, k] ** 2)
+                    )
+                    - a[im2, j, k]
+                    + a[ip2, j, k]
+                    + f * (-b[im2, j, k] ** 2 + b[ip2, j, k] ** 2)
+                )
+                result[1, i, j, k] = inv12h * (
+                    eight
+                    * (
+                        a[i, jm1, k]
+                        - a[i, jp1, k]
+                        + f * (b[i, jm1, k] ** 2 - b[i, jp1, k] ** 2)
+                    )
+                    - a[i, jm2, k]
+                    + a[i, jp2, k]
+                    + f * (-b[i, jm2, k] ** 2 + b[i, jp2, k] ** 2)
+                )
+                result[2, i, j, k] = inv12h * (
+                    eight
+                    * (
+                        a[i, j, km1]
+                        - a[i, j, kp1]
+                        + f * (b[i, j, km1] ** 2 - b[i, j, kp1] ** 2)
+                    )
+                    - a[i, j, km2]
+                    + a[i, j, kp2]
+                    + f * (-b[i, j, km2] ** 2 + b[i, j, kp2] ** 2)
+                )
+    return result
+
+
+@utils.time_me
+@njit(
+    ["f4[:,:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def derivative_with_fR_n2(
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid \\
+    Fourth-order derivative with finite differences
+
+    D(a) + f*D(b^3) // For f(R) n = 1
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+    """
+    eight = np.float32(8)
+    inv12h = np.float32(a.shape[-1] / 12.0)
+    ncells_1d = a.shape[-1]
+    # Initialise mesh
+    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    # Compute
+    for i in prange(-2, a.shape[-3] - 2):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        for j in prange(-2, a.shape[-2] - 2):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            for k in prange(-2, a.shape[-1] - 2):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+                result[0, i, j, k] = inv12h * (
+                    eight
+                    * (
+                        a[im1, j, k]
+                        - a[ip1, j, k]
+                        + f * (b[im1, j, k] ** 3 - b[ip1, j, k] ** 3)
+                    )
+                    - a[im2, j, k]
+                    + a[ip2, j, k]
+                    + f * (-b[im2, j, k] ** 3 + b[ip2, j, k] ** 3)
+                )
+                result[1, i, j, k] = inv12h * (
+                    eight
+                    * (
+                        a[i, jm1, k]
+                        - a[i, jp1, k]
+                        + f * (b[i, jm1, k] ** 3 - b[i, jp1, k] ** 3)
+                    )
+                    - a[i, jm2, k]
+                    + a[i, jp2, k]
+                    + f * (-b[i, jm2, k] ** 3 + b[i, jp2, k] ** 3)
+                )
+                result[2, i, j, k] = inv12h * (
+                    eight
+                    * (
+                        a[i, j, km1]
+                        - a[i, j, kp1]
+                        + f * (b[i, j, km1] ** 3 - b[i, j, kp1] ** 3)
+                    )
+                    - a[i, j, km2]
+                    + a[i, j, kp2]
+                    + f * (-b[i, j, km2] ** 3 + b[i, j, kp2] ** 3)
+                )
+    return result
+
+
 @njit(
     ["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=False
 )  # FIXME: NOT THREAD SAFE

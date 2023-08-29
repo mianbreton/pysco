@@ -1,8 +1,7 @@
 import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange
-import math
-import utils
+import mesh
 
 
 @njit(
@@ -91,30 +90,21 @@ def solution_cubic_equation(
     np.float32
         Solution of the cubic equation
     """
-    inv3 = np.float64(1.0 / 3)  # TODO: test minus_inv3
+    inv3 = 1.0 / 3  # TODO: test minus_inv3
     d0 = np.float64(-3.0 * p)
     d1f = np.float64(d1)
     d = np.float64(d1f**2 - 4 * d0**3)
     if d > 0:
-        arg = d1 + np.sqrt(d)
-        if arg == 0:
-            return np.float32(-inv3 * np.cbrt(d1f))
-        half = np.float64(0.5)
-        C = np.cbrt(half * arg)
+        d = d1f + np.sqrt(d)
+        if d == 0:
+            return np.float32(-inv3 * d1f**inv3)
+        C = (0.5 * d) ** inv3
         return np.float32(-inv3 * (C + d0 / C))
     elif d < 0:
-        two = np.float64(2)
-        three_half = np.float64(1.5)
-        theta = math.acos(d1f / (two * d0**three_half))
-        return np.float32(
-            -two
-            * inv3
-            * math.sqrt(d0)
-            * math.cos(inv3 * (theta + two * np.float64(math.pi)))
-        )
+        theta = np.arccos(d1f / (2 * d0**1.5))
+        return np.float32(-2 * inv3 * np.sqrt(d0) * np.cos(inv3 * (theta + 2 * np.pi)))
     else:
-        print(3.1, d, d0, d1f)
-        return np.float32(-inv3 * np.cbrt(d1f))
+        return np.float32(-inv3 * d1f**inv3)
 
 
 # @utils.time_me
@@ -153,137 +143,18 @@ def initialise_potential(
     """
     threeh2 = np.float32(3 * h**2)
     four = np.float32(4)
-    minus_inv3 = -np.float32(1.0 / 3)
-    h2 = np.float32(h**2)
-    d1 = np.float32(27 * h2 * q)
+    d1 = np.float32(27 * h**2 * q)
     half = np.float32(0.5)
+    inv3 = np.float32(1.0 / 3)
     u_scalaron = np.empty_like(b)
-    for i in prange(b.shape[0]):
-        for j in prange(b.shape[1]):
-            for k in prange(b.shape[2]):
+    size = len(b)
+    for i in prange(size):
+        for j in prange(size):
+            for k in prange(size):
                 d0 = -threeh2 * b[i, j, k]
-                C = np.cbrt(half * (d1 + np.sqrt(d1**2 - four * d0**3)))
-                u_scalaron[i, j, k] = minus_inv3 * (C + d0 / C)
+                C = (half * (d1 + np.sqrt(d1**2 - four * d0**3))) ** inv3
+                u_scalaron[i, j, k] = -inv3 * (C + d0 / C)
     return u_scalaron
-
-
-# @utils.time_me
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
-def jacobi(
-    x: npt.NDArray[np.float32],
-    b: npt.NDArray[np.float32],
-    h: np.float32,
-    q: np.float32,
-) -> None:
-    """Jacobi depressed cubic equation solver \\
-    Solve the roots of u in the equation: \\
-    u^3 + pu + q = 0 \\
-    with, in f(R) gravity [Bose et al. 2017]\\
-    p = b - 1/6 * (u_{i+1,j,k}**2+u_{i-1,j,k}**2+u_{i,j+1,k}**2+u_{i,j-1,k}**2+u_{i,j,k+1}**2+u_{i,j,k-1}**2)
-
-    Parameters
-    ----------
-    x : npt.NDArray[np.float32]
-        Field [N_cells_1d, N_cells_1d, N_cells_1d]
-    b : npt.NDArray[np.float32]
-        Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
-    q : np.float32
-        Constant value in the cubic equation
-    
-    """
-    invsix = np.float32(1.0 / 6)
-    h2 = np.float32(h**2)
-    d1 = 27 * h2 * q
-    ncells_1d = len(x)
-    # Computation Red
-    for i in prange(1, ncells_1d - 1):
-        im1 = i - 1
-        ip1 = i + 1
-        for j in prange(1, ncells_1d - 1):
-            jm1 = j - 1
-            jp1 = j + 1
-            for k in prange(1, ncells_1d - 1):
-                km1 = k - 1
-                kp1 = k + 1
-                # Put in array
-                p = h2 * b[i, j, k] - invsix * (
-                    x[im1, j, k] ** 2
-                    + x[i, jm1, k] ** 2
-                    + x[i, j, km1] ** 2
-                    + x[i, j, kp1] ** 2
-                    + x[i, jp1, k] ** 2
-                    + x[ip1, j, k] ** 2
-                )
-                x[i, j, k] = solution_cubic_equation(p, d1)
-
-
-# @utils.time_me
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4, f4[:,:,::1])"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
-def jacobi_with_rhs(
-    x: npt.NDArray[np.float32],
-    b: npt.NDArray[np.float32],
-    h: np.float32,
-    q: np.float32,
-    rhs: npt.NDArray[np.float32],
-) -> None:
-    """Jacobi depressed cubic equation solver with source term, for example in Multigrid with residuals \\
-    Solve the roots of u in the equation: \\
-    u^3 + pu + q = 0 \\
-    with, in f(R) gravity [Bose et al. 2017]\\
-    p = b - 1/6 * (u_{i+1,j,k}**2+u_{i-1,j,k}**2+u_{i,j+1,k}**2+u_{i,j-1,k}**2+u_{i,j,k+1}**2+u_{i,j,k-1}**2)
-
-    Parameters
-    ----------
-    x : npt.NDArray[np.float32]
-        Field [N_cells_1d, N_cells_1d, N_cells_1d]
-    b : npt.NDArray[np.float32]
-        Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
-    q : np.float32
-        Constant value in the cubic equation
-    rhs : npt.NDArray[np.float32]
-        Right-hand side of the cubic equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    
-    """
-    invsix = np.float32(1.0 / 6)
-    h2 = np.float32(h**2)
-    twenty_seven = np.float32(27)
-    d1_q = twenty_seven * h2 * q
-    ncells_1d = len(x)
-    # Computation Red
-    for i in prange(-1, ncells_1d - 1):
-        im1 = i - 1
-        ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
-            jm1 = j - 1
-            jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
-                km1 = k - 1
-                kp1 = k + 1
-                # Put in array
-                p = h2 * b[i, j, k] - invsix * (
-                    x[im1, j, k] ** 2
-                    + x[i, jm1, k] ** 2
-                    + x[i, j, km1] ** 2
-                    + x[i, j, kp1] ** 2
-                    + x[i, jp1, k] ** 2
-                    + x[ip1, j, k] ** 2
-                )
-                d1 = d1_q - twenty_seven * rhs[i, j, k]
-                x[i, j, k] = solution_cubic_equation(p, d1)
 
 
 # @utils.time_me
@@ -345,9 +216,7 @@ def gauss_seidel(
                     + x[iim1, jj, kkm1] ** 2
                     + x[ii, jjm1, kkm1] ** 2
                 )
-                # print("red before", x[iim1, jjm1, kkm1])
                 x[iim1, jjm1, kkm1] = solution_cubic_equation(p, d1)
-                # print("p", p, "d1", d1, "res", x[iim1, jjm1, kkm1], 11)
                 # Put in array
                 p = h2 * b[iim1, jj, kk] - invsix * (
                     x[iim2, jj, kk] ** 2
@@ -475,7 +344,6 @@ def gauss_seidel_with_rhs(
     h2 = np.float32(h**2)
     twenty_seven = np.float32(27)
     d1_q = twenty_seven * h2 * q
-    # twenty_seven *= 0
     # Computation Red
     for i in prange(x.shape[0] >> 1):
         ii = 2 * i
@@ -502,12 +370,6 @@ def gauss_seidel_with_rhs(
                     + x[ii, jjm1, kkm1] ** 2
                 )
                 d1 = d1_q - twenty_seven * rhs[iim1, jjm1, kkm1]
-                """ print(
-                    d1,
-                    twenty_seven * rhs[iim1, jjm1, kkm1],
-                    twenty_seven * rhs[iim1, jjm1, kkm1] / d1,
-                    1.0 / h2,
-                ) """
                 x[iim1, jjm1, kkm1] = solution_cubic_equation(p, d1)
                 # Put in array
                 p = h2 * b[iim1, jj, kk] - invsix * (
@@ -636,7 +498,7 @@ def residual_half(
         Residual
     """
     invsix = np.float32(1.0 / 6)
-    ncells_1d = len(x.shape) >> 1
+    ncells_1d = len(x) >> 1
     h2 = np.float32(h**2)
     qh2 = q * h2
     result = np.zeros_like(x)
@@ -650,7 +512,7 @@ def residual_half(
             jjm1 = jj - 1
             jjm2 = jjm1 - 1
             jjp1 = jj + 1
-            for k in prange(-1, ncells_1d / 2 - 1):
+            for k in prange(-1, ncells_1d - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
@@ -799,6 +661,147 @@ def residual_error_half(
     return np.sqrt(result)
 
 
+@njit(
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4, f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def restrict_residual_half(
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32, q: np.float32
+) -> npt.NDArray[np.float32]:
+    """Restriction of residual of the cubic operator on half the mesh \\
+    residual = -(u^3 + p*u + q)  \\
+    This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
+    in this case we can compute the residual for only half the points.
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+    q : np.float32
+        Constant value in the cubic equation
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Restricted half residual
+    """
+    invsix = np.float32(1.0 / 6)
+    inveight = np.float32(0.125)
+    ncells_1d = len(x) >> 1
+    h2 = np.float32(h**2)
+    qh2 = q * h2
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(-1, ncells_1d - 1):
+        ii = 2 * i
+        iim1 = ii - 1
+        iim2 = iim1 - 1
+        iip1 = ii + 1
+        for j in prange(-1, ncells_1d - 1):
+            jj = 2 * j
+            jjm1 = jj - 1
+            jjm2 = jjm1 - 1
+            jjp1 = jj + 1
+            for k in prange(-1, ncells_1d - 1):
+                kk = 2 * k
+                kkm1 = kk - 1
+                kkm2 = kkm1 - 1
+                kkp1 = kk + 1
+                # Put in array
+                p = h2 * b[iim1, jjm1, kkm1] - invsix * (
+                    x[iim2, jjm1, kkm1] ** 2
+                    + x[iim1, jjm2, kkm1] ** 2
+                    + x[iim1, jjm1, kkm2] ** 2
+                    + x[iim1, jjm1, kk] ** 2
+                    + x[iim1, jj, kkm1] ** 2
+                    + x[ii, jjm1, kkm1] ** 2
+                )
+                x_tmp = x[iim1, jjm1, kkm1]
+                x1 = -((x_tmp) ** 3) - p * x_tmp - qh2
+                # Put in array
+                p = h2 * b[ii, jj, kkm1] - invsix * (
+                    x[iim1, jj, kkm1] ** 2
+                    + x[ii, jjm1, kkm1] ** 2
+                    + x[ii, jj, kkm2] ** 2
+                    + x[ii, jj, kk] ** 2
+                    + x[ii, jjp1, kkm1] ** 2
+                    + x[iip1, jj, kkm1] ** 2
+                )
+                x_tmp = x[ii, jj, kkm1]
+                x2 = -((x_tmp) ** 3) - p * x_tmp - qh2
+                # Put in array
+                p = h2 * b[ii, jjm1, kk] - invsix * (
+                    x[iim1, jjm1, kk] ** 2
+                    + x[ii, jjm2, kk] ** 2
+                    + x[ii, jjm1, kkm1] ** 2
+                    + x[ii, jjm1, kkp1] ** 2
+                    + x[ii, jj, kk] ** 2
+                    + x[iip1, jjm1, kk] ** 2
+                )
+                x_tmp = x[ii, jjm1, kk]
+                x3 = -((x_tmp) ** 3) - p * x_tmp - qh2
+                # Put in array
+                p = h2 * b[iim1, jj, kk] - invsix * (
+                    x[iim2, jj, kk] ** 2
+                    + x[iim1, jjm1, kk] ** 2
+                    + x[iim1, jj, kkm1] ** 2
+                    + x[iim1, jj, kkp1] ** 2
+                    + x[iim1, jjp1, kk] ** 2
+                    + x[ii, jj, kk] ** 2
+                )
+                x_tmp = x[iim1, jj, kk]
+                x4 = -((x_tmp) ** 3) - p * x_tmp - qh2
+                # Put in array
+                result[i, j, k] = inveight * (x1 + x2 + x3 + x4)
+    return result
+
+
+@njit(
+    ["f4(f4[:,:,::1], f4[:,:,::1], f4, f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def truncation_error(
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32, q: np.float32
+) -> np.float32:
+    """Truncation error estimator \\
+    As in Numerical Recipes, we estimate the truncation error as \\
+    t = Laplacian(Restriction(Phi)) - Restriction(Laplacian(Phi)) \\
+    terr = Sum t^2
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+    q : np.float32
+        Constant value in the cubic equation
+
+    Returns
+    -------
+    np.float32
+        Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
+    """
+    ncells_1d = len(x) >> 1
+    RLx = mesh.restriction(operator(x, b, h, q))
+    LRx = operator(mesh.restriction(x), mesh.restriction(b), 2 * h, q)
+    result = 0
+    for i in prange(-1, ncells_1d - 1):
+        for j in prange(-1, ncells_1d - 1):
+            for k in prange(-1, ncells_1d - 1):
+                result += (RLx[i, j, k] - LRx[i, j, k]) ** 2
+    return np.sqrt(result)
+
+
 # @utils.time_me
 def smoothing(
     x: npt.NDArray[np.float32],
@@ -822,7 +825,7 @@ def smoothing(
     n_smoothing : int
         Number of smoothing iterations
     """
-    # TODO: check if one is enough
+    # gauss_seidel.parallel_diagnostics(level=4)
     for _ in range(n_smoothing):
         gauss_seidel(x, b, h, q)
 
@@ -851,7 +854,7 @@ def smoothing_with_rhs(
     n_smoothing : int
         Number of smoothing iterations
     rhs : npt.NDArray[np.float32]
-        Right-hand side of the cubic equatin [N_cells_1d, N_cells_1d, N_cells_1d]
+        Right-hand side of the cubic equation [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     for _ in range(n_smoothing):
         gauss_seidel_with_rhs(x, b, h, q, rhs)
