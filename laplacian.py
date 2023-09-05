@@ -239,41 +239,46 @@ def residual_error_half(
                 kkm1 = kk - 1
                 kkp1 = kk + 1
                 kkp2 = kkp1 + 1
+                #
+                x000 = x[ii, jj, kk]
+                x011 = x[ii, jjp1, kkp1]
+                x101 = x[iip1, jj, kkp1]
+                x110 = x[iip1, jjp1, kk]
                 # Put in array
                 x1 = (
                     -(
-                        x[iim1, jj, kkp1]
+                        +x000
+                        + x011
+                        + x101
+                        + x[iim1, jj, kkp1]
                         + x[ii, jjm1, kkp1]
-                        + x[ii, jj, kk]
                         - six * x[ii, jj, kkp1]
                         + x[ii, jj, kkp2]
-                        + x[ii, jjp1, kkp1]
-                        + x[iip1, jj, kkp1]
                     )
                     * invh2
                     + b[ii, jj, kkp1]
                 )
                 x2 = (
                     -(
-                        x[iim1, jjp1, kk]
-                        + x[ii, jj, kk]
+                        +x000
+                        + x011
+                        + x110
+                        + x[iim1, jjp1, kk]
                         + x[ii, jjp1, kkm1]
                         - six * x[ii, jjp1, kk]
-                        + x[ii, jjp1, kkp1]
                         + x[ii, jjp2, kk]
-                        + x[iip1, jjp1, kk]
                     )
                     * invh2
                     + b[ii, jjp1, kk]
                 )
                 x3 = (
                     -(
-                        x[ii, jj, kk]
+                        x000
+                        + x101
+                        + x110
                         + x[iip1, jjm1, kk]
                         + x[iip1, jj, kkm1]
                         - six * x[iip1, jj, kk]
-                        + x[iip1, jj, kkp1]
-                        + x[iip1, jjp1, kk]
                         + x[iip2, jj, kk]
                     )
                     * invh2
@@ -281,9 +286,9 @@ def residual_error_half(
                 )
                 x4 = (
                     -(
-                        x[ii, jjp1, kkp1]
-                        + x[iip1, jj, kkp1]
-                        + x[iip1, jjp1, kk]
+                        x011
+                        + x101
+                        + x110
                         - six * x[iip1, jjp1, kkp1]
                         + x[iip1, jjp1, kkp2]
                         + x[iip1, jjp2, kkp1]
@@ -623,75 +628,77 @@ def gauss_seidel(
                 kkm2 = kk - 2
                 kkm1 = kk - 1
                 kkp1 = kk + 1
+                #
+                x001 = x[iim1, jjm1, kk]
+                x010 = x[iim1, jj, kkm1]
+                x100 = x[ii, jjm1, kkm1]
+                x111 = x[ii, jj, kk]
                 # Put in array
                 x[iim1, jjm1, kkm1] += (
                     f_relax
                     * (
                         (
-                            x[iim2, jjm1, kkm1]
+                            +x001
+                            + x010
+                            + x100
+                            + x[iim2, jjm1, kkm1]
                             + x[iim1, jjm2, kkm1]
                             + x[iim1, jjm1, kkm2]
                             - h2 * b[iim1, jjm1, kkm1]
-                            + x[iim1, jjm1, kk]
-                            + x[iim1, jj, kkm1]
-                            + x[ii, jjm1, kkm1]
                         )
                         * invsix
                     )
                     - f_relax * x[iim1, jjm1, kkm1]
-                )
-
-                # Put in array
-                x[ii, jj, kkm1] += (
-                    f_relax
-                    * (
-                        (
-                            x[iim1, jj, kkm1]
-                            + x[ii, jjm1, kkm1]
-                            + x[ii, jj, kkm2]
-                            - h2 * b[ii, jj, kkm1]
-                            + x[ii, jj, kk]
-                            + x[ii, jjp1, kkm1]
-                            + x[iip1, jj, kkm1]
-                        )
-                        * invsix
-                    )
-                    - f_relax * x[ii, jj, kkm1]
-                )
-
-                # Put in array
-                x[ii, jjm1, kk] += (
-                    f_relax
-                    * (
-                        (
-                            x[iim1, jjm1, kk]
-                            + x[iip1, jjm1, kk]
-                            + x[ii, jjm2, kk]
-                            + x[ii, jj, kk]
-                            + x[ii, jjm1, kkm1]
-                            + x[ii, jjm1, kkp1]
-                            - h2 * b[ii, jjm1, kk]
-                        )
-                        * invsix
-                    )
-                    - f_relax * x[ii, jjm1, kk]
                 )
                 # Put in array
                 x[iim1, jj, kk] += (
                     f_relax
                     * (
                         (
-                            x[iim2, jj, kk]
-                            + x[iim1, jjm1, kk]
-                            + x[iim1, jj, kkm1]
+                            +x001
+                            + x010
+                            + x111
+                            + x[iim2, jj, kk]
                             - h2 * b[iim1, jj, kk]
                             + x[iim1, jj, kkp1]
                             + x[iim1, jjp1, kk]
-                            + x[ii, jj, kk]
                         )
                         * invsix
                     )
                     - f_relax * x[iim1, jj, kk]
+                )
+                # Put in array
+                x[ii, jjm1, kk] += (
+                    f_relax
+                    * (
+                        (
+                            x001
+                            + x111
+                            + x100
+                            + x[iip1, jjm1, kk]
+                            + x[ii, jjm2, kk]
+                            + x[ii, jjm1, kkp1]
+                            - h2 * b[ii, jjm1, kk]
+                        )
+                        * invsix
+                    )
+                    - f_relax * x[ii, jjm1, kk]
+                )  # Put in array
+                x[ii, jj, kkm1] += (
+                    f_relax
+                    * (
+                        (
+                            x010
+                            + x100
+                            + x111
+                            + x[ii, jj, kkm2]
+                            - h2 * b[ii, jj, kkm1]
+                            + x[ii, jjp1, kkm1]
+                            + x[iip1, jj, kkm1]
+                        )
+                        * invsix
+                    )
+                    - f_relax * x[ii, jj, kkm1]
                 )
 
     # Computation Black
@@ -710,35 +717,23 @@ def gauss_seidel(
                 kkm2 = kk - 2
                 kkm1 = kk - 1
                 kkp1 = kk + 1
-                # Put in array
-                x[ii, jj, kk] += (
-                    f_relax
-                    * (
-                        (
-                            x[iim1, jj, kk]
-                            + x[ii, jjm1, kk]
-                            + x[ii, jj, kkm1]
-                            - h2 * b[ii, jj, kk]
-                            + x[ii, jj, kkp1]
-                            + x[ii, jjp1, kk]
-                            + x[iip1, jj, kk]
-                        )
-                        * invsix
-                    )
-                    - f_relax * x[ii, jj, kk]
-                )
+                #
+                x000 = x[iim1, jjm1, kkm1]
+                x011 = x[iim1, jj, kk]
+                x101 = x[ii, jjm1, kk]
+                x110 = x[ii, jj, kkm1]
                 # Put in array
                 x[iim1, jjm1, kk] += (
                     f_relax
                     * (
                         (
-                            x[iim2, jjm1, kk]
+                            +x000
+                            + x011
+                            + x101
+                            + x[iim2, jjm1, kk]
                             + x[iim1, jjm2, kk]
-                            + x[iim1, jjm1, kkm1]
                             - h2 * b[iim1, jjm1, kk]
                             + x[iim1, jjm1, kkp1]
-                            + x[iim1, jj, kk]
-                            + x[ii, jjm1, kk]
                         )
                         * invsix
                     )
@@ -749,13 +744,13 @@ def gauss_seidel(
                     f_relax
                     * (
                         (
-                            x[iim2, jj, kkm1]
-                            + x[iim1, jjm1, kkm1]
+                            +x000
+                            + x011
+                            + x110
+                            + x[iim2, jj, kkm1]
                             + x[iim1, jj, kkm2]
                             - h2 * b[iim1, jj, kkm1]
-                            + x[iim1, jj, kk]
                             + x[iim1, jjp1, kkm1]
-                            + x[ii, jj, kkm1]
                         )
                         * invsix
                     )
@@ -766,17 +761,34 @@ def gauss_seidel(
                     f_relax
                     * (
                         (
-                            x[iim1, jjm1, kkm1]
+                            x000
+                            + x101
+                            + x110
                             + x[ii, jjm2, kkm1]
                             + x[ii, jjm1, kkm2]
                             - h2 * b[ii, jjm1, kkm1]
-                            + x[ii, jjm1, kk]
-                            + x[ii, jj, kkm1]
                             + x[iip1, jjm1, kkm1]
                         )
                         * invsix
                     )
                     - f_relax * x[ii, jjm1, kkm1]
+                )
+                # Put in array
+                x[ii, jj, kk] += (
+                    f_relax
+                    * (
+                        (
+                            x011
+                            + x101
+                            + x110
+                            - h2 * b[ii, jj, kk]
+                            + x[ii, jj, kkp1]
+                            + x[ii, jjp1, kk]
+                            + x[iip1, jj, kk]
+                        )
+                        * invsix
+                    )
+                    - f_relax * x[ii, jj, kk]
                 )
 
 
@@ -820,49 +832,51 @@ def gauss_seidel_no_overrelaxation(
                 kkm2 = kk - 2
                 kkm1 = kk - 1
                 kkp1 = kk + 1
+                #
+                x001 = x[iim1, jjm1, kk]
+                x010 = x[iim1, jj, kkm1]
+                x100 = x[ii, jjm1, kkm1]
+                x111 = x[ii, jj, kk]
                 # Put in array
                 x[iim1, jjm1, kkm1] = (
-                    x[iim2, jjm1, kkm1]
+                    +x001
+                    + x010
+                    + x100
+                    + x[iim2, jjm1, kkm1]
                     + x[iim1, jjm2, kkm1]
                     + x[iim1, jjm1, kkm2]
                     - h2 * b[iim1, jjm1, kkm1]
-                    + x[iim1, jjm1, kk]
-                    + x[iim1, jj, kkm1]
-                    + x[ii, jjm1, kkm1]
-                ) * invsix
-
-                # Put in array
-                x[ii, jj, kkm1] = (
-                    x[iim1, jj, kkm1]
-                    + x[ii, jjm1, kkm1]
-                    + x[ii, jj, kkm2]
-                    - h2 * b[ii, jj, kkm1]
-                    + x[ii, jj, kk]
-                    + x[ii, jjp1, kkm1]
-                    + x[iip1, jj, kkm1]
-                ) * invsix
-
-                # Put in array
-                x[ii, jjm1, kk] = (
-                    x[iim1, jjm1, kk]
-                    + x[ii, jjm2, kk]
-                    + x[ii, jjm1, kkm1]
-                    - h2 * b[ii, jjm1, kk]
-                    + x[ii, jjm1, kkp1]
-                    + x[ii, jj, kk]
-                    + x[iip1, jjm1, kk]
                 ) * invsix
                 # Put in array
                 x[iim1, jj, kk] = (
                     x[iim2, jj, kk]
-                    + x[iim1, jjm1, kk]
-                    + x[iim1, jj, kkm1]
+                    + x001
+                    + x010
+                    + x111
                     - h2 * b[iim1, jj, kk]
                     + x[iim1, jj, kkp1]
                     + x[iim1, jjp1, kk]
-                    + x[ii, jj, kk]
                 ) * invsix
-
+                # Put in array
+                x[ii, jjm1, kk] = (
+                    x001
+                    + x100
+                    + x111
+                    + x[ii, jjm2, kk]
+                    - h2 * b[ii, jjm1, kk]
+                    + x[ii, jjm1, kkp1]
+                    + x[iip1, jjm1, kk]
+                ) * invsix
+                # Put in array
+                x[ii, jj, kkm1] = (
+                    x010
+                    + x100
+                    + x111
+                    + x[ii, jj, kkm2]
+                    - h2 * b[ii, jj, kkm1]
+                    + x[ii, jjp1, kkm1]
+                    + x[iip1, jj, kkm1]
+                ) * invsix
     # Computation Black
     for i in prange(x.shape[0] >> 1):
         ii = 2 * i
@@ -879,45 +893,50 @@ def gauss_seidel_no_overrelaxation(
                 kkm2 = kk - 2
                 kkm1 = kk - 1
                 kkp1 = kk + 1
+                #
+                x000 = x[iim1, jjm1, kkm1]
+                x011 = x[iim1, jj, kk]
+                x101 = x[ii, jjm1, kk]
+                x110 = x[ii, jj, kkm1]
+                # Put in array
+                x[iim1, jjm1, kk] = (
+                    +x000
+                    + x011
+                    + x101
+                    + x[iim2, jjm1, kk]
+                    + x[iim1, jjm2, kk]
+                    - h2 * b[iim1, jjm1, kk]
+                    + x[iim1, jjm1, kkp1]
+                ) * invsix
+                # Put in array
+                x[iim1, jj, kkm1] = (
+                    +x000
+                    + x011
+                    + x110
+                    + x[iim2, jj, kkm1]
+                    + x[iim1, jj, kkm2]
+                    - h2 * b[iim1, jj, kkm1]
+                    + x[iim1, jjp1, kkm1]
+                ) * invsix
+                # Put in array
+                x[ii, jjm1, kkm1] = (
+                    x000
+                    + x101
+                    + x110
+                    + +x[ii, jjm2, kkm1]
+                    + x[ii, jjm1, kkm2]
+                    - h2 * b[ii, jjm1, kkm1]
+                    + x[iip1, jjm1, kkm1]
+                ) * invsix
                 # Put in array
                 x[ii, jj, kk] = (
-                    x[iim1, jj, kk]
-                    + x[ii, jjm1, kk]
-                    + x[ii, jj, kkm1]
+                    x011
+                    + x101
+                    + x110
                     - h2 * b[ii, jj, kk]
                     + x[ii, jj, kkp1]
                     + x[ii, jjp1, kk]
                     + x[iip1, jj, kk]
-                ) * invsix
-                # Put in array
-                x[iim1, jjm1, kk] = (
-                    x[iim2, jjm1, kk]
-                    + x[iim1, jjm2, kk]
-                    + x[iim1, jjm1, kkm1]
-                    - h2 * b[iim1, jjm1, kk]
-                    + x[iim1, jjm1, kkp1]
-                    + x[iim1, jj, kk]
-                    + x[ii, jjm1, kk]
-                ) * invsix
-                # Put in array
-                x[iim1, jj, kkm1] = (
-                    x[iim2, jj, kkm1]
-                    + x[iim1, jjm1, kkm1]
-                    + x[iim1, jj, kkm2]
-                    - h2 * b[iim1, jj, kkm1]
-                    + x[iim1, jj, kk]
-                    + x[iim1, jjp1, kkm1]
-                    + x[ii, jj, kkm1]
-                ) * invsix
-                # Put in array
-                x[ii, jjm1, kkm1] = (
-                    x[iim1, jjm1, kkm1]
-                    + x[ii, jjm2, kkm1]
-                    + x[ii, jjm1, kkm2]
-                    - h2 * b[ii, jjm1, kkm1]
-                    + x[ii, jjm1, kk]
-                    + x[ii, jj, kkm1]
-                    + x[iip1, jjm1, kkm1]
                 ) * invsix
 
 

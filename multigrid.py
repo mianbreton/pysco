@@ -56,6 +56,7 @@ def linear(
         tolerance = param["tolerance"]
 
     # Main procedure: Multigrid
+    print("Start linear Multigrid")
     residual_error = 1e30
     while residual_error > tolerance:
         V_cycle(x, rhs, param)
@@ -109,14 +110,15 @@ def FAS(
         tolerance = param["tolerance"]
 
     # Main procedure: Multigrid
-    residual_error = 1e30
-    while residual_error > tolerance:
-        V_cycle_FAS(x, b, param)
-        residual_error_tmp = residual_error_half(x, b, h, param)
-        print(f"{residual_error_tmp=} {tolerance=}")
-        if residual_error_tmp < tolerance or residual_error / residual_error_tmp < 2:
-            break
-        residual_error = residual_error_tmp
+    # residual_error = 1e30
+    # while residual_error > tolerance:
+    print("Start Full-Approximation Storage Multigrid")
+    F_cycle_FAS(x, b, param)
+    residual_error_tmp = residual_error_half(x, b, h, param)
+    print(f"{residual_error_tmp=} {tolerance=}")
+    #    if residual_error_tmp < tolerance or residual_error / residual_error_tmp < 2:
+    #        break
+    #    residual_error = residual_error_tmp
     return x
 
 

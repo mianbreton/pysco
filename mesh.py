@@ -539,7 +539,7 @@ def derivative_with_fR_n2(
     """Spatial derivatives of a scalar field on a grid \\
     Fourth-order derivative with finite differences
 
-    D(a) + f*D(b^3) // For f(R) n = 1
+    D(a) + f*D(b^3) // For f(R) n = 2
 
     Parameters
     ----------

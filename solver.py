@@ -65,12 +65,20 @@ def pm(
     # Main procedure: Poisson solver
     potential = multigrid.linear(potential, rhs, h, param)
     rhs = 0
-    # Compute Force and interpolate to particle position
+    # Compute Force
     if param["theory"].casefold() == "newton".casefold():
         force = mesh.derivative(potential)
     else:
+        Rbar = 3 * param["Om_m"] * param["aexp"] ** (-3) + 12 * param["Om_lambda"]
+        Rbar0 = 3 * param["Om_m"] + 12 * param["Om_lambda"]
+        fR_a = (
+            -param["aexp"] ** 2
+            * ((Rbar0 / Rbar) ** (param["fR_n"] + 1))
+            * 10 ** (-param["fR_logfR0"])
+        )
         half_c2 = np.float32(
             0.5
+            * (-fR_a)
             * (c.value * 1e-3 * param["unit_t"] / (param["unit_l"] * param["aexp"]))
             ** 2
         )  # m -> km -> BU
@@ -82,7 +90,8 @@ def pm(
             raise NotImplemented(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
             )
-    acceleration = mesh.invTSC_vec(force, position)  # In BU, particle mass = 1
+    # Interpolate to particle position
+    acceleration = mesh.invTSC_vec(force, position)
     return (acceleration, potential, additional_field)
 
 
@@ -187,19 +196,21 @@ def get_additional_field(
             * ((Rbar0 / Rbar) ** (param["fR_n"] + 1))
             * 10 ** (-param["fR_logfR0"])
         )
+        ubar_scalaron = (-fR_a) ** (1.0 / (param["fR_n"] + 1))
         c2 = (
             c.value * 1e-3 * param["unit_t"] / (param["unit_l"] * param["aexp"])
         ) ** 2  # m -> km -> BU
-        # c2 = c.value * 1e-5 / param["boxlen"]
-        f1 = np.float32(param["aexp"] * param["Om_m"] / (c2 * 6))  # / param["fR_fR0"]
-        f2 = np.float32(
-            Rbar / 3 * param["aexp"] ** 4 - param["Om_m"] * param["aexp"]
-        ) / (6 * c2)
+        f1 = np.float32(param["aexp"] * param["Om_m"] / (c2 * 6)) / (-fR_a)
+        f2 = (
+            np.float32(Rbar / 3 * param["aexp"] ** 4 - param["Om_m"] * param["aexp"])
+            / (6 * c2)
+            / (-fR_a)
+            # / ubar_scalaron
+        )
         dens_term = utils.linear_operator(density, f1, f2)
 
         # Compute q
-        ubar_scalaron = (-fR_a) ** (1.0 / (param["fR_n"] + 1))
-        q = np.float32(-param["aexp"] ** 4 * Rbar * ubar_scalaron / (18 * c2))
+        q = np.float32(-param["aexp"] ** 4 * Rbar / (18 * c2)) / (-fR_a)
         # Compute the scalaron field
         param["fR_q"] = q
         print(f"initialise")
@@ -207,14 +218,10 @@ def get_additional_field(
         u_scalaron = multigrid.FAS(u_scalaron, dens_term, h, param)
         print(f"{1./ubar_scalaron=}")
         print(f"{np.mean(1./u_scalaron)=}")
-        print(f"{ubar_scalaron=}")
-        print(f"{-np.mean(u_scalaron**(param['fR_n']+1))=}")
-        print(f"{(-fR_a)**(1./param['fR_n']+1)=}")
         print(f"{fR_a=}")
-        print(f"{np.mean(u_scalaron)=}")
-        print(f"{ubar_scalaron**(param['fR_n']+1)=}")
         """ plt.figure(0)
-        plt.imshow(u_scalaron[0] ** (param["fR_n"] + 1))
+        plt.imshow(u_scalaron[0] ** (param["fR_n"] + 1) * fR_a)
+        plt.title("uscalaron**(n+1)")
         plt.colorbar()
         plt.figure(1)
         plt.imshow(quartic.operator(u_scalaron, dens_term, h, q)[0])
