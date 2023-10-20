@@ -63,8 +63,14 @@ def pm(
     param["compute_additional_field"] = False
     potential = initialise_potential(potential, rhs, h, param, tables)
     # Main procedure: Poisson solver
-    potential = multigrid.linear(potential, rhs, h, param)
+    if param["linear_newton_solver"].casefold() == "multigrid".casefold():
+        potential = multigrid.linear(potential, rhs, h, param)
+    elif param["linear_newton_solver"].casefold() == "fft".casefold():
+        potential = fft(rhs, param)
     rhs = 0
+    # plt.imshow(potential[0])
+    # plt.colorbar()
+    # plt.show()
     # Compute Force
     if param["theory"].casefold() == "newton".casefold():
         force = mesh.derivative(potential)
@@ -216,19 +222,44 @@ def get_additional_field(
         print(f"initialise")
         u_scalaron = initialise_potential(additional_field, dens_term, h, param, tables)
         u_scalaron = multigrid.FAS(u_scalaron, dens_term, h, param)
-        print(f"{1./ubar_scalaron=}")
-        print(f"{np.mean(1./u_scalaron)=}")
+        # print(f"{1./ubar_scalaron=}")
+        if (param["nsteps"] + 1) % 10 == 0:  # Check
+            print(f"{np.mean(u_scalaron)=}, should be close to 1")
         print(f"{fR_a=}")
-        """ plt.figure(0)
-        plt.imshow(u_scalaron[0] ** (param["fR_n"] + 1) * fR_a)
-        plt.title("uscalaron**(n+1)")
+        """ print(f"{np.mean(fR_a * u_scalaron ** (param['fR_n'] + 1))=}")
+        plt.figure(0)
+        plt.imshow(np.log10(density[0]), vmin=-2)
+        plt.title("Log10(density)")
         plt.colorbar()
+        plt.savefig("fig/logdensity_z0.png", bbox_inches="tight", dpi=300)
         plt.figure(1)
-        plt.imshow(quartic.operator(u_scalaron, dens_term, h, q)[0])
+        vmin = -1.15e-6
+        vmax = -1.0e-8
+        plt.imshow(fR_a * u_scalaron[0] ** (param["fR_n"] + 1), vmin=vmin, vmax=vmax)
+        plt.title(
+            rf"Scalaron field (-fR0 = 1e-{int(param['fR_logfR0'])}, n = {param['fR_n']})"
+        )
         plt.colorbar()
+        plt.savefig(
+            f"fig/fr{param['fR_logfR0']}_n{param['fR_n']}_z0.png",
+            bbox_inches="tight",
+            dpi=300,
+        )
         plt.figure(2)
-        plt.imshow(density[0])
+        plt.imshow(
+            laplacian.operator(fR_a * u_scalaron ** (param["fR_n"] + 1), h)[0],
+            vmin=-0.2,
+            vmax=0.2,
+        )
+        plt.title(
+            rf"Laplacian(Scalaron) field (-fR0 = 1e-{int(param['fR_logfR0'])}, n = {param['fR_n']})"
+        )
         plt.colorbar()
+        plt.savefig(
+            f"fig/laplacian_fr{param['fR_logfR0']}_n{param['fR_n']}_z0.png",
+            bbox_inches="tight",
+            dpi=300,
+        )
         plt.show() """
         return u_scalaron
 
@@ -253,3 +284,44 @@ def rhs_poisson(
     f1 = np.float32(1.5 * param["aexp"] * param["Om_m"])
     f2 = -f1
     utils.linear_operator_inplace(density, f1, f2)  # Newtonian Poisson RHS
+
+
+@utils.time_me
+def fft(rhs: npt.NDArray[np.float32], param: pd.Series) -> npt.NDArray[np.float32]:
+    """Compute FFT
+
+    Parameters
+    ----------
+    rhs : npt.NDArray[np.float32]
+        Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
+    param : pd.Series
+        Parameter container
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d,N_cells_1d]
+    """
+    # TODO: Rewrite with pyFFTW
+    logging.debug("In fft")
+    # TO DO: - Only compute invk2 once...
+    # FFT
+    rhs_fourier = utils.fft_3D(rhs, param["nthreads"])
+    # Divide by k**2
+    n = 2 ** param["ncoarse"]
+    k0 = 2.0 * np.pi * np.fft.rfftfreq(n, 1 / n)
+    k1 = 2.0 * np.pi * np.fft.fftfreq(n, 1 / n)
+    invk2 = (
+        k0[np.newaxis, np.newaxis, :] ** 2
+        + k1[:, np.newaxis, np.newaxis] ** 2
+        + k1[np.newaxis, :, np.newaxis] ** 2
+    ) ** (-1)
+    invk2[0, 0, 0] = 0
+    # potential_fourier = -rhs_fourier * invk2
+    utils.prod_minus_vector_inplace(rhs_fourier, invk2)
+    potential_fourier = rhs_fourier
+    del rhs_fourier
+    # Inverse FFT
+    potential = utils.ifft_3D(potential_fourier, param["nthreads"])
+
+    return potential

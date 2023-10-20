@@ -10,6 +10,7 @@ import numpy.typing as npt
 import pandas as pd
 from astropy.constants import G, pc
 from numba import njit, prange
+import pyfftw
 
 import morton
 
@@ -184,6 +185,8 @@ def read_param_file(name: str) -> pd.Series:
             "Om_lambda": float,
             "w0": float,
             "wa": float,
+            "fixed_ICS": int,
+            "seed": int,
             "z_start": float,
             "boxlen": float,
             "ncoarse": int,
@@ -414,10 +417,31 @@ def prod_add_vector_scalar_scalar(
 
 
 @njit(fastmath=True, cache=True, parallel=True)
+def prod_vector_vector_inplace(
+    x: npt.NDArray[np.float32],
+    y: npt.NDArray[np.float32],
+) -> None:
+    """Vector times scalar plus vector \\
+    x *= y
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Array
+    y : npt.NDArray[np.float32]
+        Array    
+    """
+    x_ravel = x.ravel()
+    y_ravel = y.ravel()
+    for i in prange(len(x_ravel)):
+        x_ravel[i] *= np.complex64(y_ravel[i])
+
+
+@njit(fastmath=True, cache=True, parallel=True)
 def prod_add_vector_scalar_vector(
     x: npt.NDArray[np.float32],
     a: np.float32,
-    b: np.float32,
+    b: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
     """Vector times scalar plus vector \\
     return a*x + b
@@ -428,7 +452,7 @@ def prod_add_vector_scalar_vector(
         Array
     a : np.float32
         Scalar
-    b : np.float32
+    b : npt.NDArray[np.float32]
         Array
 
     Returns
@@ -443,6 +467,29 @@ def prod_add_vector_scalar_vector(
     for i in prange(result_ravel.shape[0]):
         result_ravel[i] = a * x_ravel[i] + b_ravel[i]
     return result
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def prod_minus_vector_inplace(
+    x: npt.NDArray[np.float32],
+    y: npt.NDArray[np.float32],
+) -> None:
+    """Vector times scalar plus vector inplace \\
+    x *= -y
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Array
+    y : npt.NDArray[np.float32]
+        Array
+    """
+    result = np.empty_like(x)
+    result_ravel = result.ravel()
+    x_ravel = x.ravel()
+    y_ravel = y.ravel()
+    for i in prange(result_ravel.shape[0]):
+        x_ravel[i] *= -y_ravel[i]
 
 
 @njit(fastmath=True, cache=True, parallel=True)
@@ -591,3 +638,76 @@ def periodic_wrap(position: npt.NDArray[np.float32]) -> None:
                 position_ravelled[i] += one
         elif tmp >= one:
             position_ravelled[i] -= one
+
+
+def grid2Pk(
+    x: npt.NDArray[np.float32], param: pd.Series, MAS: str = "TSC"
+) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+    """Compute Power Spectrum from 3D grid using Pylians
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        3D density field [N, N, N]
+    param : np.float32
+        Parameter container
+    MAS : str, optional
+        Mass Assignment Scheme (None, NGP, CIC, TSC or PCS), by default "TSC"
+
+    Returns
+    -------
+    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+        k [in h/Mpc], P(k) [in h/Mpc ** 3]
+    """
+    import Pk_library as PKL
+
+    Pk = PKL.Pk(
+        x, param["boxlen"], axis=0, MAS=MAS, threads=param["nthreads"], verbose=True
+    )
+    return Pk.k3D, Pk.Pk[:, 0]
+
+
+def fft_3D(x: npt.NDArray[np.float32], threads):
+    ncells_1d = len(x)
+    # Prepare FFTW containers
+    x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="float32")
+    x_out = pyfftw.empty_aligned(
+        (ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64"
+    )
+    # plan FFTW over three axes
+    fftw_plan = pyfftw.FFTW(
+        x_in,
+        x_out,
+        axes=(0, 1, 2),
+        flags=("FFTW_ESTIMATE",),
+        direction="FFTW_FORWARD",
+        threads=threads,
+    )
+    # put in FFTW container
+    x_in[:] = x
+    # run FFTW
+    fftw_plan(x_in, x_out)
+    return x_out
+
+
+def ifft_3D(x: npt.NDArray[np.complex64], threads):
+    ncells_1d = len(x)
+    # Prepare FFTW containers
+    x_in = pyfftw.empty_aligned(
+        (ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64"
+    )
+    x_out = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="float32")
+    # plan FFTW over three axes
+    fftw_plan = pyfftw.FFTW(
+        x_in,
+        x_out,
+        axes=(0, 1, 2),
+        flags=("FFTW_ESTIMATE",),
+        direction="FFTW_BACKWARD",
+        threads=threads,
+    )
+    # Put in FFTW container
+    x_in[:] = x
+    # run FFTW
+    fftw_plan(x_in, x_out)
+    return x_out
