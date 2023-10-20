@@ -6,7 +6,7 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.1.7"
+__version__ = "0.1.8"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Production"
 
@@ -44,7 +44,7 @@ def run(param):
     utils.set_units(param)
     # Initial conditions
     logging.debug(f"Initial conditions")
-    position, velocity = initial_conditions.generate(param)
+    position, velocity = initial_conditions.generate(param, tables)
     param["t"] = tables[1](param["aexp"])
     print(f"{param['aexp']=} {param['t']=}")
     # Run code
@@ -55,7 +55,9 @@ def run(param):
     z_out = ast.literal_eval(param["z_out"])
     aexp_out = 1.0 / (np.array(z_out) + 1)
     aexp_out.sort()
+    t_out = tables[1](aexp_out)
     print(f"{aexp_out=}")
+    print(f"{t_out}")
     i_snap = 1
     # Get output redshifts
     while param["aexp"] < 1.0:
@@ -66,7 +68,14 @@ def run(param):
             potential,
             additional_field,
         ) = integration.integrate(
-            position, velocity, acceleration, potential, additional_field, tables, param
+            position,
+            velocity,
+            acceleration,
+            potential,
+            additional_field,
+            tables,
+            param,
+            t_out[i_snap - 1],
         )  # Put None instead of potential if you don't want to use previous step
         param["nsteps"] += 1
         # plt.imshow(potential[0])

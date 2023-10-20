@@ -19,6 +19,7 @@ def integrate(
     additional_field: npt.NDArray[np.float32],
     tables: List[interp1d],
     param: pd.Series,
+    t_snap_next: np.float32 = np.float32(0),
 ) -> Tuple[
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
@@ -44,6 +45,8 @@ def integrate(
         Interpolated functions [a(t), t(a), Dplus(a)]
     param : pd.Series
         Parameter container
+    t_snap_next : np.float32
+        Time at next snapshot, by default np.float32(0)
 
     Returns
     -------
@@ -61,8 +64,8 @@ def integrate(
     dt3 = dt_weak_variation(tables[1], param)
     dt = np.min([dt1, dt2, dt3])
     # Finish at z = 0 exactly
-    if (param["t"] + dt) > 0:
-        dt = -param["t"]
+    if (param["t"] + dt) > t_snap_next:
+        dt = t_snap_next - param["t"]
     logging.debug(f"{dt1=} {dt2=} {dt3=}")
     # Integrate
     if param.integrator == "leapfrog":
