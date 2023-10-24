@@ -46,8 +46,29 @@ def pm(
     logging.debug("In pm")
     ncells_1d = 2 ** (param["ncoarse"])
     h = np.float32(1.0 / ncells_1d)
+    # Check if need to compute P(k)
+    save_pk = False
+    if param["save_power_spectrum"].casefold() == "all".casefold() or (
+        param["save_power_spectrum"].casefold() == "z_out".casefold()
+        and param["write_snapshot"]
+    ):
+        save_pk = True
     # Compute density mesh from particles and put in BU units
     density = mesh.TSC(position, ncells_1d)
+    # Write P(k)
+    if save_pk:
+        output_pk = (
+            f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
+        )
+        print(f"Write P(k) in {output_pk}")
+        k, Pk = utils.grid2Pk(density, param, MAS="TSC")
+        np.savetxt(f"{output_pk}", np.c_[k, Pk], header="# k [h/Mpc] P(k) [Mpc/h]^3")
+        param.to_csv(
+            f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
+            sep="=",
+            header=False,
+        )
+    # Normalise density to SI
     conversion = np.float32(
         param["mpart"] * ncells_1d**3 / (param["unit_l"] ** 3 * param["unit_d"])
     )
@@ -223,7 +244,7 @@ def get_additional_field(
         u_scalaron = initialise_potential(additional_field, dens_term, h, param, tables)
         u_scalaron = multigrid.FAS(u_scalaron, dens_term, h, param)
         # print(f"{1./ubar_scalaron=}")
-        if (param["nsteps"] + 1) % 10 == 0:  # Check
+        if (param["nsteps"]) % 10 == 0:  # Check
             print(f"{np.mean(u_scalaron)=}, should be close to 1")
         print(f"{fR_a=}")
         """ print(f"{np.mean(fR_a * u_scalaron ** (param['fR_n'] + 1))=}")
@@ -304,13 +325,12 @@ def fft(rhs: npt.NDArray[np.float32], param: pd.Series) -> npt.NDArray[np.float3
     """
     # TODO: Rewrite with pyFFTW
     logging.debug("In fft")
-    # TO DO: - Only compute invk2 once...
     # FFT
-    rhs_fourier = utils.fft_3D(rhs, param["nthreads"])
+    rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
     # Divide by k**2
     n = 2 ** param["ncoarse"]
-    k0 = 2.0 * np.pi * np.fft.rfftfreq(n, 1 / n)
-    k1 = 2.0 * np.pi * np.fft.fftfreq(n, 1 / n)
+    k0 = 2.0 * np.pi * np.fft.rfftfreq(n, 1 / n).astype(np.complex64)
+    k1 = 2.0 * np.pi * np.fft.fftfreq(n, 1 / n).astype(np.complex64)
     invk2 = (
         k0[np.newaxis, np.newaxis, :] ** 2
         + k1[:, np.newaxis, np.newaxis] ** 2
@@ -319,9 +339,10 @@ def fft(rhs: npt.NDArray[np.float32], param: pd.Series) -> npt.NDArray[np.float3
     invk2[0, 0, 0] = 0
     # potential_fourier = -rhs_fourier * invk2
     utils.prod_minus_vector_inplace(rhs_fourier, invk2)
+    invk2 = 0
     potential_fourier = rhs_fourier
     del rhs_fourier
     # Inverse FFT
-    potential = utils.ifft_3D(potential_fourier, param["nthreads"])
+    potential = utils.ifft_3D_real(potential_fourier, param["nthreads"])
 
     return potential

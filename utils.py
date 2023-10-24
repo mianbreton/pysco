@@ -198,6 +198,7 @@ def read_param_file(name: str) -> pd.Series:
             "Courant_factor": float,
         }
     )
+    param["write_snapshot"] = False
     if param["theory"].item().casefold() == "fr".casefold():
         param = param.astype({"fR_logfR0": float, "fR_n": int})
     # Return Series
@@ -471,8 +472,8 @@ def prod_add_vector_scalar_vector(
 
 @njit(fastmath=True, cache=True, parallel=True)
 def prod_minus_vector_inplace(
-    x: npt.NDArray[np.float32],
-    y: npt.NDArray[np.float32],
+    x: npt.NDArray[np.complex64],
+    y: npt.NDArray[np.complex64],
 ) -> None:
     """Vector times scalar plus vector inplace \\
     x *= -y
@@ -640,6 +641,7 @@ def periodic_wrap(position: npt.NDArray[np.float32]) -> None:
             position_ravelled[i] -= one
 
 
+@time_me
 def grid2Pk(
     x: npt.NDArray[np.float32], param: pd.Series, MAS: str = "TSC"
 ) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
@@ -662,12 +664,28 @@ def grid2Pk(
     import Pk_library as PKL
 
     Pk = PKL.Pk(
-        x, param["boxlen"], axis=0, MAS=MAS, threads=param["nthreads"], verbose=True
+        x, param["boxlen"], axis=0, MAS=MAS, threads=param["nthreads"], verbose=False
     )
     return Pk.k3D, Pk.Pk[:, 0]
 
 
-def fft_3D(x: npt.NDArray[np.float32], threads):
+def fft_3D_real(x: npt.NDArray[np.float32], threads: int) -> npt.NDArray[np.complex64]:
+    """Fast Fourier Transform with real inputs
+
+    Uses FFTW library
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Real grid
+    threads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.complex64]
+        Fourier-space grid
+    """
     ncells_1d = len(x)
     # Prepare FFTW containers
     x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="float32")
@@ -690,13 +708,103 @@ def fft_3D(x: npt.NDArray[np.float32], threads):
     return x_out
 
 
-def ifft_3D(x: npt.NDArray[np.complex64], threads):
+def fft_3D(x: npt.NDArray[np.float32], threads: int) -> npt.NDArray[np.complex64]:
+    """Fast Fourier Transform with real and imaginary inputs
+
+    Uses FFTW library
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Real grid
+    threads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.complex64]
+        Fourier-space grid
+    """
+    ncells_1d = len(x)
+    # Prepare FFTW containers
+    x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="float32")
+    x_out = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="complex64")
+    # plan FFTW over three axes
+    fftw_plan = pyfftw.FFTW(
+        x_in,
+        x_out,
+        axes=(0, 1, 2),
+        flags=("FFTW_ESTIMATE",),
+        direction="FFTW_FORWARD",
+        threads=threads,
+    )
+    # put in FFTW container
+    x_in[:] = x
+    # run FFTW
+    fftw_plan(x_in, x_out)
+    return x_out
+
+
+def ifft_3D_real(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.float32]:
+    """Inverse Fast Fourier Transform with real and imaginary inputs
+
+    Uses FFTW library
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.complex64]
+        Fourier-space real grid
+    threads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Configuration-space grid
+    """
     ncells_1d = len(x)
     # Prepare FFTW containers
     x_in = pyfftw.empty_aligned(
         (ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64"
     )
     x_out = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="float32")
+    # plan FFTW over three axes
+    fftw_plan = pyfftw.FFTW(
+        x_in,
+        x_out,
+        axes=(0, 1, 2),
+        flags=("FFTW_ESTIMATE",),
+        direction="FFTW_BACKWARD",
+        threads=threads,
+    )
+    # Put in FFTW container
+    x_in[:] = x
+    # run FFTW
+    fftw_plan(x_in, x_out)
+    return x_out
+
+
+def ifft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.complex64]:
+    """Inverse Fast Fourier Transform with real and imaginary inputs
+
+    Uses FFTW library
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.complex64]
+        Fourier-space grid
+    threads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.complex64]
+        Configuration-space grid
+    """
+    ncells_1d = len(x)
+    # Prepare FFTW containers
+    x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="complex64")
+    x_out = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="complex64")
     # plan FFTW over three axes
     fftw_plan = pyfftw.FFTW(
         x_in,

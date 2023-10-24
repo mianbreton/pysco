@@ -6,7 +6,7 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.1.9"
+__version__ = "0.1.10"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Production"
 
@@ -15,7 +15,7 @@ import logging
 
 import numba
 import numpy as np
-
+import os
 import cosmotable
 import initial_conditions
 import integration
@@ -35,6 +35,19 @@ def run(param):
     if extra.casefold() == "fr".casefold():
         extra += f"{param['fR_logfR0']}_n{param['fR_n']}"
     extra += f"_ncoarse{param['ncoarse']}"
+    param["extra"] = extra
+    z_out = ast.literal_eval(param["z_out"])
+    # Create directories
+    # Power dir
+    power_directory = f"{param['base']}/power"
+    if not os.path.exists(power_directory):
+        print(f"Create directory {power_directory}")
+        os.mkdir(power_directory)
+    for i in range(len(z_out)):
+        output_directory = f"{param['base']}/output_{i+1:05d}"
+        if not os.path.exists(output_directory):
+            print(f"Create directory {output_directory}")
+            os.mkdir(output_directory)
     ###################################################
     # Get cosmological table
     logging.debug("Get table...")
@@ -52,7 +65,6 @@ def run(param):
     logging.debug("Compute initial acceleration")
     param["nsteps"] = 0
     acceleration, potential, additional_field = solver.pm(position, param)
-    z_out = ast.literal_eval(param["z_out"])
     aexp_out = 1.0 / (np.array(z_out) + 1)
     aexp_out.sort()
     t_out = tables[1](aexp_out)
@@ -61,6 +73,7 @@ def run(param):
     i_snap = 1
     # Get output redshifts
     while param["aexp"] < 1.0:
+        param["nsteps"] += 1
         (
             position,
             velocity,
@@ -77,13 +90,12 @@ def run(param):
             param,
             t_out[i_snap - 1],
         )  # Put None instead of potential if you don't want to use previous step
-        param["nsteps"] += 1
         # plt.imshow(potential[0])
         # plt.show()
         if param["nsteps"] % param["n_reorder"] == 0:
             print("Reordering particles")
             utils.reorder_particles(position, velocity, acceleration)
-        if param["aexp"] >= aexp_out[i_snap - 1]:
+        if param["write_snapshot"]:
             snap_name = f"{param['base']}/output_{i_snap:05d}/particles_{extra}.parquet"
             print(f"Write snapshot...{snap_name=} {param['aexp']=}")
             utils.write_snapshot_particles_parquet(f"{snap_name}", position, velocity)
@@ -92,7 +104,6 @@ def run(param):
                 sep="=",
                 header=False,
             )
-
             i_snap += 1
         print(f"{param['nsteps']=} {param['aexp']=} z = {1.0 / param['aexp'] - 1}")
 

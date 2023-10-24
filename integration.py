@@ -63,9 +63,13 @@ def integrate(
     dt2 = dt_CFL_maxvel(velocity, param)
     dt3 = dt_weak_variation(tables[1], param)
     dt = np.min([dt1, dt2, dt3])
-    # Finish at z = 0 exactly
+    # Stop at z = zsnap exactly to output snapshots
     if (param["t"] + dt) > t_snap_next:
         dt = t_snap_next - param["t"]
+        param["write_snapshot"] = True
+    else:
+        param["write_snapshot"] = False
+
     logging.debug(f"{dt1=} {dt2=} {dt3=}")
     # Integrate
     if param.integrator == "leapfrog":
