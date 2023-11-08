@@ -6,7 +6,7 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.1.10"
+__version__ = "0.1.11"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Production"
 
@@ -21,6 +21,8 @@ import initial_conditions
 import integration
 import solver
 import utils
+
+from rich import print
 
 
 def run(param):
@@ -56,13 +58,14 @@ def run(param):
     param["aexp"] = 1.0 / (1 + param["z_start"])
     utils.set_units(param)
     # Initial conditions
-    logging.debug(f"Initial conditions")
+    print(f"\n[bold blue]----- Initial conditions -----[/bold blue]\n")
     position, velocity = initial_conditions.generate(param, tables)
     param["t"] = tables[1](param["aexp"])
     print(f"{param['aexp']=} {param['t']=}")
     # Run code
     # Compute acceleration
     logging.debug("Compute initial acceleration")
+    print(f"\n[bold blue]----- Run N-body -----[/bold blue]\n")
     param["nsteps"] = 0
     acceleration, potential, additional_field = solver.pm(position, param)
     aexp_out = 1.0 / (np.array(z_out) + 1)

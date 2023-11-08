@@ -114,6 +114,7 @@ def FAS(
     # while residual_error > tolerance:
     print("Start Full-Approximation Storage Multigrid")
     F_cycle_FAS(x, b, param)
+    # F_cycle_FAS(x, b, param)
     residual_error_tmp = residual_error_half(x, b, h, param)
     print(f"{residual_error_tmp=} {tolerance=}")
     #    if residual_error_tmp < tolerance or residual_error / residual_error_tmp < 2:
@@ -129,7 +130,7 @@ def truncation_error(
     b: npt.NDArray[np.float32] = np.empty(0, dtype=np.float32),
 ) -> np.float32:
     """Truncation error estimator \\
-    As in Numerical Recipies (and Li et al. 2012), we estimate the truncation error as \\
+    As in Numerical Recipes (and Li et al. 2012), we estimate the truncation error as \\
     t = (Operator(Restriction(Phi))) - Restriction(Operator(Phi))
 
     Parameters

@@ -12,6 +12,7 @@ import utils
 import laplacian
 import cubic
 import quartic
+from rich import print
 
 
 # @utils.profile_me
@@ -55,27 +56,33 @@ def pm(
         save_pk = True
     # Compute density mesh from particles and put in BU units
     density = mesh.TSC(position, ncells_1d)
+    # Normalise density to RU
+    if ncells_1d**3 != param["npart"]:
+        conversion = np.float32(ncells_1d**3 / param["npart"])
+        utils.prod_vector_scalar_inplace(density, conversion)
+    # Get additional field (for MG)
+    param["compute_additional_field"] = True
+    additional_field = get_additional_field(additional_field, density, h, param, tables)
     # Write P(k)
-    if save_pk:
+    if save_pk and param["linear_newton_solver"].casefold() == "multigrid".casefold():
+        output_pk = (
+            f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
+        )
+        density_fourier = utils.fft_3D_real(density, param["nthreads"])
+        k, Pk = utils.fourier_grid_to_Pk(density_fourier, 3)
+        density_fourier = 0
+        Pk *= (param["boxlen"] / len(density) ** 2) ** 3
+        k *= 2 * np.pi / param["boxlen"]
         output_pk = (
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
         print(f"Write P(k) in {output_pk}")
-        k, Pk = utils.grid2Pk(density, param, MAS="TSC")
         np.savetxt(f"{output_pk}", np.c_[k, Pk], header="# k [h/Mpc] P(k) [Mpc/h]^3")
         param.to_csv(
             f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
             sep="=",
             header=False,
         )
-    # Normalise density to SI
-    conversion = np.float32(
-        param["mpart"] * ncells_1d**3 / (param["unit_l"] ** 3 * param["unit_d"])
-    )
-    utils.prod_vector_scalar_inplace(density, conversion)
-    # Get additional field (for MG)
-    param["compute_additional_field"] = True
-    additional_field = get_additional_field(additional_field, density, h, param, tables)
     # Compute RHS of the final Poisson equation
     rhs_poisson(density, additional_field, param)
     rhs = density
@@ -86,15 +93,31 @@ def pm(
     # Main procedure: Poisson solver
     if param["linear_newton_solver"].casefold() == "multigrid".casefold():
         potential = multigrid.linear(potential, rhs, h, param)
+        force = mesh.derivative(potential)
+        # force = mesh.derivative6(potential)
     elif param["linear_newton_solver"].casefold() == "fft".casefold():
-        potential = fft(rhs, param)
+        # potential = fft(rhs, param, save_pk)
+        # force = mesh.derivative(potential)
+        force = fft_force(rhs, param, save_pk)
+        """ plt.figure(0)
+        plt.imshow(force[0, 0])
+        plt.colorbar()
+        plt.figure(1)
+        plt.imshow(force2[0, 0])
+        plt.colorbar()
+        plt.show() """
+    else:
+        raise ValueError(
+            f"{param['linear_newton_solver']=}, should be 'multigrid' or 'fft'"
+        )
+
     rhs = 0
-    # plt.imshow(potential[0])
-    # plt.colorbar()
-    # plt.show()
+    """ plt.imshow(potential[0])
+    plt.colorbar()
+    plt.show() """
     # Compute Force
     if param["theory"].casefold() == "newton".casefold():
-        force = mesh.derivative(potential)
+        pass
     else:
         Rbar = 3 * param["Om_m"] * param["aexp"] ** (-3) + 12 * param["Om_lambda"]
         Rbar0 = 3 * param["Om_m"] + 12 * param["Om_lambda"]
@@ -247,41 +270,6 @@ def get_additional_field(
         if (param["nsteps"]) % 10 == 0:  # Check
             print(f"{np.mean(u_scalaron)=}, should be close to 1")
         print(f"{fR_a=}")
-        """ print(f"{np.mean(fR_a * u_scalaron ** (param['fR_n'] + 1))=}")
-        plt.figure(0)
-        plt.imshow(np.log10(density[0]), vmin=-2)
-        plt.title("Log10(density)")
-        plt.colorbar()
-        plt.savefig("fig/logdensity_z0.png", bbox_inches="tight", dpi=300)
-        plt.figure(1)
-        vmin = -1.15e-6
-        vmax = -1.0e-8
-        plt.imshow(fR_a * u_scalaron[0] ** (param["fR_n"] + 1), vmin=vmin, vmax=vmax)
-        plt.title(
-            rf"Scalaron field (-fR0 = 1e-{int(param['fR_logfR0'])}, n = {param['fR_n']})"
-        )
-        plt.colorbar()
-        plt.savefig(
-            f"fig/fr{param['fR_logfR0']}_n{param['fR_n']}_z0.png",
-            bbox_inches="tight",
-            dpi=300,
-        )
-        plt.figure(2)
-        plt.imshow(
-            laplacian.operator(fR_a * u_scalaron ** (param["fR_n"] + 1), h)[0],
-            vmin=-0.2,
-            vmax=0.2,
-        )
-        plt.title(
-            rf"Laplacian(Scalaron) field (-fR0 = 1e-{int(param['fR_logfR0'])}, n = {param['fR_n']})"
-        )
-        plt.colorbar()
-        plt.savefig(
-            f"fig/laplacian_fr{param['fR_logfR0']}_n{param['fR_n']}_z0.png",
-            bbox_inches="tight",
-            dpi=300,
-        )
-        plt.show() """
         return u_scalaron
 
 
@@ -308,8 +296,10 @@ def rhs_poisson(
 
 
 @utils.time_me
-def fft(rhs: npt.NDArray[np.float32], param: pd.Series) -> npt.NDArray[np.float32]:
-    """Compute FFT
+def fft(
+    rhs: npt.NDArray[np.float32], param: pd.Series, save_pk: bool = False
+) -> npt.NDArray[np.float32]:
+    """Solves the Newtonian linear Poisson equation using Fast Fourier Transforms
 
     Parameters
     ----------
@@ -317,32 +307,75 @@ def fft(rhs: npt.NDArray[np.float32], param: pd.Series) -> npt.NDArray[np.float3
         Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
     param : pd.Series
         Parameter container
+    save_pk : bool
+        Save or not the Power spectrum
 
     Returns
     -------
     npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
     """
-    # TODO: Rewrite with pyFFTW
-    logging.debug("In fft")
-    # FFT
     rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
-    # Divide by k**2
-    n = 2 ** param["ncoarse"]
-    k0 = 2.0 * np.pi * np.fft.rfftfreq(n, 1 / n).astype(np.complex64)
-    k1 = 2.0 * np.pi * np.fft.fftfreq(n, 1 / n).astype(np.complex64)
-    invk2 = (
-        k0[np.newaxis, np.newaxis, :] ** 2
-        + k1[:, np.newaxis, np.newaxis] ** 2
-        + k1[np.newaxis, :, np.newaxis] ** 2
-    ) ** (-1)
-    invk2[0, 0, 0] = 0
-    # potential_fourier = -rhs_fourier * invk2
-    utils.prod_minus_vector_inplace(rhs_fourier, invk2)
-    invk2 = 0
-    potential_fourier = rhs_fourier
-    del rhs_fourier
-    # Inverse FFT
-    potential = utils.ifft_3D_real(potential_fourier, param["nthreads"])
+    MAS_index = 3  # None = 0, NGP = 1, CIC = 2, TSC = 3
+    if save_pk:
+        k, Pk = utils.fourier_grid_to_Pk(rhs_fourier, MAS_index)
+        Pk *= (param["boxlen"] / len(rhs) ** 2) ** 3 / (
+            1.5 * param["aexp"] * param["Om_m"]
+        ) ** 2
+        k *= 2 * np.pi / param["boxlen"]
+        output_pk = (
+            f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
+        )
+        print(f"Write P(k) in {output_pk}")
+        np.savetxt(f"{output_pk}", np.c_[k, Pk], header="# k [h/Mpc] P(k) [Mpc/h]^3")
+        param.to_csv(
+            f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
+            sep="=",
+            header=False,
+        )
+    # utils.divide_by_minus_k2_fourier(rhs_fourier)
+    utils.divide_by_minus_k2_fourier_compensated(rhs_fourier, MAS_index)
+    return utils.ifft_3D_real(rhs_fourier, param["nthreads"])
 
-    return potential
+
+@utils.time_me
+def fft_force(
+    rhs: npt.NDArray[np.float32], param: pd.Series, save_pk: bool = False
+) -> npt.NDArray[np.float32]:
+    """Solves the Newtonian linear Poisson equation using Fast Fourier Transforms and outputs Force
+
+    Parameters
+    ----------
+    rhs : npt.NDArray[np.float32]
+        Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
+    param : pd.Series
+        Parameter container
+    save_pk : bool
+        Save or not the Power spectrum
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Force [3, N_cells_1d, N_cells_1d,N_cells_1d]
+    """
+    rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
+    # force = utils.compute_gradient_laplacian_fourier(rhs_fourier)
+    MAS_index = 3  # None = 0, NGP = 1, CIC = 2, TSC = 3
+    force = utils.compute_gradient_laplacian_fourier_compensated(rhs_fourier, MAS_index)
+    if save_pk:
+        k, Pk = utils.fourier_grid_to_Pk(rhs_fourier, MAS_index)
+        Pk *= (param["boxlen"] / len(rhs) ** 2) ** 3 / (
+            1.5 * param["aexp"] * param["Om_m"]
+        ) ** 2
+        k *= 2 * np.pi / param["boxlen"]
+        output_pk = (
+            f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
+        )
+        print(f"Write P(k) in {output_pk}")
+        np.savetxt(f"{output_pk}", np.c_[k, Pk], header="# k [h/Mpc] P(k) [Mpc/h]^3")
+        param.to_csv(
+            f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
+            sep="=",
+            header=False,
+        )
+    return utils.ifft_3D_real_grad(force, param["nthreads"])

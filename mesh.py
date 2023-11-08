@@ -348,12 +348,14 @@ def add_prolongation_half(
                 )
 
 
+@utils.time_me
 @njit(["f4[:,:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
-def derivative2(
+def derivative3(
     a: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
-    """Spatial derivatives of a scalar field on a grid \\
-    Second-order derivative with finite differences
+    """Spatial derivatives of a scalar field on a grid
+
+    Three-point stencil derivative with finite differences
 
     Parameters
     ----------
@@ -390,8 +392,9 @@ def derivative2(
 def derivative(
     a: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
-    """Spatial derivatives of a scalar field on a grid \\
-    Fourth-order derivative with finite differences
+    """Spatial derivatives of a scalar field on a grid
+
+    Five-point stencil derivative with finite differences
 
     Parameters
     ----------
@@ -432,6 +435,74 @@ def derivative(
                 )
                 result[2, i, j, k] = inv12h * (
                     eight * (a[i, j, km1] - a[i, j, kp1]) - a[i, j, km2] + a[i, j, kp2]
+                )
+    return result
+
+
+@utils.time_me
+@njit(["f4[:,:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+def derivative7(
+    a: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid
+
+    Seven-point stencil derivative with finite differences
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+    """
+    nine = np.float32(9)
+    fortyfive = np.float32(45.0)
+    inv60h = np.float32(a.shape[-1] / 60.0)
+    ncells_1d = a.shape[-1]
+    # Initialise mesh
+    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    # Compute
+    for i in prange(-3, a.shape[-3] - 3):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        ip3 = i + 3
+        im3 = i - 3
+        for j in prange(-3, a.shape[-2] - 3):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            jp3 = j + 3
+            jm3 = j - 3
+            for k in prange(-3, a.shape[-1] - 3):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+                kp3 = k + 3
+                km3 = k - 3
+                result[0, i, j, k] = inv60h * (
+                    fortyfive * (a[im1, j, k] - a[ip1, j, k])
+                    + nine * (-a[im2, j, k] + a[ip2, j, k])
+                    + a[im3, j, k]
+                    - a[ip3, j, k]
+                )
+                result[1, i, j, k] = inv60h * (
+                    fortyfive * (a[i, jm1, k] - a[i, jp1, k])
+                    + nine * (-a[i, jm2, k] + a[i, jp2, k])
+                    + a[i, jm3, k]
+                    - a[i, jp3, k]
+                )
+                result[2, i, j, k] = inv60h * (
+                    fortyfive * (a[i, j, km1] - a[i, j, kp1])
+                    + nine * (-a[i, j, km2] + a[i, j, kp2])
+                    + a[i, j, km3]
+                    - a[i, j, kp3]
                 )
     return result
 

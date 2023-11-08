@@ -63,9 +63,7 @@ def generate(param: pd.Series) -> List[interp1d]:
 
 
 # TODO: Extend for large range of cosmologies and more accurate calculation
-def Dplus(
-    cosmo: w0waCDM, z: npt.NDArray[np.float64], t: int = 0
-) -> npt.NDArray[np.float64]:
+def Dplus(cosmo: w0waCDM, z: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """Computes growth factor
 
     Parameters
@@ -74,9 +72,6 @@ def Dplus(
         astropy.cosmology class
     z : npt.NDArray[np.float64]
         Redshifts
-    t : int, optional
-        Flag to now if z = 0 or not. Defaults to 0.
-
     Returns
     -------
     npt.NDArray[np.float64]
@@ -85,9 +80,7 @@ def Dplus(
     omega = cosmo.Om(z)
     lamb = 1 - omega
     a = 1 / (1 + z)
-    norm = 1
-    if t == 0:
-        norm = 1.0 / Dplus(cosmo, 0.0, 1)
+    norm = 1.0 / Dplus(cosmo, 0.0)
     return (
         norm
         * (5.0 / 2.0)
