@@ -21,7 +21,6 @@ def operator(
     q = q*h^2
     p = h^2*b - 1/6 * (u_{i+1,j,k}**2+u_{i-1,j,k}**2+u_{i,j+1,k}**2+u_{i,j-1,k}**2+u_{i,j,k+1}**2+u_{i,j,k-1}**2)
     
-
     Parameters
     ----------
     x : npt.NDArray[np.float32]
@@ -154,7 +153,7 @@ def initialise_potential(
     half = np.float32(0.5)
     inv3 = np.float32(1.0 / 3)
     u_scalaron = np.empty_like(b)
-    size = len(b)
+    size = b.shape[0]
     for i in prange(size):
         for j in prange(size):
             for k in prange(size):
@@ -198,18 +197,19 @@ def gauss_seidel(
     invsix = np.float32(1.0 / 6)
     h2 = np.float32(h**2)
     d1 = np.float32(27 * h2 * q)
+    half_ncells_1d = x.shape[0] >> 1
     # Computation Red
     for i in prange(x.shape[0] >> 1):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(x.shape[1] >> 1):
+        for j in prange(half_ncells_1d):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(x.shape[2] >> 1):
+            for k in prange(half_ncells_1d):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -261,17 +261,17 @@ def gauss_seidel(
                 x[ii, jj, kkm1] = solution_cubic_equation(p, d1)
 
     # Computation Black
-    for i in prange(x.shape[0] >> 1):
+    for i in prange(half_ncells_1d):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(x.shape[1] >> 1):
+        for j in prange(half_ncells_1d):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(x.shape[2] >> 1):
+            for k in prange(half_ncells_1d):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -361,18 +361,19 @@ def gauss_seidel_with_rhs(
     h2 = np.float32(h**2)
     twenty_seven = np.float32(27)
     d1_q = twenty_seven * h2 * q
+    half_ncells_1d = x.shape[0] >> 1
     # Computation Red
     for i in prange(x.shape[0] >> 1):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(x.shape[1] >> 1):
+        for j in prange(half_ncells_1d):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(x.shape[2] >> 1):
+            for k in prange(half_ncells_1d):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -428,17 +429,17 @@ def gauss_seidel_with_rhs(
                 x[ii, jj, kkm1] = solution_cubic_equation(p, d1)
 
     # Computation Black
-    for i in prange(x.shape[0] >> 1):
+    for i in prange(half_ncells_1d):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(x.shape[1] >> 1):
+        for j in prange(half_ncells_1d):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(x.shape[2] >> 1):
+            for k in prange(half_ncells_1d):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -525,7 +526,7 @@ def residual_half(
         Residual
     """
     invsix = np.float32(1.0 / 6)
-    ncells_1d = len(x) >> 1
+    ncells_1d = x.shape[0] >> 1
     h2 = np.float32(h**2)
     qh2 = q * h2
     result = np.zeros_like(x)
@@ -731,7 +732,7 @@ def restrict_residual_half(
     """
     invsix = np.float32(1.0 / 6)
     inveight = np.float32(0.125)
-    ncells_1d = len(x) >> 1
+    ncells_1d = x.shape[0] >> 1
     h2 = np.float32(h**2)
     qh2 = q * h2
     result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
@@ -834,7 +835,7 @@ def truncation_error(
     np.float32
         Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
     """
-    ncells_1d = len(x) >> 1
+    ncells_1d = x.shape[0] >> 1
     RLx = mesh.restriction(operator(x, b, h, q))
     LRx = operator(mesh.restriction(x), mesh.restriction(b), 2 * h, q)
     result = 0
@@ -868,7 +869,6 @@ def smoothing(
     n_smoothing : int
         Number of smoothing iterations
     """
-    # gauss_seidel.parallel_diagnostics(level=4)
     for _ in range(n_smoothing):
         gauss_seidel(x, b, h, q)
 

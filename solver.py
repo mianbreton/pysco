@@ -37,7 +37,7 @@ def pm(
     additional_field : npt.NDArray[np.float32], optional
         Additional potential [N_cells_1d, N_cells_1d,N_cells_1d], by default np.empty(0, dtype=np.float32)
     tables : List[interp1d], optional
-        Interpolated functions [a(t), t(a), Dplus(a)], by default []
+        Interpolated functions [a(t), t(a), Dplus(a), H(a)], by default []
 
     Returns
     -------
@@ -47,6 +47,7 @@ def pm(
     logging.debug("In pm")
     ncells_1d = 2 ** (param["ncoarse"])
     h = np.float32(1.0 / ncells_1d)
+    MAS_index = 3  # None = 0, NGP = 1, CIC = 2, TSC = 3
     # Check if need to compute P(k)
     save_pk = False
     if param["save_power_spectrum"].casefold() == "all".casefold() or (
@@ -56,6 +57,7 @@ def pm(
         save_pk = True
     # Compute density mesh from particles and put in BU units
     density = mesh.TSC(position, ncells_1d)
+    # print("After TSC!")
     # Normalise density to RU
     if ncells_1d**3 != param["npart"]:
         conversion = np.float32(ncells_1d**3 / param["npart"])
@@ -69,7 +71,7 @@ def pm(
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
         density_fourier = utils.fft_3D_real(density, param["nthreads"])
-        k, Pk = utils.fourier_grid_to_Pk(density_fourier, 3)
+        k, Pk, Nmodes = utils.fourier_grid_to_Pk(density_fourier, 3)
         density_fourier = 0
         Pk *= (param["boxlen"] / len(density) ** 2) ** 3
         k *= 2 * np.pi / param["boxlen"]
@@ -77,7 +79,11 @@ def pm(
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
         print(f"Write P(k) in {output_pk}")
-        np.savetxt(f"{output_pk}", np.c_[k, Pk], header="# k [h/Mpc] P(k) [Mpc/h]^3")
+        np.savetxt(
+            f"{output_pk}",
+            np.c_[k, Pk, Nmodes],
+            header="k [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
+        )
         param.to_csv(
             f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
             sep="=",
@@ -88,6 +94,7 @@ def pm(
     rhs = density
     del density
     # Initialise Potential if there is no previous step. Else, rescale the potential using growth and scale factors
+    # TODO: Try to keep Phidot and initialise Phi_i = Phi_(i-1) + Phidot*dt
     param["compute_additional_field"] = False
     potential = initialise_potential(potential, rhs, h, param, tables)
     # Main procedure: Poisson solver
@@ -96,9 +103,9 @@ def pm(
         force = mesh.derivative(potential)
         # force = mesh.derivative6(potential)
     elif param["linear_newton_solver"].casefold() == "fft".casefold():
-        # potential = fft(rhs, param, save_pk)
-        # force = mesh.derivative(potential)
-        force = fft_force(rhs, param, save_pk)
+        potential = fft(rhs, param, MAS_index, save_pk)
+        force = mesh.derivative(potential)
+        # force = fft_force(rhs, param, MAS_index, save_pk)
         """ plt.figure(0)
         plt.imshow(force[0, 0])
         plt.colorbar()
@@ -167,7 +174,7 @@ def initialise_potential(
     param : pd.Series
         Parameter container
     tables : List[interp1d], optional
-        Interpolated functions [a(t), t(a), Dplus(a)], by default []
+        Interpolated functions [a(t), t(a), Dplus(a), H(a)], by default []
     
     Returns
     -------
@@ -227,7 +234,7 @@ def get_additional_field(
     param : pd.Series
         Parameter container
     tables : List[interp1d], optional
-        Interpolated functions [a(t), t(a), Dplus(a)], by default []
+        Interpolated functions [a(t), t(a), Dplus(a), H(a)], by default []
 
     Returns
     -------
@@ -297,7 +304,10 @@ def rhs_poisson(
 
 @utils.time_me
 def fft(
-    rhs: npt.NDArray[np.float32], param: pd.Series, save_pk: bool = False
+    rhs: npt.NDArray[np.float32],
+    param: pd.Series,
+    MAS_index: int = 0,
+    save_pk: bool = False,
 ) -> npt.NDArray[np.float32]:
     """Solves the Newtonian linear Poisson equation using Fast Fourier Transforms
 
@@ -307,8 +317,10 @@ def fft(
         Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
     param : pd.Series
         Parameter container
+    MAS_index : int
+        Mass assignment index (None = 0, NGP = 1, CIC = 2, TSC = 3), default to 0
     save_pk : bool
-        Save or not the Power spectrum
+        Save or not the Power spectrum, by default False
 
     Returns
     -------
@@ -316,9 +328,12 @@ def fft(
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
     """
     rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
-    MAS_index = 3  # None = 0, NGP = 1, CIC = 2, TSC = 3
+    if MAS_index == 0:
+        utils.divide_by_minus_k2_fourier(rhs_fourier)
+    else:
+        utils.divide_by_minus_k2_fourier_compensated(rhs_fourier, MAS_index)
     if save_pk:
-        k, Pk = utils.fourier_grid_to_Pk(rhs_fourier, MAS_index)
+        k, Pk, Nmodes = utils.fourier_grid_to_Pk(rhs_fourier, MAS_index)
         Pk *= (param["boxlen"] / len(rhs) ** 2) ** 3 / (
             1.5 * param["aexp"] * param["Om_m"]
         ) ** 2
@@ -327,20 +342,25 @@ def fft(
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
         print(f"Write P(k) in {output_pk}")
-        np.savetxt(f"{output_pk}", np.c_[k, Pk], header="# k [h/Mpc] P(k) [Mpc/h]^3")
+        np.savetxt(
+            f"{output_pk}",
+            np.c_[k, Pk, Nmodes],
+            header="k [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
+        )
         param.to_csv(
             f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
             sep="=",
             header=False,
         )
-    # utils.divide_by_minus_k2_fourier(rhs_fourier)
-    utils.divide_by_minus_k2_fourier_compensated(rhs_fourier, MAS_index)
     return utils.ifft_3D_real(rhs_fourier, param["nthreads"])
 
 
 @utils.time_me
 def fft_force(
-    rhs: npt.NDArray[np.float32], param: pd.Series, save_pk: bool = False
+    rhs: npt.NDArray[np.float32],
+    param: pd.Series,
+    MAS_index: int = 0,
+    save_pk: bool = False,
 ) -> npt.NDArray[np.float32]:
     """Solves the Newtonian linear Poisson equation using Fast Fourier Transforms and outputs Force
 
@@ -350,8 +370,10 @@ def fft_force(
         Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
     param : pd.Series
         Parameter container
+    MAS_index : int
+        Mass assignment index (None = 0, NGP = 1, CIC = 2, TSC = 3), default to 0
     save_pk : bool
-        Save or not the Power spectrum
+        Save or not the Power spectrum, by default False
 
     Returns
     -------
@@ -359,11 +381,15 @@ def fft_force(
         Force [3, N_cells_1d, N_cells_1d,N_cells_1d]
     """
     rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
-    # force = utils.compute_gradient_laplacian_fourier(rhs_fourier)
-    MAS_index = 3  # None = 0, NGP = 1, CIC = 2, TSC = 3
-    force = utils.compute_gradient_laplacian_fourier_compensated(rhs_fourier, MAS_index)
+    if MAS_index == 0:
+        force = utils.compute_gradient_laplacian_fourier(rhs_fourier)
+    else:
+        force = utils.compute_gradient_laplacian_fourier_compensated(
+            rhs_fourier, MAS_index
+        )
     if save_pk:
-        k, Pk = utils.fourier_grid_to_Pk(rhs_fourier, MAS_index)
+        k, Pk, Nmodes = utils.fourier_grid_to_Pk(rhs_fourier, MAS_index)
+        rhs_fourier = 0
         Pk *= (param["boxlen"] / len(rhs) ** 2) ** 3 / (
             1.5 * param["aexp"] * param["Om_m"]
         ) ** 2
@@ -372,10 +398,15 @@ def fft_force(
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
         print(f"Write P(k) in {output_pk}")
-        np.savetxt(f"{output_pk}", np.c_[k, Pk], header="# k [h/Mpc] P(k) [Mpc/h]^3")
+        np.savetxt(
+            f"{output_pk}",
+            np.c_[k, Pk, Nmodes],
+            header="k [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
+        )
         param.to_csv(
             f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
             sep="=",
             header=False,
         )
+    rhs_fourier = 0
     return utils.ifft_3D_real_grad(force, param["nthreads"])

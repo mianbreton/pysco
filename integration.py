@@ -42,7 +42,7 @@ def integrate(
     additional_field : npt.NDArray[np.float32]
         Additional potential [N_cells_1d, N_cells_1d, N_cells_1d]
     tables : List[interp1d]
-        Interpolated functions [a(t), t(a), Dplus(a)]
+        Interpolated functions [a(t), t(a), Dplus(a), H(a)]
     param : pd.Series
         Parameter container
     t_snap_next : np.float32
@@ -131,7 +131,7 @@ def euler(
     dt : np.float32
         Time step
     tables : List[interp1d]
-        Interpolated functions [a(t), t(a), Dplus(a)]
+        Interpolated functions [a(t), t(a), Dplus(a), H(a)]
     param : pd.Series
         Parameter container
 
@@ -191,7 +191,7 @@ def leapfrog(
     dt : np.float32
         Time step
     tables : List[interp1d]
-        Interpolated functions [a(t), t(a), Dplus(a)]
+        Interpolated functions [a(t), t(a), Dplus(a), H(a)]
     param : pd.Series
         Parameter container
 

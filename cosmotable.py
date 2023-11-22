@@ -43,22 +43,26 @@ def generate(param: pd.Series) -> List[interp1d]:
         dt_lookback = np.diff(t_lookback)
         dt_supercomoving = 1.0 / a[1:] ** 2 * dt_lookback
         t_supercomoving = np.concatenate(([0], np.cumsum(dt_supercomoving)))
+        H_array = param["H0"] * np.sqrt(param["Om_m"] * a ** (-3) + param["Om_lambda"])
         Dplus_array = Dplus(cosmo, 1.0 / a - 1, 0)
     # Use RAMSES tables
     else:
         evo = np.loadtxt(param["evolution_table"]).T
         a = evo[0]
         t_supercomoving = evo[2]
+        H_o_h0 = evo[1]
         mpgrafic = np.loadtxt(param["mpgrafic_table"]).T
         aexp = mpgrafic[0]
         dplus = mpgrafic[2]
         dplus_norm = dplus / dplus[-1]
         Dplus_array = np.interp(a, aexp, dplus_norm)
+        H_array = param["H0"] * H_o_h0 / a**2
 
     return [
         interp1d(t_supercomoving, a, fill_value="extrapolate"),
         interp1d(a, t_supercomoving, fill_value="extrapolate"),
         interp1d(a, Dplus_array, fill_value="extrapolate"),
+        interp1d(a, H_array, fill_value="extrapolate"),
     ]
 
 

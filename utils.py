@@ -700,14 +700,14 @@ def grid2Pk(
 
 @time_me
 @njit(
-    ["UniTuple(f4[:],2)(c8[:,:,::1], i8)"],
+    ["UniTuple(f4[:],3)(c8[:,:,::1], i8)"],
     fastmath=True,
     cache=True,
-    parallel=True,
+    parallel=False,
 )
 def fourier_grid_to_Pk(
     density_k: npt.NDArray[np.complex64], p: int
-) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Compute P(k) from Fourier-space density grid with compensated Kernel (Jing 2005)
 
     Parameters
@@ -720,7 +720,7 @@ def fourier_grid_to_Pk(
     Returns
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
-        k [in h/Mpc], P(k) [in h/Mpc ** 3]
+        k [in h/Mpc], P(k) [in h/Mpc ** 3], Nmodes
     """
     ncells_1d = len(density_k)
     one = np.float32(1)
@@ -730,7 +730,7 @@ def fourier_grid_to_Pk(
     k_array = np.zeros(ncells_1d, dtype=np.float32)
     nmodes = np.zeros_like(k_array)
     pk_array = np.zeros_like(k_array)
-    for i in range(ncells_1d):  # FIXME: Make thread safe
+    for i in prange(ncells_1d):  # FIXME: Make thread safe
         if i == 0:
             i_iszero = True
         else:
@@ -741,7 +741,7 @@ def fourier_grid_to_Pk(
             kx = np.float32(i)
         kx2 = kx**2
         w_x = np.sinc(kx * prefactor)
-        for j in range(ncells_1d):
+        for j in prange(ncells_1d):
             if j == 0:
                 j_iszero = True
             else:
@@ -752,7 +752,7 @@ def fourier_grid_to_Pk(
                 ky = np.float32(j)
             w_xy = w_x * np.sinc(ky * prefactor)
             kx2_ky2 = kx2 + ky**2
-            for k in range(middle + 1):
+            for k in prange(middle + 1):
                 if i_iszero and j_iszero and k == 0:
                     density_k[0, 0, 0] = 0
                     continue
@@ -770,6 +770,7 @@ def fourier_grid_to_Pk(
     return (
         k_array[1:kmax_orszag] / nmodes[1:kmax_orszag],
         pk_array[1:kmax_orszag] / nmodes[1:kmax_orszag],
+        nmodes[1:kmax_orszag],
     )
 
 

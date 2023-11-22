@@ -123,6 +123,7 @@ def FAS(
     return x
 
 
+@utils.time_me
 def truncation_error(
     x: npt.NDArray[np.float32],
     h: np.float32,
@@ -163,6 +164,7 @@ def truncation_error(
         return laplacian.truncation_error(x, h)
 
 
+@utils.time_me
 def residual_error_half(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],

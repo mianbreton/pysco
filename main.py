@@ -6,9 +6,9 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.1.12"
+__version__ = "0.1.13"
 __email__ = "michel-andres.breton@obspm.fr"
-__status__ = "Production"
+__status__ = "Development"
 
 import ast
 import logging
@@ -42,14 +42,10 @@ def run(param):
     # Create directories
     # Power dir
     power_directory = f"{param['base']}/power"
-    if not os.path.exists(power_directory):
-        print(f"Create directory {power_directory}")
-        os.mkdir(power_directory)
-    for i in range(len(z_out)):
-        output_directory = f"{param['base']}/output_{i+1:05d}"
-        if not os.path.exists(output_directory):
-            print(f"Create directory {output_directory}")
-            os.mkdir(output_directory)
+    os.makedirs(power_directory, exist_ok=True)
+    for i in range(len(z_out) + 1):
+        output_directory = f"{param['base']}/output_{i:05d}"
+        os.makedirs(output_directory, exist_ok=True)
     ###################################################
     # Get cosmological table
     logging.debug("Get table...")

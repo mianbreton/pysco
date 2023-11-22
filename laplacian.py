@@ -139,8 +139,9 @@ def restrict_residual_half(
     three = np.float32(3.0)
     six = np.float32(6.0)
     invh2 = np.float32(h ** (-2))
+    ncells_1d = x.shape[0]
     result = np.empty(
-        (x.shape[0] >> 1, x.shape[1] >> 1, x.shape[2] >> 1), dtype=np.float32
+        (ncells_1d >> 1, ncells_1d >> 1, ncells_1d >> 1), dtype=np.float32
     )
     for i in prange(-1, result.shape[0] - 1):
         ii = 2 * i
@@ -326,7 +327,7 @@ def truncation_error(x: npt.NDArray[np.float32], h: np.float32) -> np.float32:
     np.float32
         Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
     """
-    ncells_1d = len(x) >> 1
+    ncells_1d = x.shape[0] >> 1
     RLx = mesh.restriction(operator(x, h))
     LRx = operator(mesh.restriction(x), 2 * h)
     result = 0
@@ -611,6 +612,7 @@ def gauss_seidel(
     #          then LLVM tries to fuse the red and black loops! And we really don't want that...
     h2 = np.float32(h**2)
     invsix = np.float32(1.0 / 6)
+    half_ncells_1d = x.shape[0] >> 1
 
     # Computation Red
     for i in prange(x.shape[0] >> 1):
@@ -618,12 +620,12 @@ def gauss_seidel(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(x.shape[1] >> 1):
+        for j in prange(half_ncells_1d):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(x.shape[2] >> 1):
+            for k in prange(half_ncells_1d):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -702,17 +704,17 @@ def gauss_seidel(
                 )
 
     # Computation Black
-    for i in prange(x.shape[0] >> 1):
+    for i in prange(half_ncells_1d):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(x.shape[1] >> 1):
+        for j in prange(half_ncells_1d):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(x.shape[2] >> 1):
+            for k in prange(half_ncells_1d):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -815,6 +817,7 @@ def gauss_seidel_no_overrelaxation(
     #          then LLVM tries to fuse the red and black loops! And we really don't want that...
     h2 = np.float32(h**2)
     invsix = np.float32(1.0 / 6)
+    half_ncells_1d = x.shape[0] >> 1
 
     # Computation Red
     for i in prange(x.shape[0] >> 1):
@@ -822,12 +825,12 @@ def gauss_seidel_no_overrelaxation(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(x.shape[1] >> 1):
+        for j in prange(half_ncells_1d):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(x.shape[2] >> 1):
+            for k in prange(half_ncells_1d):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -878,17 +881,17 @@ def gauss_seidel_no_overrelaxation(
                     + x[iip1, jj, kkm1]
                 ) * invsix
     # Computation Black
-    for i in prange(x.shape[0] >> 1):
+    for i in prange(half_ncells_1d):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(x.shape[1] >> 1):
+        for j in prange(half_ncells_1d):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(x.shape[2] >> 1):
+            for k in prange(half_ncells_1d):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -963,6 +966,7 @@ def smoothing(
     """
     # No over-relaxation because half prolongated
     gauss_seidel_no_overrelaxation(x, b, h)
+    # gauss_seidel_no_overrelaxation.parallel_diagnostics(level=4)
     if n_smoothing > 1:
         f_relax = np.float32(1.3)
         for _ in range(n_smoothing - 2):
