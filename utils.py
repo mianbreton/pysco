@@ -1,5 +1,4 @@
 import ast
-import logging
 import sys
 from time import perf_counter
 from typing import Tuple, Callable
@@ -618,6 +617,7 @@ def operator_fR_inplace(
         density_ravel[i] = f1 * density_ravel[i] + f2 / u_scalaron_ravel[i] + f3
 
 
+@time_me
 def reorder_particles(
     position: npt.NDArray[np.float32],
     velocity: npt.NDArray[np.float32],
@@ -634,10 +634,8 @@ def reorder_particles(
     acceleration : npt.NDArray[np.float32], optional
         Acceleration [3, N_part], by default None
     """
-    logging.debug(f"Re-order particles and acceleration")
     index = morton.positions_to_keys(position)
     arg = np.argsort(index)
-    logging.debug(f"{arg=}")
     position[:] = position[:, arg]
     velocity[:] = velocity[:, arg]
     if acceleration is not None:

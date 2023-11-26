@@ -98,7 +98,10 @@ def solution_quartic_equation(
     four = np.float32(4.0)
     d0 = np.float32(12.0 * q)
     d1 = np.float32(27.0 * p**2)
-    Q = (half * d1 * (one + math.sqrt(one - four * d0 * (d0 / d1) ** 2))) ** inv3
+    sqrt_term = one - four * d0 * (d0 / d1) ** 2
+    if sqrt_term < zero:  # No real solution
+        return (-q) ** np.float32(1.0 / 4.0)
+    Q = (half * d1 * (one + math.sqrt(sqrt_term))) ** inv3
     Q_d0oQ = Q + d0 / Q
     if Q_d0oQ > zero:
         S = half * math.sqrt(Q_d0oQ * inv3)
@@ -122,7 +125,7 @@ def initialise_potential(
 ) -> npt.NDArray[np.float32]:
     """Gauss-Seidel quartic equation solver \\
     Solve the roots of u in the equation: \\
-    u^3 + pu + q = 0 \\
+    u^4 + pu + q = 0 \\
     with, in f(R) gravity [Ruan et al. 2021]\\
     p = b (as we assume u_ijk = 0)
 

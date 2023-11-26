@@ -1,4 +1,3 @@
-import logging
 import matplotlib.pyplot as plt
 import math
 import numpy as np
@@ -148,10 +147,12 @@ def generate(
             raise ValueError(
                 f"Initial conditions shoule be 1LPT, 2LPT, 3LPT or *.h5. Currently {param['initial_conditions']=}"
             )
-    else:
+    elif param["initial_conditions"][-3:].casefold() == ".h5".casefold():
         position, velocity = read_hdf5(param)
-        position = position.reshape(3, param["npart"])
-        velocity = velocity.reshape(3, param["npart"])
+        finalise_initial_conditions(position, velocity, param)
+        return position, velocity
+    else:  # Gadget format
+        position, velocity = read_gadget(param)
         finalise_initial_conditions(position, velocity, param)
         return position, velocity
 
@@ -184,7 +185,6 @@ def read_hdf5(
     """
     import h5py
 
-    logging.debug("HDF5 initial conditions")
     # Open file
     print(f"Read {param['initial_conditions']}")
     f = h5py.File(param["initial_conditions"], "r")
@@ -213,6 +213,67 @@ def read_hdf5(
         ][:].T
         istart += npart_grp_array[i]
 
+    return position, velocity
+
+
+def read_gadget(
+    param: pd.Series,
+) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+    """Read initial conditions from Gadget snapshot
+
+    The snapshot can be divided in multiple files, such as \\
+    snapshot_X.Y, where Y is the file number. \\
+    In this case only keep snapshot_X
+
+    Parameters
+    ----------
+    param : pd.Series
+        Parameter container
+
+    Returns
+    -------
+    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+        Position, Velocity [3, Npart]
+    """
+    import readgadget  # From Pylians
+
+    print(f"Read {param['initial_conditions']}")
+    # Open file
+    filename = param["initial_conditions"]
+    ptype = 1  # DM particles
+    header = readgadget.header(filename)
+    BoxSize = header.boxsize  # Gpc/h
+    Nall = header.nall  # Total number of particles
+    Omega_m = header.omega_m  # value of Omega_m
+    Omega_l = header.omega_l  # value of Omega_l
+    h = header.hubble  # value of h
+    redshift = header.redshift  # redshift of the snapshot
+    aexp = 1.0 / (1 + redshift)
+    # Get scale factor
+    param["aexp"] = aexp
+    param["z_start"] = 1.0 / aexp - 1
+    print(f"Initial redshift snapshot at z = {1./param['aexp'] - 1}")
+    utils.set_units(param)
+    # Check that Npart and cosmology are correct
+    npart = int(Nall[ptype])
+    if npart != param["npart"]:
+        raise ValueError(f"{npart=} and {param['npart']} should be equal.")
+    if not np.allclose(
+        [Omega_m, Omega_l, 100 * h], [param["Om_m"], param["Om_lambda"], param["H0"]]
+    ):
+        raise ValueError(
+            f"Cosmology mismatch: {Omega_m=} {param['Om_m']=} {Omega_l=} {param['Om_lambda']=} {(100*h)=} {param['H0']=}"
+        )
+    # Read position and velocity
+    position = readgadget.read_block(filename, "POS ", [ptype])
+    velocity = readgadget.read_block(filename, "VEL ", [ptype])
+    # Transpose from (N,3) to (3,N) vector and make contiguous
+    position = np.ascontiguousarray(np.transpose(position))
+    velocity = np.ascontiguousarray(np.transpose(velocity))
+    # Pysco Units
+    vel_factor = param["unit_t"] / param["unit_l"]
+    utils.prod_vector_scalar_inplace(position, np.float32(1.0 / BoxSize))
+    utils.prod_vector_scalar_inplace(velocity, np.float32(vel_factor))
     return position, velocity
 
 

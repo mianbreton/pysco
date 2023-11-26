@@ -24,6 +24,7 @@ def generate(param: pd.Series) -> List[interp1d]:
     # Get cosmo
     # TODO: Add Standard cosmologies (Planck18 etc...)
     if param["evolution_table"] == "no":
+        print(f"No evolution table read: computes all quantities")
         cosmo = w0waCDM(  # type: ignore
             H0=param["H0"],
             Om0=param["Om_m"],
@@ -44,9 +45,14 @@ def generate(param: pd.Series) -> List[interp1d]:
         dt_supercomoving = 1.0 / a[1:] ** 2 * dt_lookback
         t_supercomoving = np.concatenate(([0], np.cumsum(dt_supercomoving)))
         H_array = param["H0"] * np.sqrt(param["Om_m"] * a ** (-3) + param["Om_lambda"])
-        Dplus_array = Dplus(cosmo, 1.0 / a - 1, 0)
+        Dplus_array = Dplus(cosmo, 1.0 / a - 1) / Dplus(cosmo, 0)
+        np.savetxt(
+            "evotable_lcdmw7v2_pysco.txt", np.c_[a, Dplus_array, t_supercomoving]
+        )
     # Use RAMSES tables
     else:
+        print(f"Read RAMSES evolution: {param['evolution_table']}")
+        print(f"Read MPGRAFIC table: {param['mpgrafic_table']}")
         evo = np.loadtxt(param["evolution_table"]).T
         a = evo[0]
         t_supercomoving = evo[2]
@@ -84,10 +90,8 @@ def Dplus(cosmo: w0waCDM, z: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]
     omega = cosmo.Om(z)
     lamb = 1 - omega
     a = 1 / (1 + z)
-    norm = 1.0 / Dplus(cosmo, 0.0)
     return (
-        norm
-        * (5.0 / 2.0)
+        (5.0 / 2.0)
         * a
         * omega
         / (omega ** (4.0 / 7.0) - lamb + (1.0 + omega / 2.0) * (1.0 + lamb / 70.0))

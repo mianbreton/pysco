@@ -1,4 +1,3 @@
-import logging
 from typing import List, Tuple, Callable
 import matplotlib.pyplot as plt
 import multigrid
@@ -44,7 +43,6 @@ def pm(
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Acceleration, Potential, Additional field [N_cells_1d, N_cells_1d,N_cells_1d]
     """
-    logging.debug("In pm")
     ncells_1d = 2 ** (param["ncoarse"])
     h = np.float32(1.0 / ncells_1d)
     MAS_index = 3  # None = 0, NGP = 1, CIC = 2, TSC = 3
@@ -66,7 +64,7 @@ def pm(
     param["compute_additional_field"] = True
     additional_field = get_additional_field(additional_field, density, h, param, tables)
     # Write P(k)
-    if save_pk and param["linear_newton_solver"].casefold() == "multigrid".casefold():
+    if save_pk and "multigrid".casefold() == param["linear_newton_solver"].casefold():
         output_pk = (
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
@@ -100,31 +98,27 @@ def pm(
     # Main procedure: Poisson solver
     if param["linear_newton_solver"].casefold() == "multigrid".casefold():
         potential = multigrid.linear(potential, rhs, h, param)
-        force = mesh.derivative(potential)
-        # force = mesh.derivative6(potential)
+        rhs = 0
     elif param["linear_newton_solver"].casefold() == "fft".casefold():
         potential = fft(rhs, param, MAS_index, save_pk)
-        force = mesh.derivative(potential)
-        # force = fft_force(rhs, param, MAS_index, save_pk)
-        """ plt.figure(0)
-        plt.imshow(force[0, 0])
-        plt.colorbar()
-        plt.figure(1)
-        plt.imshow(force2[0, 0])
-        plt.colorbar()
-        plt.show() """
+        rhs = 0
+    elif param["linear_newton_solver"].casefold() == "full_fft".casefold():
+        pass
     else:
         raise ValueError(
-            f"{param['linear_newton_solver']=}, should be 'multigrid' or 'fft'"
+            f"{param['linear_newton_solver']=}, should be multigrid, fft or full_fft"
         )
 
-    rhs = 0
     """ plt.imshow(potential[0])
     plt.colorbar()
     plt.show() """
     # Compute Force
     if param["theory"].casefold() == "newton".casefold():
-        pass
+        if param["linear_newton_solver"].casefold() == "full_fft".casefold():
+            force = fft_force(rhs, param, MAS_index, save_pk)
+            rhs = 0
+        else:
+            force = mesh.derivative5(potential)
     else:
         Rbar = 3 * param["Om_m"] * param["aexp"] ** (-3) + 12 * param["Om_lambda"]
         Rbar0 = 3 * param["Om_m"] + 12 * param["Om_lambda"]
@@ -140,9 +134,23 @@ def pm(
             ** 2
         )  # m -> km -> BU
         if param["fR_n"] == 1:
-            force = mesh.derivative_with_fR_n1(potential, additional_field, half_c2)
+            if param["linear_newton_solver"].casefold() == "full_fft".casefold():
+                force = fft_force(rhs, param, MAS_index, save_pk)
+                rhs = 0
+                mesh.add_derivative5_fR_n1(force, additional_field, half_c2)
+            else:
+                force = mesh.derivative5_with_fR_n1(
+                    potential, additional_field, half_c2
+                )
         elif param["fR_n"] == 2:
-            force = mesh.derivative_with_fR_n2(potential, additional_field, half_c2)
+            if param["linear_newton_solver"].casefold() == "full_fft".casefold():
+                force = fft_force(rhs, param, MAS_index, save_pk)
+                rhs = 0
+                mesh.add_derivative5_fR_n2(force, additional_field, half_c2)
+            else:
+                force = mesh.derivative5_with_fR_n2(
+                    potential, additional_field, half_c2
+                )
         else:
             raise NotImplemented(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
@@ -275,7 +283,9 @@ def get_additional_field(
         u_scalaron = multigrid.FAS(u_scalaron, dens_term, h, param)
         # print(f"{1./ubar_scalaron=}")
         if (param["nsteps"]) % 10 == 0:  # Check
-            print(f"{np.mean(u_scalaron)=}, should be close to 1")
+            print(
+                f"{np.mean(u_scalaron)=}, should be close to 1 (actually <1/u_sclaron> should be conserved)"
+            )
         print(f"{fR_a=}")
         return u_scalaron
 
@@ -328,10 +338,6 @@ def fft(
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
     """
     rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
-    if MAS_index == 0:
-        utils.divide_by_minus_k2_fourier(rhs_fourier)
-    else:
-        utils.divide_by_minus_k2_fourier_compensated(rhs_fourier, MAS_index)
     if save_pk:
         k, Pk, Nmodes = utils.fourier_grid_to_Pk(rhs_fourier, MAS_index)
         Pk *= (param["boxlen"] / len(rhs) ** 2) ** 3 / (
@@ -352,6 +358,10 @@ def fft(
             sep="=",
             header=False,
         )
+    if MAS_index == 0:
+        utils.divide_by_minus_k2_fourier(rhs_fourier)
+    else:
+        utils.divide_by_minus_k2_fourier_compensated(rhs_fourier, MAS_index)
     return utils.ifft_3D_real(rhs_fourier, param["nthreads"])
 
 

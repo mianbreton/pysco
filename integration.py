@@ -1,11 +1,10 @@
-import logging
 import sys
 from typing import List, Tuple
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from scipy.interpolate import interp1d
-
+from rich import print
 import solver
 import utils
 
@@ -58,7 +57,6 @@ def integrate(
     ValueError
         Integrator must be Euler or Leapfrog
     """
-    logging.debug("In integrate")
     dt1 = dt_CFL_maxacc(acceleration, param)
     dt2 = dt_CFL_maxvel(velocity, param)
     dt3 = dt_weak_variation(tables[1], param)
@@ -70,7 +68,7 @@ def integrate(
     else:
         param["write_snapshot"] = False
 
-    logging.debug(f"{dt1=} {dt2=} {dt3=}")
+    print(f"Conditions: velocity {dt1=}, acceleration {dt2=}, scale factor {dt3=}")
     # Integrate
     if param.integrator == "leapfrog":
         return leapfrog(
@@ -148,7 +146,6 @@ def euler(
     utils.set_units(param)
     # Periodic boundary conditions
     utils.periodic_wrap(position)
-    logging.debug(f"{np.min(position)=} {np.max(position)}")
     # Kick
     utils.add_vector_scalar_inplace(velocity, acceleration, dt)
     # Solver
@@ -203,10 +200,8 @@ def leapfrog(
     half_dt = np.float32(0.5 * dt)
     # Kick
     utils.add_vector_scalar_inplace(velocity, acceleration, half_dt)
-
     # Drift
     utils.add_vector_scalar_inplace(position, velocity, dt)
-
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
     param["aexp"] = tables[0](param["t"])
@@ -246,7 +241,6 @@ def dt_CFL_maxacc(
     return np.float32(param["Courant_factor"]) * np.sqrt(dx / max_acc)
 
 
-# TODO: Check if really useful
 def dt_CFL_maxvel(
     velocity: npt.NDArray[np.float32], param: pd.Series
 ) -> np.float32:  # Angulo & Hahn 2021 (review), Teyssier 2002 (RAMSES)

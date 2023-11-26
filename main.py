@@ -6,13 +6,11 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.1.13"
+__version__ = "0.1.14"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
 import ast
-import logging
-
 import numba
 import numpy as np
 import os
@@ -30,13 +28,11 @@ def run(param):
     if param["nthreads"] > 0:
         numba.set_num_threads(param["nthreads"])
     print(f"{numba.get_num_threads()=}")
-    # Debug verbose
-    if param["DEBUG"].casefold() == "True".casefold():
-        logging.basicConfig(level=logging.DEBUG)
+    # Extra string
     extra = param["theory"].casefold()
     if extra.casefold() == "fr".casefold():
         extra += f"{param['fR_logfR0']}_n{param['fR_n']}"
-    extra += f"_ncoarse{param['ncoarse']}"
+    extra += f"_{param['linear_newton_solver']}_ncoarse{param['ncoarse']}"
     param["extra"] = extra
     z_out = ast.literal_eval(param["z_out"])
     # Create directories
@@ -48,7 +44,6 @@ def run(param):
         os.makedirs(output_directory, exist_ok=True)
     ###################################################
     # Get cosmological table
-    logging.debug("Get table...")
     tables = cosmotable.generate(param)
     # aexp and t are overwritten if we read a snapshot
     param["aexp"] = 1.0 / (1 + param["z_start"])
@@ -59,8 +54,6 @@ def run(param):
     param["t"] = tables[1](param["aexp"])
     print(f"{param['aexp']=} {param['t']=}")
     # Run code
-    # Compute acceleration
-    logging.debug("Compute initial acceleration")
     print(f"\n[bold blue]----- Run N-body -----[/bold blue]\n")
     param["nsteps"] = 0
     acceleration, potential, additional_field = solver.pm(position, param)

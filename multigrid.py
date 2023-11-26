@@ -1,4 +1,3 @@
-import logging
 from typing import List, Tuple, Callable
 import matplotlib.pyplot as plt
 import laplacian
@@ -351,7 +350,6 @@ def V_cycle(
     nlevel : int, optional
         Grid level (positive, equal to zero at coarse level), by default 0
     """
-    logging.debug("In V_cycle")
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
     f1 = np.float32(-4.0 / 6 * h**2)
@@ -393,7 +391,6 @@ def V_cycle_FAS(
     rhs : npt.NDArray[np.float32], optional
         Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d], by default np.empty(0, dtype=np.float32)
     """
-    logging.debug("In V_cycle")
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
     smoothing(x, b, h, param["Npre"], param, rhs)
@@ -440,7 +437,6 @@ def F_cycle(
     nlevel : int, optional
         Grid level (positive, equal to zero at coarse level), by default 0
     """
-    logging.debug("In F_cycle")
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
     f1 = np.float32(-4.0 / 6 * h**2)
@@ -497,7 +493,6 @@ def F_cycle_FAS(
     rhs : npt.NDArray[np.float32], optional
         Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d], by default np.empty(0, dtype=np.float32)
     """
-    logging.debug("In F_cycle")
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
     smoothing(x, b, h, param["Npre"], param, rhs)
@@ -563,7 +558,6 @@ def W_cycle(
     nlevel : int, optional
         Grid level (positive, equal to zero at coarse level), by default 0
     """
-    logging.debug("In W_cycle")
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))  # nlevel = 0 is coarse level
     two = np.float32(2)
     f1 = np.float32(-4.0 / 6 * h**2)
@@ -623,7 +617,6 @@ def W_cycle_FAS(
     rhs : npt.NDArray[np.float32], optional
         Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d], by default np.empty(0, dtype=np.float32)
     """
-    logging.debug("In W_cycle")
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))  # nlevel = 0 is coarse level
     two = np.float32(2)
     smoothing(x, b, h, param["Npre"], param, rhs)

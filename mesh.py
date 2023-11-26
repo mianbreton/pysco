@@ -1,4 +1,3 @@
-import logging
 import sys
 from typing import List, Tuple, Callable
 
@@ -389,7 +388,7 @@ def derivative3(
 
 @utils.time_me
 @njit(["f4[:,:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
-def derivative(
+def derivative5(
     a: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
     """Spatial derivatives of a scalar field on a grid
@@ -412,17 +411,17 @@ def derivative(
     # Initialise mesh
     result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     # Compute
-    for i in prange(-2, a.shape[-3] - 2):
+    for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
         ip2 = i + 2
         im2 = i - 2
-        for j in prange(-2, a.shape[-2] - 2):
+        for j in prange(-2, ncells_1d - 2):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
-            for k in prange(-2, a.shape[-1] - 2):
+            for k in prange(-2, ncells_1d - 2):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -465,21 +464,21 @@ def derivative7(
     # Initialise mesh
     result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     # Compute
-    for i in prange(-3, a.shape[-3] - 3):
+    for i in prange(-3, ncells_1d - 3):
         ip1 = i + 1
         im1 = i - 1
         ip2 = i + 2
         im2 = i - 2
         ip3 = i + 3
         im3 = i - 3
-        for j in prange(-3, a.shape[-2] - 3):
+        for j in prange(-3, ncells_1d - 3):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
             jp3 = j + 3
             jm3 = j - 3
-            for k in prange(-3, a.shape[-1] - 3):
+            for k in prange(-3, ncells_1d - 3):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -514,15 +513,16 @@ def derivative7(
     cache=True,
     parallel=True,
 )
-def derivative_with_fR_n1(
+def derivative5_with_fR_n1(
     a: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     f: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
-    """Spatial derivatives of a scalar field on a grid \\
-    Fourth-order derivative with finite differences
+    """Spatial derivatives of a scalar field on a grid
 
-    D(a) + f*D(b^2) // For f(R) n = 1
+    Five-point stencil derivative with finite differences
+
+    grad(a) + f*grad(b^2) // For f(R) n = 1
 
     Parameters
     ----------
@@ -544,17 +544,17 @@ def derivative_with_fR_n1(
     # Initialise mesh
     result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     # Compute
-    for i in prange(-2, a.shape[-3] - 2):
+    for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
         ip2 = i + 2
         im2 = i - 2
-        for j in prange(-2, a.shape[-2] - 2):
+        for j in prange(-2, ncells_1d - 2):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
-            for k in prange(-2, a.shape[-1] - 2):
+            for k in prange(-2, ncells_1d - 2):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -597,20 +597,82 @@ def derivative_with_fR_n1(
 
 @utils.time_me
 @njit(
+    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def add_derivative5_fR_n1(
+    force: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: npt.NDArray[np.float32],
+) -> None:
+    """Inplace add spatial derivatives of a scalar field on a grid
+
+    Five-point stencil derivative with finite differences
+
+    force += f grad(b^2) // For f(R) n = 1
+
+    Parameters
+    ----------
+    force : npt.NDArray[np.float32]
+        Force field [3, N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    """
+    eightf = np.float32(8 * f)
+    inv12h = np.float32(b.shape[-1] / 12.0)
+    ncells_1d = b.shape[-1]
+    # Compute
+    for i in prange(-2, ncells_1d - 2):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        for j in prange(-2, ncells_1d - 2):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            for k in prange(-2, ncells_1d - 2):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+                force[0, i, j, k] += inv12h * (
+                    eightf * (b[im1, j, k] ** 2 - b[ip1, j, k] ** 2)
+                    + f * (-b[im2, j, k] ** 2 + b[ip2, j, k] ** 2)
+                )
+                force[1, i, j, k] += inv12h * (
+                    eightf * (b[i, jm1, k] ** 2 - b[i, jp1, k] ** 2)
+                    + f * (-b[i, jm2, k] ** 2 + b[i, jp2, k] ** 2)
+                )
+                force[2, i, j, k] += inv12h * (
+                    eightf * (b[i, j, km1] ** 2 - b[i, j, kp1] ** 2)
+                    + f * (-b[i, j, km2] ** 2 + b[i, j, kp2] ** 2)
+                )
+
+
+@utils.time_me
+@njit(
     ["f4[:,:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
-def derivative_with_fR_n2(
+def derivative5_with_fR_n2(
     a: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     f: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
-    """Spatial derivatives of a scalar field on a grid \\
-    Fourth-order derivative with finite differences
+    """Spatial derivatives of a scalar field on a grid
 
-    D(a) + f*D(b^3) // For f(R) n = 2
+    Five-point stencil derivative with finite differences
+
+    grad(a) + f*grad(b^3) // For f(R) n = 2
 
     Parameters
     ----------
@@ -632,17 +694,17 @@ def derivative_with_fR_n2(
     # Initialise mesh
     result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     # Compute
-    for i in prange(-2, a.shape[-3] - 2):
+    for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
         ip2 = i + 2
         im2 = i - 2
-        for j in prange(-2, a.shape[-2] - 2):
+        for j in prange(-2, ncells_1d - 2):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
-            for k in prange(-2, a.shape[-1] - 2):
+            for k in prange(-2, ncells_1d - 2):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -681,6 +743,66 @@ def derivative_with_fR_n2(
                     + f * (-b[i, j, km2] ** 3 + b[i, j, kp2] ** 3)
                 )
     return result
+
+
+@utils.time_me
+@njit(
+    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def add_derivative5_fR_n2(
+    force: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: npt.NDArray[np.float32],
+) -> None:
+    """Inplace add spatial derivatives of a scalar field on a grid
+
+    Five-point stencil derivative with finite differences
+
+    force += f*grad(b^3) // For f(R) n = 2
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+    """
+    eightf = np.float32(8 * f)
+    inv12h = np.float32(b.shape[-1] / 12.0)
+    ncells_1d = b.shape[-1]
+    # Compute
+    for i in prange(-2, ncells_1d - 2):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        for j in prange(-2, ncells_1d - 2):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            for k in prange(-2, ncells_1d - 2):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+                force[0, i, j, k] += inv12h * (
+                    eightf * (b[im1, j, k] ** 3 - b[ip1, j, k] ** 3)
+                    + f * (-b[im2, j, k] ** 3 + b[ip2, j, k] ** 3)
+                )
+                force[1, i, j, k] += inv12h * (
+                    eightf * (b[i, jm1, k] ** 3 - b[i, jp1, k] ** 3)
+                    + f * (-b[i, jm2, k] ** 3 + b[i, jp2, k] ** 3)
+                )
+                force[2, i, j, k] += inv12h * (
+                    eightf * (b[i, j, km1] ** 3 - b[i, j, kp1] ** 3)
+                    + f * (-b[i, j, km2] ** 3 + b[i, j, kp2] ** 3)
+                )
 
 
 @njit(
@@ -931,13 +1053,13 @@ def invNGP_vec(
     ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
     # Initialise mesh
-    result = np.empty((grid.shape[0], position.shape[-1]), dtype=np.float32)
+    result = np.empty((3, position.shape[-1]), dtype=np.float32)
     # Vector grid
     for n in prange(position.shape[-1]):
         i = np.int16(position[0, n] * ncells_1d_f)  # For float32 precision
         j = np.int16(position[1, n] * ncells_1d_f)  # For float32 precision
         k = np.int16(position[2, n] * ncells_1d_f)  # For float32 precision)
-        for m in prange(grid.shape[0]):
+        for m in prange(3):
             result[m, n] = grid[m, i, j, k]
     return result
 
@@ -1033,7 +1155,7 @@ def invCIC_vec(
     one = np.float32(1)
     half = np.float32(0.5)
     # Initialise mesh
-    result = np.empty((grid.shape[0], position.shape[-1]), np.float32)
+    result = np.empty((3, position.shape[-1]), np.float32)
     # Loop over particles
     for n in prange(position.shape[-1]):
         # Get particle position
@@ -1062,7 +1184,7 @@ def invCIC_vec(
         i2 = (i + signx) % ncells_1d
         j2 = (j + signy) % ncells_1d
         k2 = (k + signz) % ncells_1d
-        for m in prange(grid.shape[0]):
+        for m in prange(3):
             # 8 neighbours
             result[m, n] = (
                 wx * wy * wz * grid[m, i, j, k]
@@ -1232,7 +1354,7 @@ def invTSC_vec(
     half = np.float32(0.5)
     threequarters = np.float32(0.75)
     # Initialise mesh
-    result = np.zeros((grid.shape[0], position.shape[-1]), dtype=np.float32)
+    result = np.zeros((3, position.shape[-1]), dtype=np.float32)
     # Loop over particles
     for n in prange(position.shape[-1]):
         # Get particle position
@@ -1300,7 +1422,9 @@ def invTSC_vec(
         i_p1 = i - ncells_1d_m1
         j_p1 = j - ncells_1d_m1
         k_p1 = k - ncells_1d_m1
-        for m in prange(grid.shape[0]):
+        for m in prange(
+            3
+        ):  # TODO: check if not better to do [n,m] for acceleration and force
             # 27 neighbours
             result[m, n] = (
                 wx_m1_y_m1_z_m1 * grid[m, i_m1, j_m1, k_m1]
