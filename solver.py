@@ -217,6 +217,7 @@ def initialise_potential(
                 / (param["aexp_old"] * tables[2](param["aexp_old"]))
             )
         utils.prod_vector_scalar_inplace(potential, scaling)
+
     return potential
 
 
