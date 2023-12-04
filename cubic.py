@@ -89,28 +89,28 @@ def solution_cubic_equation(
     -------
     np.float32
         Solution of the cubic equation
-    """
-    zero = np.float32(0)
-    inv3 = np.float32(1.0 / 3)
-    d = np.float32(d1**2 + np.float32(108.0) * p**3)
-    if d > zero:
+    """  # TODO: Optimize but keep double precision
+    inv3 = 1.0 / 3
+    d1 = np.float64(d1)
+    p = np.float64(p)
+    d = d1**2 + 108.0 * p**3
+    if d > 0.0:
         d = d1 + math.sqrt(d)
-        if d == zero:
+        if d == 0.0:
             return -inv3 * d1**inv3
-        C = (np.float32(0.5) * d) ** inv3
-        return -inv3 * (C - np.float32(3) * p / C)
-    elif d < zero:
-        two = np.float32(2)
-        d0 = np.float32(-3.0 * p)
-        d = d1 / (two * d0 ** np.float32(1.5))
-        if np.abs(d) < np.float32(1):
+        C = (0.5 * d) ** inv3
+        return -inv3 * (C - 3.0 * p / C)
+    elif d < 0.0:
+        d0 = -3.0 * p
+        d = d1 / (2.0 * d0**1.5)
+        if np.abs(d) < 1.0:
             theta = math.acos(d)
-            pi = np.float32(math.pi)
-            return -two * inv3 * math.sqrt(d0) * math.cos(inv3 * (theta + two * pi))
+            return np.float32(
+                -2.0 * inv3 * math.sqrt(d0) * math.cos(inv3 * (theta + 2.0 * math.pi))
+            )
         else:
             return -inv3 * d1**inv3
-    else:
-        return -inv3 * d1**inv3
+    return -inv3 * d1**inv3
 
 
 # @utils.time_me

@@ -88,7 +88,7 @@ def solution_quartic_equation(
     -------
     np.float32
         Solution of the quartic equation
-    """
+    """  # TODO: Try if not better to use double precision but less checking conditions
     zero = np.float32(0)
     if p == zero:
         return (-q) ** np.float32(1.0 / 4.0)
