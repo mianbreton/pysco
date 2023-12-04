@@ -5,20 +5,26 @@ from astropy.cosmology import w0waCDM, FlatLambdaCDM
 from scipy.interpolate import interp1d
 import numpy.typing as npt
 from scipy import integrate
+from typing import List
 
 
-def generate(param: pd.Series) -> list[interp1d]:
+def generate(param: pd.Series) -> List[interp1d]:
     """Generate time and scale factor interpolators from cosmological parameters or RAMSES files
 
-    Args:
-        param (pd.Series): Parameter container
+    Parameters
+    ----------
+    param : pd.Series
+        Parameter container
 
-    Returns:
-        list[interp1d]: Interpolated functions [a(t), t(a), Dplus(a)]
+    Returns
+    -------
+    List[interp1d]
+        Interpolated functions [a(t), t(a), Dplus(a)]
     """
     # Get cosmo
     # TODO: Add Standard cosmologies (Planck18 etc...)
     if param["evolution_table"] == "no":
+        print(f"No evolution table read: computes all quantities")
         cosmo = w0waCDM(  # type: ignore
             H0=param["H0"],
             Om0=param["Om_m"],
@@ -38,48 +44,55 @@ def generate(param: pd.Series) -> list[interp1d]:
         dt_lookback = np.diff(t_lookback)
         dt_supercomoving = 1.0 / a[1:] ** 2 * dt_lookback
         t_supercomoving = np.concatenate(([0], np.cumsum(dt_supercomoving)))
-        Dplus_array = Dplus(cosmo, 1.0 / a - 1, 0)
+        H_array = param["H0"] * np.sqrt(param["Om_m"] * a ** (-3) + param["Om_lambda"])
+        Dplus_array = Dplus(cosmo, 1.0 / a - 1) / Dplus(cosmo, 0)
+        np.savetxt(
+            f"{param['base']}/evotable_lcdmw7v2_pysco.txt",
+            np.c_[a, Dplus_array, t_supercomoving],
+        )
     # Use RAMSES tables
     else:
+        print(f"Read RAMSES evolution: {param['evolution_table']}")
+        print(f"Read MPGRAFIC table: {param['mpgrafic_table']}")
         evo = np.loadtxt(param["evolution_table"]).T
         a = evo[0]
         t_supercomoving = evo[2]
+        H_o_h0 = evo[1]
         mpgrafic = np.loadtxt(param["mpgrafic_table"]).T
         aexp = mpgrafic[0]
         dplus = mpgrafic[2]
         dplus_norm = dplus / dplus[-1]
         Dplus_array = np.interp(a, aexp, dplus_norm)
+        H_array = param["H0"] * H_o_h0 / a**2
 
     return [
         interp1d(t_supercomoving, a, fill_value="extrapolate"),
         interp1d(a, t_supercomoving, fill_value="extrapolate"),
         interp1d(a, Dplus_array, fill_value="extrapolate"),
+        interp1d(a, H_array, fill_value="extrapolate"),
     ]
 
 
 # TODO: Extend for large range of cosmologies and more accurate calculation
-def Dplus(
-    cosmo: w0waCDM, z: npt.NDArray[np.float64], t: int = 0
-) -> npt.NDArray[np.float64]:
+def Dplus(cosmo: w0waCDM, z: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """Computes growth factor
 
-    Args:
-        cosmo (w0waCDM): Astropy cosmo object
-        z (npt.NDArray[np.float64]): Redshifts
-        t (int, optional): Flag to now if z = 0 or not. Defaults to 0.
-
-    Returns:
-        npt.NDArray[np.float64]: Growth factor array
+    Parameters
+    ----------
+    cosmo : w0waCDM
+        astropy.cosmology class
+    z : npt.NDArray[np.float64]
+        Redshifts
+    Returns
+    -------
+    npt.NDArray[np.float64]
+        Growth factor array
     """
     omega = cosmo.Om(z)
     lamb = 1 - omega
     a = 1 / (1 + z)
-    norm = 1
-    if t == 0:
-        norm = 1.0 / Dplus(cosmo, 0.0, 1)
     return (
-        norm
-        * (5.0 / 2.0)
+        (5.0 / 2.0)
         * a
         * omega
         / (omega ** (4.0 / 7.0) - lamb + (1.0 + omega / 2.0) * (1.0 + lamb / 70.0))
