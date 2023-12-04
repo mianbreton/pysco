@@ -47,7 +47,8 @@ def generate(param: pd.Series) -> List[interp1d]:
         H_array = param["H0"] * np.sqrt(param["Om_m"] * a ** (-3) + param["Om_lambda"])
         Dplus_array = Dplus(cosmo, 1.0 / a - 1) / Dplus(cosmo, 0)
         np.savetxt(
-            "evotable_lcdmw7v2_pysco.txt", np.c_[a, Dplus_array, t_supercomoving]
+            f"{param['base']}/evotable_lcdmw7v2_pysco.txt",
+            np.c_[a, Dplus_array, t_supercomoving],
         )
     # Use RAMSES tables
     else:

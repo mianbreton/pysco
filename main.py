@@ -6,7 +6,7 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.1.14"
+__version__ = "0.1.15"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -27,7 +27,9 @@ def run(param):
     # Threading
     if param["nthreads"] > 0:
         numba.set_num_threads(param["nthreads"])
-    print(f"{numba.get_num_threads()=}")
+    else:
+        param["nthreads"] = numba.get_num_threads()
+    print(f"{param['nthreads']=}")
     # Extra string
     extra = param["theory"].casefold()
     if extra.casefold() == "fr".casefold():
