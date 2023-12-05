@@ -364,25 +364,25 @@ def derivative3(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     """
-    halfinvh = np.float32(0.5 * a.shape[-1])
-    ncells_1d = a.shape[-1]
+    ncells_1d = a.shape[0]
+    halfinvh = np.float32(0.5 * ncells_1d)
     # Initialise mesh
-    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     # Compute
-    for i in prange(-1, a.shape[-3] - 1):
+    for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
         im1 = i - 1
-        for j in prange(-1, a.shape[-2] - 1):
+        for j in prange(-1, ncells_1d - 1):
             jp1 = j + 1
             jm1 = j - 1
-            for k in prange(-1, a.shape[-1] - 1):
+            for k in prange(-1, ncells_1d - 1):
                 kp1 = k + 1
                 km1 = k - 1
-                result[0, i, j, k] = halfinvh * (a[im1, j, k] - a[ip1, j, k])
-                result[1, i, j, k] = halfinvh * (a[i, jm1, k] - a[i, jp1, k])
-                result[2, i, j, k] = halfinvh * (a[i, j, km1] - a[i, j, kp1])
+                result[i, j, k, 0] = halfinvh * (a[im1, j, k] - a[ip1, j, k])
+                result[i, j, k, 1] = halfinvh * (a[i, jm1, k] - a[i, jp1, k])
+                result[i, j, k, 2] = halfinvh * (a[i, j, km1] - a[i, j, kp1])
     return result
 
 
@@ -403,13 +403,13 @@ def derivative5(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     """
     eight = np.float32(8)
-    inv12h = np.float32(a.shape[-1] / 12.0)
-    ncells_1d = a.shape[-1]
+    ncells_1d = a.shape[0]
+    inv12h = np.float32(ncells_1d / 12.0)
     # Initialise mesh
-    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
@@ -426,13 +426,13 @@ def derivative5(
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                result[0, i, j, k] = inv12h * (
+                result[i, j, k, 0] = inv12h * (
                     eight * (a[im1, j, k] - a[ip1, j, k]) - a[im2, j, k] + a[ip2, j, k]
                 )
-                result[1, i, j, k] = inv12h * (
+                result[i, j, k, 1] = inv12h * (
                     eight * (a[i, jm1, k] - a[i, jp1, k]) - a[i, jm2, k] + a[i, jp2, k]
                 )
-                result[2, i, j, k] = inv12h * (
+                result[i, j, k, 2] = inv12h * (
                     eight * (a[i, j, km1] - a[i, j, kp1]) - a[i, j, km2] + a[i, j, kp2]
                 )
     return result
@@ -455,14 +455,14 @@ def derivative7(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     """
     nine = np.float32(9)
     fortyfive = np.float32(45.0)
-    inv60h = np.float32(a.shape[-1] / 60.0)
-    ncells_1d = a.shape[-1]
+    ncells_1d = a.shape[0]
+    inv60h = np.float32(ncells_1d / 60.0)
     # Initialise mesh
-    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     # Compute
     for i in prange(-3, ncells_1d - 3):
         ip1 = i + 1
@@ -485,19 +485,19 @@ def derivative7(
                 km2 = k - 2
                 kp3 = k + 3
                 km3 = k - 3
-                result[0, i, j, k] = inv60h * (
+                result[i, j, k, 0] = inv60h * (
                     fortyfive * (a[im1, j, k] - a[ip1, j, k])
                     + nine * (-a[im2, j, k] + a[ip2, j, k])
                     + a[im3, j, k]
                     - a[ip3, j, k]
                 )
-                result[1, i, j, k] = inv60h * (
+                result[i, j, k, 1] = inv60h * (
                     fortyfive * (a[i, jm1, k] - a[i, jp1, k])
                     + nine * (-a[i, jm2, k] + a[i, jp2, k])
                     + a[i, jm3, k]
                     - a[i, jp3, k]
                 )
-                result[2, i, j, k] = inv60h * (
+                result[i, j, k, 2] = inv60h * (
                     fortyfive * (a[i, j, km1] - a[i, j, kp1])
                     + nine * (-a[i, j, km2] + a[i, j, kp2])
                     + a[i, j, km3]
@@ -536,13 +536,13 @@ def derivative5_with_fR_n1(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     """
     eight = np.float32(8)
-    inv12h = np.float32(a.shape[-1] / 12.0)
-    ncells_1d = a.shape[-1]
+    ncells_1d = a.shape[0]
+    inv12h = np.float32(ncells_1d / 12.0)
     # Initialise mesh
-    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
@@ -559,7 +559,7 @@ def derivative5_with_fR_n1(
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                result[0, i, j, k] = inv12h * (
+                result[i, j, k, 0] = inv12h * (
                     eight
                     * (
                         a[im1, j, k]
@@ -570,7 +570,7 @@ def derivative5_with_fR_n1(
                     + a[ip2, j, k]
                     + f * (-b[im2, j, k] ** 2 + b[ip2, j, k] ** 2)
                 )
-                result[1, i, j, k] = inv12h * (
+                result[i, j, k, 1] = inv12h * (
                     eight
                     * (
                         a[i, jm1, k]
@@ -581,7 +581,7 @@ def derivative5_with_fR_n1(
                     + a[i, jp2, k]
                     + f * (-b[i, jm2, k] ** 2 + b[i, jp2, k] ** 2)
                 )
-                result[2, i, j, k] = inv12h * (
+                result[i, j, k, 2] = inv12h * (
                     eight
                     * (
                         a[i, j, km1]
@@ -616,7 +616,7 @@ def add_derivative5_fR_n1(
     Parameters
     ----------
     force : npt.NDArray[np.float32]
-        Force field [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Force field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     b : npt.NDArray[np.float32]
         Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
     f : np.float32
@@ -624,8 +624,8 @@ def add_derivative5_fR_n1(
 
     """
     eightf = np.float32(8 * f)
-    inv12h = np.float32(b.shape[-1] / 12.0)
-    ncells_1d = b.shape[-1]
+    ncells_1d = b.shape[0]
+    inv12h = np.float32(ncells_1d / 12.0)
     # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
@@ -642,15 +642,15 @@ def add_derivative5_fR_n1(
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                force[0, i, j, k] += inv12h * (
+                force[i, j, k, 0] += inv12h * (
                     eightf * (b[im1, j, k] ** 2 - b[ip1, j, k] ** 2)
                     + f * (-b[im2, j, k] ** 2 + b[ip2, j, k] ** 2)
                 )
-                force[1, i, j, k] += inv12h * (
+                force[i, j, k, 1] += inv12h * (
                     eightf * (b[i, jm1, k] ** 2 - b[i, jp1, k] ** 2)
                     + f * (-b[i, jm2, k] ** 2 + b[i, jp2, k] ** 2)
                 )
-                force[2, i, j, k] += inv12h * (
+                force[i, j, k, 2] += inv12h * (
                     eightf * (b[i, j, km1] ** 2 - b[i, j, kp1] ** 2)
                     + f * (-b[i, j, km2] ** 2 + b[i, j, kp2] ** 2)
                 )
@@ -686,13 +686,13 @@ def derivative5_with_fR_n2(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     """
     eight = np.float32(8)
-    inv12h = np.float32(a.shape[-1] / 12.0)
-    ncells_1d = a.shape[-1]
+    ncells_1d = a.shape[0]
+    inv12h = np.float32(ncells_1d / 12.0)
     # Initialise mesh
-    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
@@ -709,7 +709,7 @@ def derivative5_with_fR_n2(
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                result[0, i, j, k] = inv12h * (
+                result[i, j, k, 0] = inv12h * (
                     eight
                     * (
                         a[im1, j, k]
@@ -720,7 +720,7 @@ def derivative5_with_fR_n2(
                     + a[ip2, j, k]
                     + f * (-b[im2, j, k] ** 3 + b[ip2, j, k] ** 3)
                 )
-                result[1, i, j, k] = inv12h * (
+                result[i, j, k, 1] = inv12h * (
                     eight
                     * (
                         a[i, jm1, k]
@@ -731,7 +731,7 @@ def derivative5_with_fR_n2(
                     + a[i, jp2, k]
                     + f * (-b[i, jm2, k] ** 3 + b[i, jp2, k] ** 3)
                 )
-                result[2, i, j, k] = inv12h * (
+                result[i, j, k, 2] = inv12h * (
                     eight
                     * (
                         a[i, j, km1]
@@ -773,8 +773,8 @@ def add_derivative5_fR_n2(
         Multiplicative factor to additional field
     """
     eightf = np.float32(8 * f)
-    inv12h = np.float32(b.shape[-1] / 12.0)
-    ncells_1d = b.shape[-1]
+    ncells_1d = b.shape[0]
+    inv12h = np.float32(ncells_1d / 12.0)
     # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
@@ -791,15 +791,15 @@ def add_derivative5_fR_n2(
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                force[0, i, j, k] += inv12h * (
+                force[i, j, k, 0] += inv12h * (
                     eightf * (b[im1, j, k] ** 3 - b[ip1, j, k] ** 3)
                     + f * (-b[im2, j, k] ** 3 + b[ip2, j, k] ** 3)
                 )
-                force[1, i, j, k] += inv12h * (
+                force[i, j, k, 1] += inv12h * (
                     eightf * (b[i, jm1, k] ** 3 - b[i, jp1, k] ** 3)
                     + f * (-b[i, jm2, k] ** 3 + b[i, jp2, k] ** 3)
                 )
-                force[2, i, j, k] += inv12h * (
+                force[i, j, k, 2] += inv12h * (
                     eightf * (b[i, j, km1] ** 3 - b[i, j, kp1] ** 3)
                     + f * (-b[i, j, km2] ** 3 + b[i, j, kp2] ** 3)
                 )
@@ -815,7 +815,7 @@ def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
     ncells_1d : int
         Number of cells along one direction
 
@@ -829,10 +829,10 @@ def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     # Initialise mesh
     result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     # Loop over particles
-    for n in prange(position.shape[-1]):
-        i = np.int16(position[0, n] * ncells_1d_f)  # For float32 precision
-        j = np.int16(position[1, n] * ncells_1d_f)  # For float32 precision
-        k = np.int16(position[2, n] * ncells_1d_f)  # For float32 precision)
+    for n in prange(position.shape[0]):
+        i = np.int16(position[n, 0] * ncells_1d_f)
+        j = np.int16(position[n, 1] * ncells_1d_f)
+        k = np.int16(position[n, 2] * ncells_1d_f)
         result[i, j, k] += one
     return result
 
@@ -847,7 +847,7 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
     ncells_1d : int
         Number of cells along one direction
 
@@ -862,11 +862,11 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     # Initialise mesh
     result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     # Loop over particles
-    for n in prange(position.shape[-1]):
+    for n in prange(position.shape[0]):
         # Get particle position
-        x_part = position[0, n] * ncells_1d_f
-        y_part = position[1, n] * ncells_1d_f
-        z_part = position[2, n] * ncells_1d_f
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
         # Get closest cell indices
         i = np.int16(x_part)
         j = np.int16(y_part)
@@ -912,7 +912,7 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
     ncells_1d : int
         Number of cells along one direction
 
@@ -929,11 +929,11 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     # Initialise mesh
     result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     # Loop over particles
-    for n in prange(position.shape[-1]):
+    for n in prange(position.shape[0]):
         # Get particle position
-        x_part = position[0, n] * ncells_1d_f
-        y_part = position[1, n] * ncells_1d_f
-        z_part = position[2, n] * ncells_1d_f
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
         # Get closest cell indices
         i = np.int16(x_part)
         j = np.int16(y_part)
@@ -1011,22 +1011,22 @@ def invNGP(
     grid : npt.NDArray[np.float32]
         Field [N_cells_1d, N_cells_1d, N_cells_1d]
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
         Interpolated Field [N_part]
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[0]
     ncells_1d_f = np.float32(ncells_1d)
     # Initialise mesh
-    result = np.empty(position.shape[-1], dtype=np.float32)
+    result = np.empty(position.shape[0], dtype=np.float32)
     # Scalar grid
-    for n in prange(position.shape[-1]):
-        i = np.int16(position[0, n] * ncells_1d_f)  # For float32 precision
-        j = np.int16(position[1, n] * ncells_1d_f)  # For float32 precision
-        k = np.int16(position[2, n] * ncells_1d_f)  # For float32 precision
+    for n in prange(position.shape[0]):
+        i = np.int16(position[n, 0] * ncells_1d_f)
+        j = np.int16(position[n, 1] * ncells_1d_f)
+        k = np.int16(position[n, 2] * ncells_1d_f)
         result[n] = grid[i, j, k]
     return result
 
@@ -1041,26 +1041,25 @@ def invNGP_vec(
     Parameters
     ----------
     grid : npt.NDArray[np.float32]
-        Field [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Interpolated Field [3, N_part]
+        Interpolated Field [N_part, 3]
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[0]  # The first 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
-    # Initialise mesh
-    result = np.empty((3, position.shape[-1]), dtype=np.float32)
+    result = np.empty_like(position)
     # Vector grid
-    for n in prange(position.shape[-1]):
-        i = np.int16(position[0, n] * ncells_1d_f)  # For float32 precision
-        j = np.int16(position[1, n] * ncells_1d_f)  # For float32 precision
-        k = np.int16(position[2, n] * ncells_1d_f)  # For float32 precision)
+    for n in prange(position.shape[0]):
+        i = np.int16(position[n, 0] * ncells_1d_f)
+        j = np.int16(position[n, 1] * ncells_1d_f)
+        k = np.int16(position[n, 2] * ncells_1d_f)
         for m in prange(3):
-            result[m, n] = grid[m, i, j, k]
+            result[n, m] = grid[i, j, k, m]
     return result
 
 
@@ -1076,25 +1075,25 @@ def invCIC(
     grid : npt.NDArray[np.float32]
         Field [N_cells_1d, N_cells_1d, N_cells_1d]
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
         Interpolated Field [N_part]
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[0]
     ncells_1d_f = np.float32(ncells_1d)
     one = np.float32(1)
     half = np.float32(0.5)
     # Initialise mesh
-    result = np.empty(position.shape[-1], dtype=np.float32)
+    result = np.empty(position.shape[0], dtype=np.float32)
     # Loop over particles
-    for n in prange(position.shape[-1]):
+    for n in prange(position.shape[0]):
         # Get particle position
-        x_part = position[0, n] * ncells_1d_f
-        y_part = position[1, n] * ncells_1d_f
-        z_part = position[2, n] * ncells_1d_f
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
         # Get closest cell indices
         i = np.int16(x_part)
         j = np.int16(y_part)
@@ -1141,27 +1140,27 @@ def invCIC_vec(
     Parameters
     ----------
     grid : npt.NDArray[np.float32]
-        Field [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Interpolated Field [3, N_part]
+        Interpolated Field [N_part, 3]
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[0]  # The first 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
     one = np.float32(1)
     half = np.float32(0.5)
     # Initialise mesh
-    result = np.empty((3, position.shape[-1]), np.float32)
+    result = np.empty_like(position)
     # Loop over particles
-    for n in prange(position.shape[-1]):
+    for n in prange(position.shape[0]):
         # Get particle position
-        x_part = position[0, n] * ncells_1d_f
-        y_part = position[1, n] * ncells_1d_f
-        z_part = position[2, n] * ncells_1d_f
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
         # Get closest cell indices
         i = np.int16(x_part)
         j = np.int16(y_part)
@@ -1186,15 +1185,15 @@ def invCIC_vec(
         k2 = (k + signz) % ncells_1d
         for m in prange(3):
             # 8 neighbours
-            result[m, n] = (
-                wx * wy * wz * grid[m, i, j, k]
-                + wx * wy * dz * grid[m, i, j, k2]
-                + wx * dy * wz * grid[m, i, j2, k]
-                + wx * dy * dz * grid[m, i, j2, k2]
-                + dx * wy * wz * grid[m, i2, j, k]
-                + dx * wy * dz * grid[m, i2, j, k2]
-                + dx * dy * wz * grid[m, i2, j2, k]
-                + dx * dy * dz * grid[m, i2, j2, k2]
+            result[n, m] = (
+                wx * wy * wz * grid[i, j, k, m]
+                + wx * wy * dz * grid[i, j, k2, m]
+                + wx * dy * wz * grid[i, j2, k, m]
+                + wx * dy * dz * grid[i, j2, k2, m]
+                + dx * wy * wz * grid[i2, j, k, m]
+                + dx * wy * dz * grid[i2, j, k2, m]
+                + dx * dy * wz * grid[i2, j2, k, m]
+                + dx * dy * dz * grid[i2, j2, k2, m]
             )
     return result
 
@@ -1211,27 +1210,27 @@ def invTSC(
     grid : npt.NDArray[np.float32]
         Field [N_cells_1d, N_cells_1d, N_cells_1d]
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
         Interpolated Field [N_part]
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[0]
     ncells_1d_m1 = np.int16(ncells_1d - 1)
     one = np.int16(1)
     ncells_1d_f = np.float32(ncells_1d)
     half = np.float32(0.5)
     threequarters = np.float32(0.75)
     # Initialise mesh
-    result = np.empty(position.shape[-1], dtype=np.float32)
+    result = np.empty(position.shape[0], dtype=np.float32)
     # Loop over particles
-    for n in prange(position.shape[-1]):
+    for n in prange(position.shape[0]):
         # Get particle position
-        x_part = position[0, n] * ncells_1d_f
-        y_part = position[1, n] * ncells_1d_f
-        z_part = position[2, n] * ncells_1d_f
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
         # Get closest cell indices
         i = np.int16(x_part)
         j = np.int16(y_part)
@@ -1338,29 +1337,29 @@ def invTSC_vec(
     Parameters
     ----------
     grid : npt.NDArray[np.float32]
-        Field [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Interpolated Field [3, N_part]
+        Interpolated Field [N_part, 3]
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid size
+    ncells_1d = grid.shape[0]  # The first 3 dimensions should be the cubic grid size
     ncells_1d_m1 = np.int16(ncells_1d - 1)
     one = np.int16(1)
     ncells_1d_f = np.float32(ncells_1d)
     half = np.float32(0.5)
     threequarters = np.float32(0.75)
     # Initialise mesh
-    result = np.zeros((3, position.shape[-1]), dtype=np.float32)
+    result = np.empty_like(position)
     # Loop over particles
-    for n in prange(position.shape[-1]):
+    for n in prange(position.shape[0]):
         # Get particle position
-        x_part = position[0, n] * ncells_1d_f
-        y_part = position[1, n] * ncells_1d_f
-        z_part = position[2, n] * ncells_1d_f
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
         # Get closest cell indices
         i = np.int16(x_part)
         j = np.int16(y_part)
@@ -1422,37 +1421,35 @@ def invTSC_vec(
         i_p1 = i - ncells_1d_m1
         j_p1 = j - ncells_1d_m1
         k_p1 = k - ncells_1d_m1
-        for m in prange(
-            3
-        ):  # TODO: check if not better to do [n,m] for acceleration and force
+        for m in prange(3):
             # 27 neighbours
-            result[m, n] = (
-                wx_m1_y_m1_z_m1 * grid[m, i_m1, j_m1, k_m1]
-                + wx_m1_y_m1_z * grid[m, i_m1, j_m1, k]
-                + wx_m1_y_m1_z_p1 * grid[m, i_m1, j_m1, k_p1]
-                + wx_m1_y_z_m1 * grid[m, i_m1, j, k_m1]
-                + wx_m1_y_z * grid[m, i_m1, j, k]
-                + wx_m1_y_z_p1 * grid[m, i_m1, j, k_p1]
-                + wx_m1_y_p1_z_m1 * grid[m, i_m1, j_p1, k_m1]
-                + wx_m1_y_p1_z * grid[m, i_m1, j_p1, k]
-                + wx_m1_y_p1_z_p1 * grid[m, i_m1, j_p1, k_p1]
-                + wx_y_m1_z_m1 * grid[m, i, j_m1, k_m1]
-                + wx_y_m1_z * grid[m, i, j_m1, k]
-                + wx_y_m1_z_p1 * grid[m, i, j_m1, k_p1]
-                + wx_y_z_m1 * grid[m, i, j, k_m1]
-                + wx_y_z * grid[m, i, j, k]
-                + wx_y_z_p1 * grid[m, i, j, k_p1]
-                + wx_y_p1_z_m1 * grid[m, i, j_p1, k_m1]
-                + wx_y_p1_z * grid[m, i, j_p1, k]
-                + wx_y_p1_z_p1 * grid[m, i, j_p1, k_p1]
-                + wx_p1_y_m1_z_m1 * grid[m, i_p1, j_m1, k_m1]
-                + wx_p1_y_m1_z * grid[m, i_p1, j_m1, k]
-                + wx_p1_y_m1_z_p1 * grid[m, i_p1, j_m1, k_p1]
-                + wx_p1_y_z_m1 * grid[m, i_p1, j, k_m1]
-                + wx_p1_y_z * grid[m, i_p1, j, k]
-                + wx_p1_y_z_p1 * grid[m, i_p1, j, k_p1]
-                + wx_p1_y_p1_z_m1 * grid[m, i_p1, j_p1, k_m1]
-                + wx_p1_y_p1_z * grid[m, i_p1, j_p1, k]
-                + wx_p1_y_p1_z_p1 * grid[m, i_p1, j_p1, k_p1]
+            result[n, m] = (
+                wx_m1_y_m1_z_m1 * grid[i_m1, j_m1, k_m1, m]
+                + wx_m1_y_m1_z * grid[i_m1, j_m1, k, m]
+                + wx_m1_y_m1_z_p1 * grid[i_m1, j_m1, k_p1, m]
+                + wx_m1_y_z_m1 * grid[i_m1, j, k_m1, m]
+                + wx_m1_y_z * grid[i_m1, j, k, m]
+                + wx_m1_y_z_p1 * grid[i_m1, j, k_p1, m]
+                + wx_m1_y_p1_z_m1 * grid[i_m1, j_p1, k_m1, m]
+                + wx_m1_y_p1_z * grid[i_m1, j_p1, k, m]
+                + wx_m1_y_p1_z_p1 * grid[i_m1, j_p1, k_p1, m]
+                + wx_y_m1_z_m1 * grid[i, j_m1, k_m1, m]
+                + wx_y_m1_z * grid[i, j_m1, k, m]
+                + wx_y_m1_z_p1 * grid[i, j_m1, k_p1, m]
+                + wx_y_z_m1 * grid[i, j, k_m1, m]
+                + wx_y_z * grid[i, j, k, m]
+                + wx_y_z_p1 * grid[i, j, k_p1, m]
+                + wx_y_p1_z_m1 * grid[i, j_p1, k_m1, m]
+                + wx_y_p1_z * grid[i, j_p1, k, m]
+                + wx_y_p1_z_p1 * grid[i, j_p1, k_p1, m]
+                + wx_p1_y_m1_z_m1 * grid[i_p1, j_m1, k_m1, m]
+                + wx_p1_y_m1_z * grid[i_p1, j_m1, k, m]
+                + wx_p1_y_m1_z_p1 * grid[i_p1, j_m1, k_p1, m]
+                + wx_p1_y_z_m1 * grid[i_p1, j, k_m1, m]
+                + wx_p1_y_z * grid[i_p1, j, k, m]
+                + wx_p1_y_z_p1 * grid[i_p1, j, k_p1, m]
+                + wx_p1_y_p1_z_m1 * grid[i_p1, j_p1, k_m1, m]
+                + wx_p1_y_p1_z * grid[i_p1, j_p1, k, m]
+                + wx_p1_y_p1_z_p1 * grid[i_p1, j_p1, k_p1, m]
             )
     return result

@@ -100,17 +100,17 @@ def positions_to_keys(positions: npt.NDArray[np.float32]) -> npt.NDArray[np.int6
     Parameters
     ----------
     positions : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.int64]
-        Morton indices [3, N_part]
+        Morton indices [N_part]
     """
-    size = positions.shape[-1]
+    size = positions.shape[0]
     keys = np.empty(size, dtype=np.int64)
     for i in prange(size):
-        keys[i] = key(positions[0, i], positions[1, i], positions[2, i])
+        keys[i] = key(positions[i, 0], positions[i, 1], positions[i, 2])
     return keys
 
 
@@ -179,20 +179,20 @@ def keys_to_positions(keys: npt.NDArray[np.int64]) -> npt.NDArray[np.float32]:
     Parameters
     ----------
     keys : npt.NDArray[np.int64]
-        Morton indices [3, N_part]
+        Morton indices [N_part]
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
     """
     size = keys.shape[0]
     positions = np.empty((3, size), dtype=np.float32)
     for i in prange(size):
         key = keys[i]
-        positions[0, i] = key_to_position(key >> 2)
-        positions[1, i] = key_to_position(key >> 1)
-        positions[2, i] = key_to_position(key)
+        positions[i, 0] = key_to_position(key >> 2)
+        positions[i, 1] = key_to_position(key >> 1)
+        positions[i, 2] = key_to_position(key)
     return positions
 
 

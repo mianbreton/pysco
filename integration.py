@@ -31,9 +31,9 @@ def integrate(
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Positions [3, N_part]
+        Positions [N_part, 3]
     velocity : npt.NDArray[np.float32]
-        Velocities [3, N_part]
+        Velocities [N_part, 3]
     acceleration : npt.NDArray[np.float32]
         Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
     potential : npt.NDArray[np.float32]
@@ -117,9 +117,9 @@ def euler(
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Positions [3, N_part]
+        Positions [N_part, 3]
     velocity : npt.NDArray[np.float32]
-        Velocities [3, N_part]
+        Velocities [N_part, 3]
     acceleration : npt.NDArray[np.float32]
         Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
     potential : npt.NDArray[np.float32]
@@ -176,9 +176,9 @@ def leapfrog(
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Positions [3, N_part]
+        Positions [N_part, 3]
     velocity : npt.NDArray[np.float32]
-        Velocities [3, N_part]
+        Velocities [N_part, 3]
     acceleration : npt.NDArray[np.float32]
         Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
     potential : npt.NDArray[np.float32]
@@ -227,7 +227,7 @@ def dt_CFL_maxacc(
     Parameters
     ----------
     acceleration : npt.NDArray[np.float32]
-        Acceleration [3, N_part]
+        Acceleration [N_part, 3]
     param : pd.Series
         Parameter container
 
@@ -249,7 +249,7 @@ def dt_CFL_maxvel(
     Parameters
     ----------
     velocity : npt.NDArray[np.float32]
-        Velocity [3, N_part]
+        Velocity [N_part, 3]
     param : pd.Series
         Parameter container
 

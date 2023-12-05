@@ -6,7 +6,7 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.1.15"
+__version__ = "0.1.16"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -83,9 +83,8 @@ def run(param):
             tables,
             param,
             t_out[i_snap - 1],
-        )  # Put None instead of potential if you don't want to use previous step
-        # plt.imshow(potential[0])
-        # plt.show()
+        )  # Put None instead of potential if you do not want to use previous step
+
         if param["nsteps"] % param["n_reorder"] == 0:
             print("Reordering particles")
             utils.reorder_particles(position, velocity, acceleration)

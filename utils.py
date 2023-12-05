@@ -108,16 +108,18 @@ def index_linear(ijk: npt.NDArray[np.int32], ncells_1d: int) -> npt.NDArray[np.i
     Parameters
     ----------
     ijk : npt.NDArray[np.int32]
-         i,j,k array [3, N_part]
+         i,j,k array [N_part, 3]
     ncells_1d : int
         Number of cells along one direction
 
     Returns
     -------
     npt.NDArray[np.int64]
-        Linear index [3, N_part]
+        Linear index [N_part, 3]
     """
-    return (ijk[0] * ncells_1d**2 + ijk[1] * ncells_1d + ijk[2]).astype(np.int64)
+    return (ijk[:, 0] * ncells_1d**2 + ijk[:, 1] * ncells_1d + ijk[:, 2]).astype(
+        np.int64
+    )
 
 
 def set_units(param: pd.Series) -> None:
@@ -218,27 +220,16 @@ def read_snapshot_particles_parquet(
     Returns
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
-        Position, Velocity [3, N_part]
+        Position, Velocity [N_part, 3]
     """
-    import pyarrow as pa
     import pyarrow.parquet as pq
 
-    position = np.array(pq.read_table(filename, columns=["x", "y", "z"]))
-    velocity = np.array(pq.read_table(filename, columns=["vx", "vy", "vz"]))
-
-    return (position, velocity)
-
-
-def read_snapshot_particles_hdf5(
-    filename: str,
-) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
-    # TODO: Write routine!
-    import h5py
-
-    f = h5py.File(filename, "r")
-    data = f["data"]
-    position = np.zeros(1)
-    velocity = np.zeros(1)
+    position = np.ascontiguousarray(
+        np.array(pq.read_table(filename, columns=["x", "y", "z"])).T
+    )
+    velocity = np.ascontiguousarray(
+        np.array(pq.read_table(filename, columns=["vx", "vy", "vz"])).T
+    )
 
     return (position, velocity)
 
@@ -257,21 +248,21 @@ def write_snapshot_particles_parquet(
     filename : str
         Filename
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
     velocity : npt.NDArray[np.float32]
-        Velocity [3, N_part]
+        Velocity [N_part, 3]
     """
     import pyarrow as pa
     import pyarrow.parquet as pq
 
     table = pa.table(
         {
-            "x": position[0],
-            "y": position[1],
-            "z": position[2],
-            "vx": velocity[0],
-            "vy": velocity[1],
-            "vz": velocity[2],
+            "x": position[:, 0],
+            "y": position[:, 1],
+            "z": position[:, 2],
+            "vx": velocity[:, 0],
+            "vy": velocity[:, 1],
+            "vz": velocity[:, 2],
         }
     )
 
@@ -456,14 +447,15 @@ def prod_gradient_vector_inplace(
     y : npt.NDArray[np.float32]
         Array    
     """
-    ndim = len(x)
+    ndim = x.shape[-1]
     x_ravel = x.ravel()
     y_ravel = y.ravel()
-    size = len(y_ravel)
+    size = y_ravel.shape[0]
     for i in prange(size):
-        yvalue = y_ravel[i]
+        y_tmp = y_ravel[i]
+        ii = i * ndim
         for j in prange(ndim):
-            x_ravel[i + j * size] *= yvalue
+            x_ravel[ii + j] *= y_tmp
 
 
 @njit(fastmath=True, cache=True, parallel=True)
@@ -628,18 +620,18 @@ def reorder_particles(
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
     velocity : npt.NDArray[np.float32]
-        Velocity [3, N_part]
+        Velocity [N_part, 3]
     acceleration : npt.NDArray[np.float32], optional
-        Acceleration [3, N_part], by default None
+        Acceleration [N_part, 3], by default None
     """
     index = morton.positions_to_keys(position)
     arg = np.argsort(index)
-    position[:] = position[:, arg]
-    velocity[:] = velocity[:, arg]
+    position[:] = position[arg, :]
+    velocity[:] = velocity[arg, :]
     if acceleration is not None:
-        acceleration[:] = acceleration[:, arg]
+        acceleration[:] = acceleration[arg, :]
 
 
 @njit(fastmath=True, cache=True, parallel=True)
@@ -780,14 +772,14 @@ def fft_3D_real(x: npt.NDArray[np.float32], threads: int) -> npt.NDArray[np.comp
     Parameters
     ----------
     x : npt.NDArray[np.float32]
-        Real grid
+        Real grid [N, N, N]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.complex64]
-        Fourier-space grid
+        Fourier-space grid [N, N, N // 2 + 1]
     """
     ncells_1d = len(x)
     # Prepare FFTW containers
@@ -819,14 +811,14 @@ def fft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.complex
     Parameters
     ----------
     x : npt.NDArray[np.complex64]
-        Real grid
+        Real grid [N, N, N]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.complex64]
-        Fourier-space grid
+        Fourier-space grid [N, N, N]
     """
     ncells_1d = len(x)
     # Prepare FFTW containers
@@ -858,29 +850,29 @@ def fft_3D_grad(
     Parameters
     ----------
     x : npt.NDArray[np.complex64]
-        Real grid
+        Real grid [N, N, N, 3]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.complex64]
-        Fourier-space grid
+        Fourier-space grid [N, N, N, 3]
     """
-    ndim = len(x)
-    ncells_1d = x.shape[-1]
+    ndim = x.shape[-1]
+    ncells_1d = x.shape[0]
     # Prepare FFTW containers
     x_in = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
+        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="complex64"
     )
     x_out = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
+        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="complex64"
     )
     # plan FFTW over three axes
     fftw_plan = pyfftw.FFTW(
         x_in,
         x_out,
-        axes=(1, 2, 3),
+        axes=(0, 1, 2),
         flags=("FFTW_ESTIMATE",),
         direction="FFTW_FORWARD",
         threads=threads,
@@ -900,14 +892,14 @@ def ifft_3D_real(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.f
     Parameters
     ----------
     x : npt.NDArray[np.complex64]
-        Fourier-space real grid
+        Fourier-space real grid [N, N, N//2 + 1]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Configuration-space grid
+        Configuration-space grid [N, N, N]
     """
     ncells_1d = len(x)
     # Prepare FFTW containers
@@ -939,14 +931,14 @@ def ifft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.comple
     Parameters
     ----------
     x : npt.NDArray[np.complex64]
-        Fourier-space grid
+        Fourier-space grid [N, N, N]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.complex64]
-        Configuration-space grid
+        Configuration-space grid [N, N, N]
     """
     ncells_1d = len(x)
     # Prepare FFTW containers
@@ -978,29 +970,29 @@ def ifft_3D_real_grad(
     Parameters
     ----------
     x : npt.NDArray[np.complex64]
-        Fourier-space real grid
+        Fourier-space real grid [N, N, N//2 + 1, 3]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Configuration-space grid
+        Configuration-space grid [N, N, N, 3]
     """
-    ndim = len(x)
-    ncells_1d = x.shape[-2]
+    ndim = x.shape[-1]
+    ncells_1d = x.shape[0]
     # Prepare FFTW containers
     x_in = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64"
+        (ncells_1d, ncells_1d, ncells_1d // 2 + 1, ndim), dtype="complex64"
     )
     x_out = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="float32"
+        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="float32"
     )
     # plan FFTW over three axes
     fftw_plan = pyfftw.FFTW(
         x_in,
         x_out,
-        axes=(1, 2, 3),
+        axes=(0, 1, 2),
         flags=("FFTW_ESTIMATE",),
         direction="FFTW_BACKWARD",
         threads=threads,
@@ -1022,29 +1014,29 @@ def ifft_3D_grad(
     Parameters
     ----------
     x : npt.NDArray[np.complex64]
-        Fourier-space grid
+        Fourier-space grid [N, N, N, 3]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.complex64]
-        Configuration-space grid
+        Configuration-space grid [N, N, N, 3]
     """
-    ndim = len(x)
-    ncells_1d = x.shape[-1]
+    ndim = x.shape[-1]
+    ncells_1d = x.shape[0]
     # Prepare FFTW containers
     x_in = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
+        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="complex64"
     )
     x_out = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
+        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="complex64"
     )
     # plan FFTW over three axes
     fftw_plan = pyfftw.FFTW(
         x_in,
         x_out,
-        axes=(1, 2, 3),
+        axes=(0, 1, 2),
         flags=("FFTW_ESTIMATE",),
         direction="FFTW_BACKWARD",
         threads=threads,
@@ -1174,13 +1166,13 @@ def compute_gradient_laplacian_fourier(
     Returns
     -------
     npt.NDArray[np.complex64]
-        Gradient of Laplacian [3, N, N, N//2 + 1]
+        Gradient of Laplacian [N, N, N//2 + 1, 3]
     """
     ii = np.complex64(1j)
     invtwopi = np.float32(0.5 / np.pi)
     ncells_1d = len(x)
     middle = ncells_1d // 2
-    result = np.empty((3, ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
+    result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     for i in prange(ncells_1d):
         if i == 0:
             i_iszero = True
@@ -1203,14 +1195,14 @@ def compute_gradient_laplacian_fourier(
             kx2_ky2 = kx2 + ky**2
             for k in prange(middle + 1):
                 if i_iszero and j_iszero and k == 0:
-                    result[0, 0, 0, 0] = result[1, 0, 0, 0] = result[2, 0, 0, 0] = 0
+                    result[0, 0, 0, 0] = result[0, 0, 0, 1] = result[0, 0, 0, 2] = 0
                     continue
                 kz = np.float32(k)
                 k2 = kx2_ky2 + kz**2
                 x_k2_tmp = ii * invtwopi * x[i, j, k] / k2
-                result[0, i, j, k] = x_k2_tmp * kx
-                result[1, i, j, k] = x_k2_tmp * ky
-                result[2, i, j, k] = x_k2_tmp * kz
+                result[i, j, k, 0] = x_k2_tmp * kx
+                result[i, j, k, 1] = x_k2_tmp * ky
+                result[i, j, k, 2] = x_k2_tmp * kz
     return result
 
 
@@ -1235,7 +1227,7 @@ def compute_gradient_laplacian_fourier_compensated(
     Returns
     -------
     npt.NDArray[np.complex64]
-        Gradient of Laplacian [3, N, N, N//2 + 1]
+        Gradient of Laplacian [N, N, N//2 + 1, 3]
     """
     ii = np.complex64(1j)
     invtwopi = np.float32(0.5 / np.pi)
@@ -1243,7 +1235,7 @@ def compute_gradient_laplacian_fourier_compensated(
     prefactor = np.float32(1.0 / ncells_1d)
     twop = 2 * p
     middle = ncells_1d // 2
-    result = np.empty((3, ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
+    result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     for i in prange(ncells_1d):
         if i == 0:
             i_iszero = True
@@ -1268,13 +1260,13 @@ def compute_gradient_laplacian_fourier_compensated(
             w_xy = w_x * np.sinc(ky * prefactor)
             for k in prange(middle + 1):
                 if i_iszero and j_iszero and k == 0:
-                    result[0, 0, 0, 0] = result[1, 0, 0, 0] = result[2, 0, 0, 0] = 0
+                    result[0, 0, 0, 0] = result[0, 0, 0, 1] = result[0, 0, 0, 2] = 0
                     continue
                 kz = np.float32(k)
                 w_xyz = w_xy * np.sinc(kz * prefactor)
                 k2 = w_xyz**twop * (kx2_ky2 + kz**2)
                 x_k2_tmp = ii * invtwopi * x[i, j, k] / k2
-                result[0, i, j, k] = x_k2_tmp * kx
-                result[1, i, j, k] = x_k2_tmp * ky
-                result[2, i, j, k] = x_k2_tmp * kz
+                result[i, j, k, 0] = x_k2_tmp * kx
+                result[i, j, k, 1] = x_k2_tmp * ky
+                result[i, j, k, 2] = x_k2_tmp * kz
     return result

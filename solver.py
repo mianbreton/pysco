@@ -28,7 +28,7 @@ def pm(
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Positions [3,N_part]
+        Positions [N_part, 3]
     param : pd.Series
         Parameter container
     potential : npt.NDArray[np.float32], optional
