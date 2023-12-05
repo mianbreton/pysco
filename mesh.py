@@ -1,6 +1,6 @@
 import sys
 from typing import List, Tuple, Callable
-
+from numpy_atomic import atomic_add
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
@@ -805,12 +805,14 @@ def add_derivative5_fR_n2(
                 )
 
 
-@njit(
-    ["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=False
-)  # FIXME: NOT THREAD SAFE
+# TODO: To be improved when numba atomics are available
+@njit(["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=True)
 def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
-    """Nearest Grid Point interpolation \\
-    Computes density on a grid from particle distribution
+    """Nearest Grid Point interpolation
+
+    Computes density on a grid from particle distribution.
+
+    Uses atomic operations for thread safety
 
     Parameters
     ----------
@@ -825,24 +827,29 @@ def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
         Density [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     ncells_1d_f = np.float32(ncells_1d)
+    ncells2 = ncells_1d**2
     one = np.float32(1)
     # Initialise mesh
     result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result_ravel = result.ravel()
     # Loop over particles
     for n in prange(position.shape[0]):
         i = np.int16(position[n, 0] * ncells_1d_f)
         j = np.int16(position[n, 1] * ncells_1d_f)
         k = np.int16(position[n, 2] * ncells_1d_f)
-        result[i, j, k] += one
+        idx = i * ncells2 + j * ncells_1d + k
+        atomic_add(result_ravel, idx, one)
     return result
 
 
-@njit(
-    ["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=False
-)  # FIXME: NOT THREAD SAFE
+# TODO: To be improved when numba atomics are available
+@njit(["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=True)
 def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
-    """Cloud-in-Cell interpolation \\
+    """Cloud-in-Cell interpolation
+
     Computes density on a grid from particle distribution
+
+    Uses atomic operations for thread safety
 
     Parameters
     ----------
@@ -890,23 +897,32 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
         j2 = (j + signy) % ncells_1d
         k2 = (k + signz) % ncells_1d
         # 8 neighbours
-        result[i, j, k] += wx * wy * wz
-        result[i, j, k2] += wx * wy * dz
-        result[i, j2, k] += wx * dy * wz
-        result[i, j2, k2] += wx * dy * dz
-        result[i2, j, k] += dx * wy * wz
-        result[i2, j, k2] += dx * wy * dz
-        result[i2, j2, k] += dx * dy * wz
-        result[i2, j2, k2] += dx * dy * dz
+        weight = wx * wy * wz
+        atomic_add(result, (i, j, k), weight)
+        weight = wx * wy * dz
+        atomic_add(result, (i, j, k2), weight)
+        weight = wx * dy * wz
+        atomic_add(result, (i, j2, k), weight)
+        weight = wx * dy * dz
+        atomic_add(result, (i, j2, k2), weight)
+        weight = dx * wy * wz
+        atomic_add(result, (i2, j, k), weight)
+        weight = dx * wy * dz
+        atomic_add(result, (i2, j, k2), weight)
+        weight = dx * dy * wz
+        atomic_add(result, (i2, j2, k), weight)
+        weight = dx * dy * dz
+        atomic_add(result, (i2, j2, k2), weight)
     return result
 
 
 @utils.time_me
-@njit(
-    ["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=False
-)  # FIXME: NOT THREAD SAFE
-def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
-    """Triangular-Shaped Cloud interpolation \\
+@njit(["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True)
+def TSC_seq(
+    position: npt.NDArray[np.float32], ncells_1d: int
+) -> npt.NDArray[np.float32]:
+    """Triangular-Shaped Cloud interpolation (sequential)
+
     Computes density on a grid from particle distribution
 
     Parameters
@@ -929,7 +945,7 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     # Initialise mesh
     result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     # Loop over particles
-    for n in prange(position.shape[0]):
+    for n in range(position.shape[0]):
         # Get particle position
         x_part = position[n, 0] * ncells_1d_f
         y_part = position[n, 1] * ncells_1d_f
@@ -996,6 +1012,133 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
         result[i_p1, j_p1, k_m1] += wx_p1_y_p1 * wz_m1
         result[i_p1, j_p1, k] += wx_p1_y_p1 * wz
         result[i_p1, j_p1, k_p1] += wx_p1_y_p1 * wz_p1
+    return result
+
+
+# TODO: To be improved when numba atomics are available
+@njit(["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=True)
+def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
+    """Triangular-Shaped Cloud interpolation
+
+    Computes density on a grid from particle distribution
+
+    Uses atomic operations for thread safety
+
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Position [N_part, 3]
+    ncells_1d : int
+        Number of cells along one direction
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Density [N_cells_1d, N_cells_1d, N_cells_1d]
+    """
+    ncells_1d_m1 = np.int16(ncells_1d - 1)
+    one = np.int16(1)
+    ncells_1d_f = np.float32(ncells_1d)
+    half = np.float32(0.5)
+    threequarters = np.float32(0.75)
+    # Initialise mesh
+    result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    # Loop over particles
+    for n in prange(position.shape[0]):
+        # Get particle position
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
+        # Get closest cell indices
+        i = np.int16(x_part)
+        j = np.int16(y_part)
+        k = np.int16(z_part)
+        # Distance to closest cell center
+        dx = x_part - half - np.float32(i)
+        dy = y_part - half - np.float32(j)
+        dz = z_part - half - np.float32(k)
+        # Weights
+        wx = threequarters - dx**2
+        wy = threequarters - dy**2
+        wz = threequarters - dz**2
+        wx_m1 = half * (half - dx) ** 2
+        wy_m1 = half * (half - dy) ** 2
+        wz_m1 = half * (half - dz) ** 2
+        wx_p1 = half * (half + dx) ** 2
+        wy_p1 = half * (half + dy) ** 2
+        wz_p1 = half * (half + dz) ** 2
+        wx_m1_y_m1 = wx_m1 * wy_m1
+        wx_m1_y = wx_m1 * wy
+        wx_m1_y_p1 = wx_m1 * wy_p1
+        wx_y_m1 = wx * wy_m1
+        wx_y = wx * wy
+        wx_y_p1 = wx * wy_p1
+        wx_p1_y_m1 = wx_p1 * wy_m1
+        wx_p1_y = wx_p1 * wy
+        wx_p1_y_p1 = wx_p1 * wy_p1
+        # Get other indices
+        i_m1 = i - one
+        j_m1 = j - one
+        k_m1 = k - one
+        i_p1 = i - ncells_1d_m1
+        j_p1 = j - ncells_1d_m1
+        k_p1 = k - ncells_1d_m1
+        # 27 neighbours
+        weight = wx_m1_y_m1 * wz_m1
+        atomic_add(result, (i_m1, j_m1, k_m1), weight)
+        weight = wx_m1_y_m1 * wz
+        atomic_add(result, (i_m1, j_m1, k), weight)
+        weight = wx_m1_y_m1 * wz_p1
+        atomic_add(result, (i_m1, j_m1, k_p1), weight)
+        weight = wx_m1_y * wz_m1
+        atomic_add(result, (i_m1, j, k_m1), weight)
+        weight = wx_m1_y * wz
+        atomic_add(result, (i_m1, j, k), weight)
+        weight = wx_m1_y * wz_p1
+        atomic_add(result, (i_m1, j, k_p1), weight)
+        weight = wx_m1_y_p1 * wz_m1
+        atomic_add(result, (i_m1, j_p1, k_m1), weight)
+        weight = wx_m1_y_p1 * wz
+        atomic_add(result, (i_m1, j_p1, k), weight)
+        weight = wx_m1_y_p1 * wz_p1
+        atomic_add(result, (i_m1, j_p1, k_p1), weight)
+        weight = wx_y_m1 * wz_m1
+        atomic_add(result, (i, j_m1, k_m1), weight)
+        weight = wx_y_m1 * wz
+        atomic_add(result, (i, j_m1, k), weight)
+        weight = wx_y_m1 * wz_p1
+        atomic_add(result, (i, j_m1, k_p1), weight)
+        weight = wx_y * wz_m1
+        atomic_add(result, (i, j, k_m1), weight)
+        weight = wx_y * wz
+        atomic_add(result, (i, j, k), weight)
+        weight = wx_y * wz_p1
+        atomic_add(result, (i, j, k_p1), weight)
+        weight = wx_y_p1 * wz_m1
+        atomic_add(result, (i, j_p1, k_m1), weight)
+        weight = wx_y_p1 * wz
+        atomic_add(result, (i, j_p1, k), weight)
+        weight = wx_y_p1 * wz_p1
+        atomic_add(result, (i, j_p1, k_p1), weight)
+        weight = wx_p1_y_m1 * wz_m1
+        atomic_add(result, (i_p1, j_m1, k_m1), weight)
+        weight = wx_p1_y_m1 * wz
+        atomic_add(result, (i_p1, j_m1, k), weight)
+        weight = wx_p1_y_m1 * wz_p1
+        atomic_add(result, (i_p1, j_m1, k_p1), weight)
+        weight = wx_p1_y * wz_m1
+        atomic_add(result, (i_p1, j, k_m1), weight)
+        weight = wx_p1_y * wz
+        atomic_add(result, (i_p1, j, k), weight)
+        weight = wx_p1_y * wz_p1
+        atomic_add(result, (i_p1, j, k_p1), weight)
+        weight = wx_p1_y_p1 * wz_m1
+        atomic_add(result, (i_p1, j_p1, k_m1), weight)
+        weight = wx_p1_y_p1 * wz
+        atomic_add(result, (i_p1, j_p1, k), weight)
+        weight = wx_p1_y_p1 * wz_p1
+        atomic_add(result, (i_p1, j_p1, k_p1), weight)
+
     return result
 
 

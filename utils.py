@@ -8,6 +8,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from astropy.constants import G, pc
+from numpy_atomic import atomic_add
 from numba import njit, prange
 import pyfftw
 
@@ -693,9 +694,9 @@ def grid2Pk(
     ["UniTuple(f4[:],3)(c8[:,:,::1], i8)"],
     fastmath=True,
     cache=True,
-    parallel=False,
+    parallel=True,
 )
-def fourier_grid_to_Pk(
+def fourier_grid_to_Pk(  # TODO: To be improved when numba atomics are available
     density_k: npt.NDArray[np.complex64], p: int
 ) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Compute P(k) from Fourier-space density grid with compensated Kernel (Jing 2005)
@@ -720,7 +721,7 @@ def fourier_grid_to_Pk(
     k_array = np.zeros(ncells_1d, dtype=np.float32)
     nmodes = np.zeros_like(k_array)
     pk_array = np.zeros_like(k_array)
-    for i in prange(ncells_1d):  # FIXME: Make thread safe
+    for i in prange(ncells_1d):
         if i == 0:
             i_iszero = True
         else:
@@ -752,9 +753,9 @@ def fourier_grid_to_Pk(
                 delta2 = tmp.real**2 + tmp.imag**2
                 k_norm = math.sqrt(kx2_ky2 + kz**2)
                 k_index = int(k_norm)
-                nmodes[k_index] += one
-                k_array[k_index] += k_norm
-                pk_array[k_index] += delta2
+                atomic_add(nmodes, k_index, one)
+                atomic_add(k_array, k_index, k_norm)
+                atomic_add(pk_array, k_index, delta2)
 
     kmax_orszag = int(2 * middle / 3)
     return (

@@ -54,8 +54,10 @@ def pm(
     ):
         save_pk = True
     # Compute density mesh from particles and put in BU units
-    density = mesh.TSC(position, ncells_1d)
-    # print("After TSC!")
+    if param["nthreads"] < 5:
+        density = mesh.TSC_seq(position, ncells_1d)
+    else:
+        density = mesh.TSC(position, ncells_1d)
     # Normalise density to RU
     if ncells_1d**3 != param["npart"]:
         conversion = np.float32(ncells_1d**3 / param["npart"])

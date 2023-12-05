@@ -4,6 +4,7 @@ import warnings
 from functools import wraps
 from threading import Lock
 
+from numba.core.extending import intrinsic
 import numba
 from numba import types
 from numba.core import cgutils
@@ -162,3 +163,38 @@ def atomic_min(ary, i, v):
     orig = ary[i]
     ary[i] = min(ary[i], v)
     return orig
+
+
+# An alternative atomic_add implementation https://gist.github.com/sklam/e5496e412fccac6acc0e96b4413ed977.
+# I modified it to allow float32 instead of int32
+@intrinsic
+def atomic_array_add(tyctx, arr, idx, val):
+    def codegen(context, builder, signature, args):
+        [arr, idx, val] = args
+        [arr_ty, idx_ty, val_ty] = signature.args
+
+        llary = make_array(arr_ty)(context, builder, arr)
+
+        index_types, indices = normalize_indices(
+            context,
+            builder,
+            [idx_ty],
+            [idx],
+        )
+        view_data, view_shapes, view_strides = basic_indexing(
+            context,
+            builder,
+            arr_ty,
+            llary,
+            index_types,
+            indices,
+            boundscheck=context.enable_boundscheck,
+        )
+        # cgutils.printf(builder, "data=%p\n", view_data)
+        # out = builder.atomic_rmw("add", view_data, val, ordering="seq_cst")
+        out = builder.atomic_rmw("fadd", view_data, val, ordering="seq_cst")
+        return out
+
+    resty = arr.dtype
+    sig = resty(arr, idx, val)
+    return sig, codegen
