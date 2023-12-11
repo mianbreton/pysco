@@ -50,38 +50,6 @@ def generate(
         # force = mesh.derivative(solver.fft(density_initial, param))
         # 1LPT
 
-        """ import density_field_library as DFL
-
-        k, Pk = np.loadtxt(param["power_spectrum_file"]).T
-        df_3D = DFL.gaussian_field_3D(
-            2 ** param["ncoarse"],
-            k.astype(np.float32),
-            Pk.astype(np.float32),
-            0,
-            param["seed"],
-            param["boxlen"],
-            threads=1,
-            verbose=True,
-        )
-        km, Pkm = utils.grid2Pk(density_initial, param, "None")
-        kp, Pkp = utils.grid2Pk(df_3D, param, "None")
-        # kf, Pkfx = utils.grid2Pk(force[0], param, "None")
-        # kf, Pkfy = utils.grid2Pk(force[1], param, "None")
-        # kf, Pkfz = utils.grid2Pk(force[2], param, "None")
-        # kr, Pkr = np.loadtxt(
-        #    "/home/mabreton/boxlen500_n512_lcdmw7v2_00000/RAMSES/initial/power_spectrum.txt"
-        # ).T
-        # kl, Pkl = np.loadtxt(
-        #    "/home/mabreton/boxlen500_n512_lcdmw7v2_00000/seed1/power/pk_newton_ncoarse9_00000.dat"
-        # ).T
-        plt.loglog(k, Pk * Dplus**2, label="Linear")
-        plt.loglog(km, Pkm, label="MAB")
-        plt.loglog(kp, Pkp * Dplus**2, label="Pylians")
-        # plt.loglog(kl, Pkl, label="MAB part")
-        # plt.loglog(kr, Pkr, label="RAMSES")
-        plt.legend()
-        plt.show() """
-
         fH_1 = np.float32(Omz**0.55 * Hz)
         position, velocity = initialise_1LPT(force, fH_1)
         if param["initial_conditions"].casefold() == "1LPT".casefold():

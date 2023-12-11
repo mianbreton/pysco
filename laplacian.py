@@ -78,7 +78,7 @@ def residual(
     invh2 = np.float32(h ** (-2))
     six = np.float32(6)
     # Initialise mesh
-    result = np.empty((x.shape[0], x.shape[1], x.shape[2]), dtype=np.float32)
+    result = np.empty_like(x)
     # Computation
     for i in prange(-1, x.shape[0] - 1):
         im1 = i - 1

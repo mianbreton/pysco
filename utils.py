@@ -628,7 +628,7 @@ def reorder_particles(
         Acceleration [N_part, 3], by default None
     """
     index = morton.positions_to_keys(position)
-    arg = np.argsort(index)
+    arg = np.argsort(index, kind="mergesort")
     position[:] = position[arg, :]
     velocity[:] = velocity[arg, :]
     if acceleration is not None:
@@ -662,44 +662,14 @@ def periodic_wrap(position: npt.NDArray[np.float32]) -> None:
 
 
 @time_me
-def grid2Pk(
-    x: npt.NDArray[np.float32], param: pd.Series, MAS: str = "TSC"
-) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
-    """Compute Power Spectrum from 3D grid using Pylians
-
-    Parameters
-    ----------
-    x : npt.NDArray[np.float32]
-        3D density field [N, N, N]
-    param : np.float32
-        Parameter container
-    MAS : str, optional
-        Mass Assignment Scheme (None, NGP, CIC, TSC or PCS), by default "TSC"
-
-    Returns
-    -------
-    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
-        k [in h/Mpc], P(k) [in h/Mpc ** 3]
-    """
-    import Pk_library as PKL
-
-    Pk = PKL.Pk(
-        x, param["boxlen"], axis=0, MAS=MAS, threads=param["nthreads"], verbose=False
-    )
-    return Pk.k3D, Pk.Pk[:, 0]
-
-
-@time_me
-@njit(
-    ["UniTuple(f4[:],3)(c8[:,:,::1], i8)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
-def fourier_grid_to_Pk(  # TODO: To be improved when numba atomics are available
-    density_k: npt.NDArray[np.complex64], p: int
+@njit(["UniTuple(f4[:],3)(c8[:,:,::1], i8)"], fastmath=True, cache=True, parallel=True)
+def fourier_grid_to_Pk(
+    density_k: npt.NDArray[np.complex64],
+    p: int,
 ) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Compute P(k) from Fourier-space density grid with compensated Kernel (Jing 2005)
+
+    Parallelized on the outer index (max_threads = ncells_1d)
 
     Parameters
     ----------
@@ -713,14 +683,16 @@ def fourier_grid_to_Pk(  # TODO: To be improved when numba atomics are available
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         k [in h/Mpc], P(k) [in h/Mpc ** 3], Nmodes
     """
-    ncells_1d = len(density_k)
+    ncells_1d = density_k.shape[0]
     one = np.float32(1)
     minus_p = -p
     prefactor = np.float32(1.0 / ncells_1d)
     middle = ncells_1d // 2
-    k_array = np.zeros(ncells_1d, dtype=np.float32)
-    nmodes = np.zeros_like(k_array)
-    pk_array = np.zeros_like(k_array)
+    # Arrays
+    k_arrays = np.zeros((ncells_1d, ncells_1d), dtype=np.float32)
+    nmodes_arrays = np.zeros_like(k_arrays)
+    pk_arrays = np.zeros_like(k_arrays)
+    # Parallel run
     for i in prange(ncells_1d):
         if i == 0:
             i_iszero = True
@@ -732,7 +704,7 @@ def fourier_grid_to_Pk(  # TODO: To be improved when numba atomics are available
             kx = np.float32(i)
         kx2 = kx**2
         w_x = np.sinc(kx * prefactor)
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             if j == 0:
                 j_iszero = True
             else:
@@ -743,7 +715,7 @@ def fourier_grid_to_Pk(  # TODO: To be improved when numba atomics are available
                 ky = np.float32(j)
             w_xy = w_x * np.sinc(ky * prefactor)
             kx2_ky2 = kx2 + ky**2
-            for k in prange(middle + 1):
+            for k in range(middle + 1):
                 if i_iszero and j_iszero and k == 0:
                     density_k[0, 0, 0] = 0
                     continue
@@ -753,10 +725,12 @@ def fourier_grid_to_Pk(  # TODO: To be improved when numba atomics are available
                 delta2 = tmp.real**2 + tmp.imag**2
                 k_norm = math.sqrt(kx2_ky2 + kz**2)
                 k_index = int(k_norm)
-                atomic_add(nmodes, k_index, one)
-                atomic_add(k_array, k_index, k_norm)
-                atomic_add(pk_array, k_index, delta2)
-
+                nmodes_arrays[i, k_index] += one
+                k_arrays[i, k_index] += k_norm
+                pk_arrays[i, k_index] += delta2
+    k_array = np.sum(k_arrays, axis=0)
+    pk_array = np.sum(pk_arrays, axis=0)
+    nmodes = np.sum(nmodes_arrays, axis=0)
     kmax_orszag = int(2 * middle / 3)
     return (
         k_array[1:kmax_orszag] / nmodes[1:kmax_orszag],
