@@ -806,6 +806,7 @@ def add_derivative5_fR_n2(
 
 
 # TODO: To be improved when numba atomics are available
+@utils.time_me
 @njit(["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=True)
 def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
     """Nearest Grid Point interpolation
@@ -843,6 +844,7 @@ def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
 
 
 # TODO: To be improved when numba atomics are available
+@utils.time_me
 @njit(["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=True)
 def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
     """Cloud-in-Cell interpolation
@@ -1016,6 +1018,7 @@ def TSC_seq(
 
 
 # TODO: To be improved when numba atomics are available
+@utils.time_me
 @njit(["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=True)
 def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
     """Triangular-Shaped Cloud interpolation
@@ -1142,6 +1145,7 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     return result
 
 
+@utils.time_me
 @njit(["f4[:](f4[:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
 def invNGP(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
@@ -1174,6 +1178,7 @@ def invNGP(
     return result
 
 
+@utils.time_me
 @njit(["f4[:,::1](f4[:,:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
 def invNGP_vec(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
@@ -1206,6 +1211,7 @@ def invNGP_vec(
     return result
 
 
+@utils.time_me
 @njit(["f4[:](f4[:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
 def invCIC(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
@@ -1273,6 +1279,7 @@ def invCIC(
     return result
 
 
+@utils.time_me
 @njit(["f4[:,::1](f4[:,:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
 def invCIC_vec(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
@@ -1341,6 +1348,7 @@ def invCIC_vec(
     return result
 
 
+@utils.time_me
 @njit(["f4[:](f4[:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
 def invTSC(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]

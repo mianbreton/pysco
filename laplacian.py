@@ -24,16 +24,17 @@ def operator(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float3
     """
     invh2 = np.float32(h ** (-2))
     six = np.float32(6)
+    ncells_1d = x.shape[0]
     # Initialise mesh
-    result = np.empty((x.shape[0], x.shape[1], x.shape[2]), dtype=np.float32)
+    result = np.empty_like(x)
     # Computation
-    for i in prange(-1, x.shape[0] - 1):
+    for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, x.shape[1] - 1):
+        for j in prange(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, x.shape[2] - 1):
+            for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 # Put in array
@@ -77,16 +78,17 @@ def residual(
     """
     invh2 = np.float32(h ** (-2))
     six = np.float32(6)
+    ncells_1d = x.shape[0]
     # Initialise mesh
     result = np.empty_like(x)
     # Computation
-    for i in prange(-1, x.shape[0] - 1):
+    for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, x.shape[1] - 1):
+        for j in prange(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, x.shape[2] - 1):
+            for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 # Put in array
@@ -139,21 +141,19 @@ def restrict_residual_half(
     three = np.float32(3.0)
     six = np.float32(6.0)
     invh2 = np.float32(h ** (-2))
-    ncells_1d = x.shape[0]
-    result = np.empty(
-        (ncells_1d >> 1, ncells_1d >> 1, ncells_1d >> 1), dtype=np.float32
-    )
-    for i in prange(-1, result.shape[0] - 1):
+    ncells_1d = x.shape[0] >> 1
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(-1, ncells_1d - 1):
         ii = 2 * i
         iim1 = ii - 1
         iip1 = ii + 1
         iip2 = iip1 + 1
-        for j in prange(-1, result.shape[1] - 1):
+        for j in prange(-1, ncells_1d - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjp1 = jj + 1
             jjp2 = jjp1 + 1
-            for k in prange(-1, result.shape[2] - 1):
+            for k in prange(-1, ncells_1d - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkp1 = kk + 1
@@ -225,17 +225,18 @@ def residual_error_half(
     six = np.float32(6.0)
     invh2 = np.float32(h ** (-2))
     result = np.float32(0)
-    for i in prange(-1, (x.shape[0] >> 1) - 1):
+    ncells_1d = x.shape[0] >> 1
+    for i in prange(-1, ncells_1d - 1):
         ii = 2 * i
         iim1 = ii - 1
         iip1 = ii + 1
         iip2 = iip1 + 1
-        for j in prange(-1, (x.shape[1] >> 1) - 1):
+        for j in prange(-1, ncells_1d - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjp1 = jj + 1
             jjp2 = jjp1 + 1
-            for k in prange(-1, (x.shape[2] >> 1) - 1):
+            for k in prange(-1, ncells_1d - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkp1 = kk + 1
@@ -406,6 +407,7 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
          Truncation error
     """
     truncation = np.float32(0)
+    ncells_1d = b.shape[0]
     f0 = np.float32(27.0 / 64)
     f1 = np.float32(9.0 / 64)
     f2 = np.float32(3.0 / 64)
@@ -413,17 +415,17 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
     # Restriction
     result = mesh.restriction(b)
     # Prolongation and subtraction
-    for i in prange(-1, result.shape[0] - 1):
+    for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(-1, result.shape[1] - 1):
+        for j in prange(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(-1, result.shape[2] - 1):
+            for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 kk = 2 * k
@@ -562,15 +564,16 @@ def jacobi(
         Grid size
     """
     h2 = np.float32(h**2)
+    ncells_1d = x.shape[0]
     invsix = np.float32(1.0 / 6)
     # Computation
-    for i in prange(-1, x.shape[0] - 1):
+    for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, x.shape[1] - 1):
+        for j in prange(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, x.shape[2] - 1):
+            for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 # Put in array

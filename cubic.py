@@ -38,18 +38,19 @@ def operator(
         Cubic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
     """
     h2 = np.float32(h**2)
+    ncells_1d = x.shape[0]
     qh2 = q * h2
     invsix = np.float32(1.0 / 6)
     # Initialise mesh
     result = np.empty_like(x)
     # Computation
-    for i in prange(-1, x.shape[0] - 1):
+    for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, x.shape[1] - 1):
+        for j in prange(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, x.shape[2] - 1):
+            for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 # Put in array
@@ -153,10 +154,10 @@ def initialise_potential(
     half = np.float32(0.5)
     inv3 = np.float32(1.0 / 3)
     u_scalaron = np.empty_like(b)
-    size = b.shape[0]
-    for i in prange(size):
-        for j in prange(size):
-            for k in prange(size):
+    ncells_1d = b.shape[0]
+    for i in prange(ncells_1d):
+        for j in prange(ncells_1d):
+            for k in prange(ncells_1d):
                 d0 = -threeh2 * b[i, j, k]
                 C = (half * (d1 + np.sqrt(d1**2 - four * d0**3))) ** inv3
                 u_scalaron[i, j, k] = -inv3 * (C + d0 / C)
@@ -628,19 +629,20 @@ def residual_error_half(
     """
     invsix = np.float32(1.0 / 6)
     h2 = np.float32(h**2)
+    ncells_1d = x.shape[0] >> 1
     qh2 = q * h2
     result = np.float32(0)
-    for i in prange(-1, (x.shape[0] >> 1) - 1):
+    for i in prange(-1, ncells_1d - 1):
         ii = 2 * i
         iim1 = ii - 1
         iim2 = iim1 - 1
         iip1 = ii + 1
-        for j in prange(-1, (x.shape[1] >> 1) - 1):
+        for j in prange(-1, ncells_1d - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjm2 = jjm1 - 1
             jjp1 = jj + 1
-            for k in prange(-1, (x.shape[2] >> 1) - 1):
+            for k in prange(-1, ncells_1d - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
