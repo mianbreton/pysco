@@ -11,7 +11,11 @@ import utils
 import laplacian
 import cubic
 import quartic
-from rich import print
+
+try:
+    from rich import print
+except ImportError:
+    pass
 
 
 # @utils.profile_me

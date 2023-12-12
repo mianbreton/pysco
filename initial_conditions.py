@@ -11,8 +11,10 @@ import solver
 import mesh
 import utils
 from astropy.constants import pc
-
-# from rich import print
+try:
+    from rich import print
+except ImportError:
+    pass
 
 
 def generate(

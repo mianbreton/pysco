@@ -4,9 +4,13 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from scipy.interpolate import interp1d
-from rich import print
 import solver
 import utils
+
+try:
+    from rich import print
+except ImportError:
+    pass
 
 
 @utils.time_me

@@ -6,7 +6,7 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.1.19"
+__version__ = "0.1.20"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -20,7 +20,10 @@ import integration
 import solver
 import utils
 
-from rich import print
+try:
+    from rich import print
+except ImportError:
+    pass
 
 
 def run(param):
