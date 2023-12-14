@@ -1,3 +1,7 @@
+"""
+This module contains various utility functions for mesh calculations 
+such as prolongation, restriction, derivatives, projections and de-projections.
+"""
 import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange

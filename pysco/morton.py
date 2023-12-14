@@ -1,20 +1,25 @@
-# Some references
-# https://stackoverflow.com/questions/18529057/produce-interleaving-bit-patterns-morton-keys-for-32-bit-64-bit-and-128bit
-# https://www.forceflow.be/2013/10/07/morton-encodingdecoding-through-bit-interleaving-implementations/
-# https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/
-# https://developer.nvidia.com/blog/thinking-parallel-part-iii-tree-construction-gpu/
-# http://www-graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN
-# http://bitmath.blogspot.com/2012/11/tesseral-arithmetic-useful-snippets.html
-# https://github.com/aavenel/mortonlib
-# https://github.com/hadeaninc/libzinc/blob/master/libzinc/region.hh <--- cross-check!
+"""
+Morton encoding/decoding utilities for 3D spatial indexing.
 
-# FOR BIGMIN/LITMAX (might be used later... or not!)
-# https://arxiv.org/pdf/1712.06326.pdf
-# https://github.com/rmrschub/zCurve/blob/main/zCurve/zCurve.py
-# https://github.com/statgen/LDServer/blob/master/core/src/Morton.cpp
+References:
+- https://stackoverflow.com/questions/18529057/produce-interleaving-bit-patterns-morton-keys-for-32-bit-64-bit-and-128bit
+- https://www.forceflow.be/2013/10/07/morton-encodingdecoding-through-bit-interleaving-implementations/
+- https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/
+- https://developer.nvidia.com/blog/thinking-parallel-part-iii-tree-construction-gpu/
+- http://www-graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN
+- http://bitmath.blogspot.com/2012/11/tesseral-arithmetic-useful-snippets.html
+- https://github.com/aavenel/mortonlib
+- https://github.com/hadeaninc/libzinc/blob/master/libzinc/region.hh (cross-check)
 
-# https://aws.amazon.com/fr/blogs/database/z-order-indexing-for-multifaceted-queries-in-amazon-dynamodb-part-1/?sc_channel=sm&sc_campaign=zackblog&sc_country=global&sc_geo=global&sc_category=rds&sc_outcome=aware&adbsc=awsdbblog_social_20170517_72417147&adbid=864895517733470208&adbpl=tw&adbpr=66780587
-# https://www.vision-tools.com/h-tropf/multidimensionalrangequery.pdf
+For BigMin/LitMax:
+- https://arxiv.org/pdf/1712.06326.pdf
+- https://github.com/rmrschub/zCurve/blob/main/zCurve/zCurve.py
+- https://github.com/statgen/LDServer/blob/master/core/src/Morton.cpp
+
+Z-Order Indexing:
+- https://aws.amazon.com/fr/blogs/database/z-order-indexing-for-multifaceted-queries-in-amazon-dynamodb-part-1/?sc_channel=sm&sc_campaign=zackblog&sc_country=global&sc_geo=global&sc_category=rds&sc_outcome=aware&adbsc=awsdbblog_social_20170517_72417147&adbid=864895517733470208&adbpl=tw&adbpr=66780587
+- https://www.vision-tools.com/h-tropf/multidimensionalrangequery.pdf
+"""
 
 import math
 from typing import Tuple

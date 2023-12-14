@@ -1,3 +1,11 @@
+"""
+Cubic Operator Solver Module
+
+This module provides functions for solving the cubic operator equation in the context
+of f(R) gravity, as described by Bose et al. (2017). The cubic operator equation is
+given by u^3 + pu + q = 0, where p and q are determined from the given field and density
+terms.
+"""
 import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange

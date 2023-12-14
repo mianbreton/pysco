@@ -1,3 +1,7 @@
+"""
+This module provides integrators for simulating cosmological structures. It includes
+Euler and Leapfrog integrators for computing one integration step.
+"""
 from typing import List, Tuple
 import numpy as np
 import numpy.typing as npt
@@ -5,11 +9,7 @@ import pandas as pd
 from scipy.interpolate import interp1d
 import solver
 import utils
-
-try:
-    from rich import print
-except ImportError:
-    pass
+import logging
 
 
 @utils.time_me
@@ -71,7 +71,9 @@ def integrate(
     else:
         param["write_snapshot"] = False
 
-    print(f"Conditions: velocity {dt1=}, acceleration {dt2=}, scale factor {dt3=}")
+    logging.warning(
+        f"Conditions: velocity {dt1=}, acceleration {dt2=}, scale factor {dt3=}"
+    )
     # Integrate
     if param.integrator == "leapfrog":
         return leapfrog(
@@ -208,7 +210,7 @@ def leapfrog(
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
     param["aexp"] = tables[0](param["t"])
-    print(f"{param['t']=} {param['aexp']=}")
+    logging.info(f"{param['t']=} {param['aexp']=}")
     utils.set_units(param)
     # Periodic boundary conditions
     utils.periodic_wrap(position)

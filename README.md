@@ -1,4 +1,4 @@
-<h3 align="center">PYSCO: PYthon Simulations for COsmology</h3>
+<h3 align="center">PySCo: Python Simulations for Cosmology</h3>
 
   <p align="center">
     A Python library to run N-body simulations with modified gravity
@@ -20,11 +20,18 @@
     <li>
        <a href="#usage">Usage</a>
        <ul>
-        <li><a href="#command-line">Command line</a></li>
-        <li><a href="#external-package">External package</a></li>
+        <li><a href="#as-command-line">As command line</a></li>
+        <li><a href="#as-package">As package</a></li>
        </ul>
     </li>
-    <li><a href="#outputs">Outputs</a></li>
+    <li>
+      <a href="#outputs">Outputs</a>
+      <ul>
+        <li><a href="#power-spectra">Power spectra</a></li>
+        <li><a href="#particle-snapshots">Particle snapshots</a></li>
+        <li><a href="#information-files">Information files</a></li>
+       </ul>
+    </li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
@@ -79,21 +86,30 @@ To run Pysco, you will need the following dependencies (the _conda_ installation
   ```sh
   conda install -c conda-forge pyarrow
   ```
+- Rich
+  ```sh
+  conda install -c conda-forge rich
+  ```
 - H5py (optional, to read HDF5 files)
   ```sh
   conda install -c anaconda h5py
   ```
-- Rich (optional, for nicer _print_ statement)
-  ```sh
-  conda install -c conda-forge rich
-  ```
 
 ### Installation
 
-1. Clone the repo
-   ```sh
-   git clone https://github.com/mianbreton/pysco.git
-   ```
+The first method is to pip install pysco using (not yet available)
+
+```sh
+python -m pip install ??
+```
+
+Otherwise, it is possible to install directly from source
+
+```sh
+git clone https://github.com/mianbreton/pysco.git
+cd pysco
+python -m pip install -e .
+```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -103,56 +119,60 @@ To run Pysco, you will need the following dependencies (the _conda_ installation
 
 There are two ways to use Pysco, either as command line with parameter file, or as an external package
 
-#### Command line
+#### As command line
 
-Move to the Pysco directory
+_To run PySCo with command line it is not necessary to pip install the package._
+
+Move to the Pysco sub-directory
 
 ```sh
 cd pysco/
 ```
 
-Example of parameter file. All strings (except paths and filenames) are case insensitive.
+Write a parameter file. **All strings (except paths and filenames) are case insensitive**. Here is an example
 
 ```sh
-### param.ini
-nthreads = 1  # For nthreads <= 0 use all available threads
+# param.ini
+nthreads = 1  # Number of threads to use in the simulation. For nthreads <= 0 use all threads
 # Theoretical model
-theory = newton # Newton, fR
-fR_logfR0 = 5 # OPTIONAL: Background value of the scalaron field today -log(fR0)
-fR_n = 2 # OPTIONAL: Exponent on the curvature in the Hu & Sawicki model. Currently n = 1 or 2
-# Cosmology
-H0 = 68  # in km/s/Mpc
-Om_m = 0.31
-Om_lambda = 0.69
-w0 = -1.0
-wa = 0.0
-evolution_table = no # Can also give a RAMSES evolution file
-mpgrafic_table = no # Can also give an MPGRAFIC file
+theory= newton # Cosmological theory to use, either "Newton" or  "fR"
+fR_logfR0 = 5 # Background value of the scalaron field today -log(fR0)
+fR_n = 2 # Exponent on the curvature in the Hu & Sawicki model. Currently n = 1 or 2
+# Cosmology -- Put more parameters later
+H0 = 68  # Hubble constant at redshift z=0 (in km/s/Mpc).
+Om_m = 0.31   # Matter density parameter
+Om_lambda = 0.69 # Dark energy density parameter
+w0 = -1.0 # Equation of state for dark energy
+wa = 0.0 # Evolution parameter for dark energy equation of state
+evolution_table = no # Table specifying the evolution of cosmological parameters (default: "no")
+mpgrafic_table = no  # Table for initial conditions (default: "no")
 # Simulation dimension
-boxlen = 500  # Mpc/h
-ncoarse = 8 # Number of cells = 2**(3*ncoarse)
-npart = 256**3 # Number of particles (ignore if we use an already existing snapshot)
+boxlen = 500  # Simulation box length (in Mpc/h)
+ncoarse = 8 # Coarse level. Total number of cells = 2**(3*ncoarse)
+npart = 256**3 # Number of particles in the simulation
 # Initial conditions
-z_start = 49 # Used with initial_conditions = 1LPT, 2LPT or 3LPT
-seed = 42 # Random seed for initial conditions (completely random if negative)
-fixed_ICS = 0 # 0: Gaussian Random Field, 1: Fixes the amplitude to match exactly the input P(k)
-paired_ICS = 0 # If enabled, add π to the random phases (works only with fixed_ICS = 1)
-power_spectrum_file = /home/user/power_spectrum.dat # Power spectrum file
-initial_conditions = 3LPT # 1LPT, 2LPT, 3LPT, .h5 file, else assumes Gadget format
+z_start = 49 # Starting redshift of the simulation
+seed = 42 # Seed for random number generation (completely random if negative)
+fixed_ICS = 0 # Use fixed initial conditions. Gaussian Random Field, 1: Fixes the amplitude to match exactly the input P(k)
+paired_ICS = 0 # Use paired initial conditions. If enabled, add π to the random phases (works only with fixed_ICS = 1)
+power_spectrum_file = /home/user/power_spectra.dat # File path to the power spectrum data
+initial_conditions = 3LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or .h5 file. Else, assumes Gadget format
 # Outputs
-base=/home/user/boxlen500_n256_lcdm_00000/ # Output directory
-z_out = [10, 5, 2, 1, 0.5, 0]  # Output snapshots at these redshifts
-save_power_spectrum = all # 'no', 'z_out' for specific redshifts given by z_out or 'all' to compute at every time step
+base=/home/user/boxlen500_n256_lcdm/ # Base directory for storing simulation data
+z_out = [1.5, 1.0, 0.66666, 0.53846, 0.25, 0.0] # List of redshifts for output snapshots
+save_power_spectrum = all # Save power spectra. Either 'no', 'z_out' for specific redshifts given by z_out or 'all' to compute at every time step
 # Particles
-integrator = leapfrog # "leapfrog" or "euler"
+integrator = leapfrog # Integration scheme for time-stepping "Leapfrog" or "Euler"
 n_reorder = 25  # Re-order particles every n_reorder steps
-Courant_factor = 0.5 # Cell fraction for time stepping (Courant_factor < 1 means more time steps)
+Courant_factor = 0.8 # Cell fraction for time stepping (Courant_factor < 1 means more time steps)
 # Newtonian solver
-linear_newton_solver = multigrid # Linear Poisson equation solver: "multigrid", "fft" or "full_fft"
-# Multigrid parameters
-Npre = 2  # Number of pre-smoothing Gauss-Seidel  iterations
+linear_newton_solver = multigrid # Linear solver for Newton's method: "multigrid", "fft" or "full_fft"
+# Multigrid
+Npre = 2  # Number of pre-smoothing Gauss-Seidel iterations
 Npost = 1  # Number of post-smoothing Gauss-Seidel iterations
-epsrel = 1e-2  # Relative error on the residual norm
+epsrel = 1e-2  # Maximum relative error on the residual norm
+# Verbose
+verbose = 2 # Verbose level. 0 : silent, 1 : basic infos, 2 : full timings
 ```
 
 Run the command line
@@ -163,9 +183,51 @@ python main.py -c param.ini
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-#### External package
+#### As package
 
-In progress
+To obtain the same as above, one first need to import the pysco module, then build a dictionnary (or Pandas Series) containing the user inputs.
+
+```python
+# examples/example.py
+import pysco
+
+param = {
+    "nthreads": 1,
+    "theory": "newton",
+    "H0": 68,
+    "Om_m": 0.31,
+    "Om_lambda": 0.69,
+    "w0": -1.0,
+    "wa": 0.0,
+    "evolution_table": "no",
+    "mpgrafic_table": "no",
+    "boxlen": 500,
+    "ncoarse": 8,
+    "npart": 256**3,
+    "z_start": 49,
+    "seed": 42,
+    "fixed_ICS": 0,
+    "paired_ICS": 0,
+    "power_spectrum_file": "/home/user/power_spectrum.dat",
+    "initial_conditions": "3LPT",
+    "base": "/home/user/boxlen500_n256_lcdm_00000/",
+    "z_out": "[10, 5, 2, 1, 0.5, 0]",
+    "save_power_spectrum": "all",
+    "integrator": "leapfrog",
+    "n_reorder": 25,
+    "Courant_factor": 0.8,
+    "linear_newton_solver": "multigrid",
+    "Npre": 2,
+    "Npost": 1,
+    "epsrel": 1e-2,
+    "verbose" : 2
+}
+
+# Run simulation
+pysco.run(param)
+print("Finished!")
+
+```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -184,6 +246,8 @@ The name formatting is pk\__theory_\_ncoarse*N*\__XXXXX_.dat
 where _theory_ and _N_ are user inputs.
 
 The ascii file contains three columns: $k$ [$h$/Mpc], $P(k)$ [Mpc/$h$]$^3$, N_modes
+
+Additionally, the file header contains the scale factor, the box length and number of particles.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -205,7 +269,7 @@ Velocities are given in supercomoving units. To recover km/s one need to multipl
 
 #### Information files
 
-Alongside every power spectra or snapshot file there is an associated information file written in ascii.
+Alongside every snapshot file there is an associated ascii information file.
 
 The name formatting is param\__theory_\_ncoarse*N*\__XXXXX_.txt
 

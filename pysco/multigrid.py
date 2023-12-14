@@ -1,4 +1,12 @@
 import numpy as np
+
+"""
+Multigrid Solver for Poisson Equation
+
+This module provides a multigrid solver for the Poisson equation. 
+It includes functions for linear multigrid, full approximation scheme (FAS), 
+truncation error estimation, residual error computation, and various multigrid cycles (V-cycle, F-cycle, W-cycle).
+"""
 import numpy.typing as npt
 import pandas as pd
 import laplacian
@@ -6,6 +14,7 @@ import cubic
 import quartic
 import mesh
 import utils
+import logging
 
 
 # @utils.profile_me
@@ -48,17 +57,17 @@ def linear(
         tolerance = 1e-20  # For additional field do not use any tolerance threshold but rather a convergence of residual
     else:
         if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
-            print("Compute Truncation error")
+            logging.info("Compute Truncation error")
             param["tolerance"] = param["epsrel"] * truncation_error(x, h, param, rhs)
         tolerance = param["tolerance"]
 
     # Main procedure: Multigrid
-    print("Start linear Multigrid")
+    logging.info("Start linear Multigrid")
     residual_error = 1e30
     while residual_error > tolerance:
         V_cycle(x, rhs, param)
         residual_error_tmp = residual_error_half(x, rhs, h, param)
-        print(f"{residual_error_tmp=} {tolerance=}")
+        logging.info(f"{residual_error_tmp=} {tolerance=}")
         if residual_error_tmp < tolerance or residual_error / residual_error_tmp < 2:
             break
         residual_error = residual_error_tmp
@@ -94,7 +103,7 @@ def FAS(
     # If tolerance not yet assigned or every 3 time steps, compute truncation error
     if param["compute_additional_field"]:
         # if (not "tolerance_additional_field" in param) or (param["nsteps"] % 3) == 0:
-        # print("Compute Truncation error for additional field")
+        # logging.info("Compute Truncation error for additional field")
         # param["tolerance_additional_field"] = param["epsrel"] * truncation_error(
         #    x, h, param, b
         # )
@@ -102,18 +111,18 @@ def FAS(
         tolerance = 1e-20  # For additional field do not use any tolerance threshold but rather a convergence of residual
     else:
         if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
-            print("Compute Truncation error")
+            logging.info("Compute Truncation error")
             param["tolerance"] = param["epsrel"] * truncation_error(x, h, param, b)
         tolerance = param["tolerance"]
 
     # Main procedure: Multigrid
     # residual_error = 1e30
     # while residual_error > tolerance:
-    print("Start Full-Approximation Storage Multigrid")
+    logging.info("Start Full-Approximation Storage Multigrid")
     F_cycle_FAS(x, b, param)
     # F_cycle_FAS(x, b, param)
     residual_error_tmp = residual_error_half(x, b, h, param)
-    print(f"{residual_error_tmp=} {tolerance=}")
+    logging.info(f"{residual_error_tmp=} {tolerance=}")
     #    if residual_error_tmp < tolerance or residual_error / residual_error_tmp < 2:
     #        break
     #    residual_error = residual_error_tmp

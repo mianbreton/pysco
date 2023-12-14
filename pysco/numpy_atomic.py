@@ -1,4 +1,15 @@
 # Copied from https://github.com/KatanaGraph/katana/blob/master/python/katana/native_interfacing/numpy_atomic.py
+# Add full documentation
+"""
+This module provides atomic array operations for NumPy arrays using Numba.
+
+These operations are designed to be used in Numba-compiled code and ensure atomicity
+when performing operations on individual elements of NumPy arrays.
+
+Note: Atomic operations are not fully atomic when DISABLE_JIT is set. It is recommended
+to only use DISABLE_JIT for testing and debugging purposes.
+
+"""
 
 import warnings
 from functools import wraps
@@ -16,6 +27,30 @@ __all__ = ["atomic_add", "atomic_sub", "atomic_max", "atomic_min"]
 
 
 def atomic_rmw(context, builder, op, arrayty, val, ptr):
+    """
+    Perform an atomic read-modify-write operation on a NumPy array.
+
+    Parameters
+    ----------
+    context : numba.core.context.Context
+        The Numba compilation context.
+    builder : numba.core.ir.Builder
+        The Numba IR builder.
+    op : str
+        The operation to perform (e.g., "add", "sub", "fadd").
+    arrayty : numba.types.Buffer
+        The NumPy array type.
+    val : numba.core.ir.Value
+        The value to be added, subtracted, etc.
+    ptr : numba.core.ir.Value
+        The pointer to the array location.
+
+    Returns
+    -------
+    numba.core.ir.Value
+        The result of the atomic operation.
+
+    """
     assert arrayty.aligned  # We probably have to have aligned arrays.
     dataval = context.get_value_as_data(builder, arrayty.dtype, val)
     return builder.atomic_rmw(op, ptr, dataval, "monotonic")
@@ -33,6 +68,25 @@ if numba.config.DISABLE_JIT:
 
 
 def declare_atomic_array_op(iop, uop, fop):
+    """
+    Declare a decorator for atomic array operations.
+
+    Parameters
+    ----------
+    iop : str
+        The operation for signed integer arrays (e.g., "add", "sub").
+    uop : str
+        The operation for unsigned integer arrays (e.g., "add", "sub").
+    fop : str or None
+        The operation for floating-point arrays (e.g., "fadd", "fsub"). None if not supported.
+
+    Returns
+    -------
+    Callable
+        The decorator for atomic array operations.
+
+    """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -87,7 +141,7 @@ def declare_atomic_array_op(iop, uop, fop):
             if shapes:
                 raise NotImplementedError("Complex shapes are not supported")
 
-            # Store source value the given location
+            # Store source value at the given location
             val = context.cast(builder, val, valty, aryty.dtype)
             op = None
             if isinstance(aryty.dtype, types.Integer) and aryty.dtype.signed:
@@ -112,9 +166,20 @@ def atomic_add(ary, i, v):
     """
     Atomically, perform `ary[i] += v` and return the previous value of `ary[i]`.
 
-    i must be a simple index for a single element of ary. Broadcasting and vector operations are not supported.
+    Parameters
+    ----------
+    ary : numpy.ndarray
+        The NumPy array.
+    i : int
+        The index of the element to be updated.
+    v : scalar
+        The value to be added.
 
-    This should be used from numba compiled code.
+    Returns
+    -------
+    scalar
+        The previous value of `ary[i]`.
+
     """
     orig = ary[i]
     ary[i] += v
@@ -126,9 +191,20 @@ def atomic_sub(ary, i, v):
     """
     Atomically, perform `ary[i] -= v` and return the previous value of `ary[i]`.
 
-    i must be a simple index for a single element of ary. Broadcasting and vector operations are not supported.
+    Parameters
+    ----------
+    ary : numpy.ndarray
+        The NumPy array.
+    i : int
+        The index of the element to be updated.
+    v : scalar
+        The value to be subtracted.
 
-    This should be used from numba compiled code.
+    Returns
+    -------
+    scalar
+        The previous value of `ary[i]`.
+
     """
     orig = ary[i]
     ary[i] -= v
@@ -139,11 +215,21 @@ def atomic_sub(ary, i, v):
 def atomic_max(ary, i, v):
     """
     Atomically, perform `ary[i] = max(ary[i], v)` and return the previous value of `ary[i]`.
-    This operation does not support floating-point values.
 
-    i must be a simple index for a single element of ary. Broadcasting and vector operations are not supported.
+    Parameters
+    ----------
+    ary : numpy.ndarray
+        The NumPy array.
+    i : int
+        The index of the element to be updated.
+    v : scalar
+        The value to be compared.
 
-    This should be used from numba compiled code.
+    Returns
+    -------
+    scalar
+        The previous value of `ary[i]`.
+
     """
     orig = ary[i]
     ary[i] = max(ary[i], v)
@@ -154,11 +240,21 @@ def atomic_max(ary, i, v):
 def atomic_min(ary, i, v):
     """
     Atomically, perform `ary[i] = min(ary[i], v)` and return the previous value of `ary[i]`.
-    This operation does not support floating-point values.
 
-    i must be a simple index for a single element of ary. Broadcasting and vector operations are not supported.
+    Parameters
+    ----------
+    ary : numpy.ndarray
+        The NumPy array.
+    i : int
+        The index of the element to be updated.
+    v : scalar
+        The value to be compared.
 
-    This should be used from numba compiled code.
+    Returns
+    -------
+    scalar
+        The previous value of `ary[i]`.
+
     """
     orig = ary[i]
     ary[i] = min(ary[i], v)
@@ -169,6 +265,27 @@ def atomic_min(ary, i, v):
 # I modified it to allow float32 instead of int32
 @intrinsic
 def atomic_array_add(tyctx, arr, idx, val):
+    """
+    Intrinsic function for atomically adding a value to a NumPy array.
+
+    Parameters
+    ----------
+    tyctx : numba.core.typing.Context
+        The Numba typing context.
+    arr : numpy.ndarray
+        The NumPy array.
+    idx : int
+        The index of the element to be updated.
+    val : scalar
+        The value to be added.
+
+    Returns
+    -------
+    scalar
+        The result of the atomic addition.
+
+    """
+
     def codegen(context, builder, signature, args):
         [arr, idx, val] = args
         [arr_ty, idx_ty, val_ty] = signature.args
@@ -190,8 +307,6 @@ def atomic_array_add(tyctx, arr, idx, val):
             indices,
             boundscheck=context.enable_boundscheck,
         )
-        # cgutils.printf(builder, "data=%p\n", view_data)
-        # out = builder.atomic_rmw("add", view_data, val, ordering="seq_cst")
         out = builder.atomic_rmw("fadd", view_data, val, ordering="seq_cst")
         return out
 

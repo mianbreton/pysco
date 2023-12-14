@@ -1,3 +1,6 @@
+"""
+This module defines functions for solving a discretized three-dimensional Poisson equation using numerical methods.
+"""
 import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange

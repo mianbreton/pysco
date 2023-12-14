@@ -1,11 +1,15 @@
+"""
+Python interface for running cosmological simulations using the PySCo library.
+It provides a convenient way to set simulation parameters and run simulations for studying the evolution
+of large-scale structures in the universe.
+"""
 import pysco
-import pandas as pd
 
-# Initialize parameter container (easier to write a dictionnary first, but can also directly be done with pd.Series)
-
-dict = {
-    "nthreads": 2,
+param = {
+    "nthreads": 1,
     "theory": "newton",
+    # "fR_logfR0": 5,
+    # "fR_n": 2,
     "H0": 68,
     "Om_m": 0.31,
     "Om_lambda": 0.69,
@@ -32,8 +36,8 @@ dict = {
     "Npre": 2,
     "Npost": 1,
     "epsrel": 1e-2,
+    "verbose": 2,
 }
-param = pd.Series(dict)
 
 # Run simulation
 pysco.run(param)

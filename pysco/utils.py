@@ -1,3 +1,7 @@
+"""
+This module contains various utility functions and decorators for profiling and timing, 
+as well as several numerical operations and Fast Fourier Transforms management.
+"""
 from time import perf_counter
 from typing import Tuple, Callable
 import math
@@ -10,6 +14,7 @@ import pyfftw
 
 from numpy_atomic import atomic_add
 import morton
+import logging
 
 
 def time_me(func: Callable) -> Callable:
@@ -37,7 +42,7 @@ def time_me(func: Callable) -> Callable:
         """
         t1 = perf_counter()
         result = func(*args, **kw)
-        print(
+        logging.info(
             f"Function {func.__name__:->40} took {perf_counter() - t1:.12f} seconds{'':{'-'}<{10}}"
         )
         return result
@@ -196,6 +201,7 @@ def read_param_file(name: str) -> pd.Series:
             "Npost": int,
             "epsrel": float,
             "Courant_factor": float,
+            "verbose": int,
         }
     )
     param["write_snapshot"] = False

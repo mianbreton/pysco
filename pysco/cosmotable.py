@@ -1,11 +1,16 @@
+"""
+This module provides functions for generating time and scale factor interpolators
+from cosmological parameters or RAMSES files. It includes a function to compute
+the growth factor based on the w0waCDM cosmology model.
+"""
 import numpy as np
 import pandas as pd
 from astropy.constants import pc
 from astropy.cosmology import w0waCDM
 from scipy.interpolate import interp1d
 import numpy.typing as npt
-from scipy import integrate
 from typing import List
+import logging
 
 
 def generate(param: pd.Series) -> List[interp1d]:
@@ -22,9 +27,8 @@ def generate(param: pd.Series) -> List[interp1d]:
         Interpolated functions [a(t), t(a), Dplus(a)]
     """
     # Get cosmo
-    # TODO: Add Standard cosmologies (Planck18 etc...)
     if param["evolution_table"] == "no":
-        print(f"No evolution table read: computes all quantities")
+        logging.warning(f"No evolution table read: computes all quantities")
         cosmo = w0waCDM(  # type: ignore
             H0=param["H0"],
             Om0=param["Om_m"],
@@ -52,8 +56,8 @@ def generate(param: pd.Series) -> List[interp1d]:
         )
     # Use RAMSES tables
     else:
-        print(f"Read RAMSES evolution: {param['evolution_table']}")
-        print(f"Read MPGRAFIC table: {param['mpgrafic_table']}")
+        logging.warning(f"Read RAMSES evolution: {param['evolution_table']}")
+        logging.warning(f"Read MPGRAFIC table: {param['mpgrafic_table']}")
         evo = np.loadtxt(param["evolution_table"]).T
         a = evo[0]
         t_supercomoving = evo[2]

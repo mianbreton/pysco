@@ -1,3 +1,10 @@
+"""
+Particle-Mesh Acceleration Computation Solvers
+
+This module defines a function for computing Particle-Mesh (PM) acceleration using density meshing techniques. 
+It includes implementations for solving the Newtonian linear Poisson equation, 
+initializing potentials, and handling additional fields in modified gravity theories.
+"""
 from typing import List, Tuple, Callable
 import numpy as np
 import numpy.typing as npt
@@ -9,11 +16,7 @@ import multigrid
 import utils
 import cubic
 import quartic
-
-try:
-    from rich import print
-except ImportError:
-    pass
+import logging
 
 
 # @utils.profile_me
@@ -80,17 +83,17 @@ def pm(
         output_pk = (
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
-        print(f"Write P(k) in {output_pk}")
+        logging.warning(f"Write P(k) in {output_pk}")
         np.savetxt(
             f"{output_pk}",
             np.c_[k, Pk, Nmodes],
-            header="k [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
+            header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
         )
-        param.to_csv(
+        """ param.to_csv(
             f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
             sep="=",
             header=False,
-        )
+        ) """
     # Compute RHS of the final Poisson equation
     rhs_poisson(density, additional_field, param)
     rhs = density
@@ -195,7 +198,7 @@ def initialise_potential(
     """
     # Initialise
     if len(potential) == 0:
-        print("Assign potential from density field")
+        logging.warning("Assign potential from density field")
         if param["compute_additional_field"]:
             q = param["fR_q"]
             if param["fR_n"] == 1:
@@ -209,7 +212,7 @@ def initialise_potential(
         else:
             potential = utils.prod_vector_scalar(rhs, (-1.0 / 6 * h**2))
     else:  # Rescale
-        print("Rescale potential from previous step")
+        logging.warning("Rescale potential from previous step")
         if param["compute_additional_field"]:
             scaling = (
                 param["aexp"] / param["aexp_old"]
@@ -283,15 +286,15 @@ def get_additional_field(
         q = np.float32(-param["aexp"] ** 4 * Rbar / (18 * c2)) / (-fR_a)
         # Compute the scalaron field
         param["fR_q"] = q
-        print(f"initialise")
+        logging.warning(f"initialise")
         u_scalaron = initialise_potential(additional_field, dens_term, h, param, tables)
         u_scalaron = multigrid.FAS(u_scalaron, dens_term, h, param)
-        # print(f"{1./ubar_scalaron=}")
+        # logging.warning(f"{1./ubar_scalaron=}")
         if (param["nsteps"]) % 10 == 0:  # Check
-            print(
+            logging.info(
                 f"{np.mean(u_scalaron)=}, should be close to 1 (actually <1/u_sclaron> should be conserved)"
             )
-        print(f"{fR_a=}")
+        logging.info(f"{fR_a=}")
         return u_scalaron
 
 
@@ -352,17 +355,17 @@ def fft(
         output_pk = (
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
-        print(f"Write P(k) in {output_pk}")
+        logging.warning(f"Write P(k) in {output_pk}")
         np.savetxt(
             f"{output_pk}",
             np.c_[k, Pk, Nmodes],
-            header="k [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
+            header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
         )
-        param.to_csv(
+        """ param.to_csv(
             f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
             sep="=",
             header=False,
-        )
+        ) """
     if MAS_index == 0:
         utils.divide_by_minus_k2_fourier(rhs_fourier)
     else:
@@ -412,16 +415,16 @@ def fft_force(
         output_pk = (
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
-        print(f"Write P(k) in {output_pk}")
+        logging.warning(f"Write P(k) in {output_pk}")
         np.savetxt(
             f"{output_pk}",
             np.c_[k, Pk, Nmodes],
-            header="k [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
+            header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
         )
-        param.to_csv(
+        """ param.to_csv(
             f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
             sep="=",
             header=False,
-        )
+        ) """
     rhs_fourier = 0
     return utils.ifft_3D_real_grad(force, param["nthreads"])

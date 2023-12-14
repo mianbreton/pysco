@@ -1,3 +1,10 @@
+"""
+Cosmological Initial Conditions Generator
+
+This script generates cosmological initial conditions for N-body simulations. 
+It provides functions to generate density and force fields based on the linear power spectrum 
+and various Lagrangian Perturbation Theory (LPT) approximations.
+"""
 import math
 import numpy as np
 import numpy.typing as npt
@@ -9,11 +16,7 @@ from scipy.interpolate import interp1d
 import solver
 import utils
 from astropy.constants import pc
-
-try:
-    from rich import print
-except ImportError:
-    pass
+import logging
 
 
 def generate(
@@ -36,7 +39,7 @@ def generate(
     """
     if param["initial_conditions"][1:4].casefold() == "LPT".casefold():
         a_start = 1.0 / (1 + param["z_start"])
-        print(f"{param['z_start']=}")
+        logging.warning(f"{param['z_start']=}")
         Omz = (
             param["Om_m"]
             * a_start ** (-3)
@@ -132,7 +135,7 @@ def finalise_initial_conditions(position, velocity, param):
     utils.reorder_particles(position, velocity)
     # Write initial distribution
     snap_name = f"{param['base']}/output_00000/particles.parquet"
-    print(f"Write initial snapshot...{snap_name=} {param['aexp']=}")
+    logging.warning(f"Write initial snapshot...{snap_name=} {param['aexp']=}")
     utils.write_snapshot_particles_parquet(f"{snap_name}", position, velocity)
     param.to_csv(f"{param['base']}/output_00000/param.txt", sep="=", header=False)
 
@@ -155,11 +158,11 @@ def read_hdf5(
     import h5py
 
     # Open file
-    print(f"Read {param['initial_conditions']}")
+    logging.warning(f"Read {param['initial_conditions']}")
     f = h5py.File(param["initial_conditions"], "r")
     # Get scale factor
     param["aexp"] = f["metadata/ramses_info"].attrs["aexp"][0]
-    print(f"Initial redshift snapshot at z = {1./param['aexp'] - 1}")
+    logging.warning(f"Initial redshift snapshot at z = {1./param['aexp'] - 1}")
     utils.set_units(param)
     # Get positions
     npart = int(f["metadata/npart_file"][:])
@@ -169,7 +172,7 @@ def read_hdf5(
     velocity = np.empty_like(position, dtype=np.float32)
     npart_grp_array = f["metadata/npart_grp_array"][:]
 
-    print(f"{npart=}")
+    logging.info(f"{npart=}")
     data = f["data"]
     istart = 0
     for i in range(npart_grp_array.shape[0]):
@@ -206,7 +209,7 @@ def read_gadget(
     """
     import readgadget  # From Pylians
 
-    print(f"Read {param['initial_conditions']}")
+    logging.warning(f"Read {param['initial_conditions']}")
     # Open file
     filename = param["initial_conditions"]
     ptype = 1  # DM particles
@@ -221,7 +224,7 @@ def read_gadget(
     # Get scale factor
     param["aexp"] = aexp
     param["z_start"] = 1.0 / aexp - 1
-    print(f"Initial redshift snapshot at z = {1./param['aexp'] - 1}")
+    logging.warning(f"Initial redshift snapshot at z = {1./param['aexp'] - 1}")
     utils.set_units(param)
     # Check that Npart and cosmology are correct
     npart = int(Nall[ptype])
