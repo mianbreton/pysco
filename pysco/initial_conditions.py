@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import math
 import numpy as np
 import numpy.typing as npt
@@ -8,9 +7,9 @@ from numba import config, njit, prange
 import numpy.typing as npt
 from scipy.interpolate import interp1d
 import solver
-import mesh
 import utils
 from astropy.constants import pc
+
 try:
     from rich import print
 except ImportError:

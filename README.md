@@ -24,6 +24,7 @@
         <li><a href="#external-package">External package</a></li>
        </ul>
     </li>
+    <li><a href="#outputs">Outputs</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
@@ -34,9 +35,9 @@
 
 ## About The Project
 
-Pysco is a multi-threaded Particle-Mesh code (no MPI parallelization) and currently contains Newtonian and [Hu & Sawicki (2007)](https://ui.adsabs.harvard.edu/abs/2007PhRvD..76f4004H/abstract) $f(R)$ gravity.
+Pysco is a multi-threaded Particle-Mesh code (no MPI parallelization) which currently contains Newtonian and [Hu & Sawicki (2007)](https://ui.adsabs.harvard.edu/abs/2007PhRvD..76f4004H/abstract) $f(R)$ gravity theories.
 
-The goal is to create a Python-based N-body code that is user-friendly and efficient. Python was chosen for its widespread use and rapid development capabilities, making it well-suited for collaborative open-source projects. To address performance issues in Python, we utilize [Numba](https://github.com/numba/numba), a high-performance library that compiles Python functions using LLVM, offering both Just-In-Time and Ahead-Of-Time compilation. Additionally, Numba facilitates straightforward parallelization of _for_ loops.
+The goal is to develop a Python-based N-body code that is user-friendly and efficient. Python was chosen for its widespread use and rapid development capabilities, making it well-suited for collaborative open-source projects. To address performance issues in Python, we utilize [Numba](https://github.com/numba/numba), a high-performance library that compiles Python functions using LLVM. Additionally, Numba facilitates straightforward loop parallelization.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -147,7 +148,7 @@ integrator = leapfrog # "leapfrog" or "euler"
 n_reorder = 25  # Re-order particles every n_reorder steps
 Courant_factor = 0.5 # Cell fraction for time stepping (Courant_factor < 1 means more time steps)
 # Newtonian solver
-linear_newton_solver = fft # Linear Poisson equation solver: "multigrid", "fft" or "full_fft"
+linear_newton_solver = multigrid # Linear Poisson equation solver: "multigrid", "fft" or "full_fft"
 # Multigrid parameters
 Npre = 2  # Number of pre-smoothing Gauss-Seidel  iterations
 Npost = 1  # Number of post-smoothing Gauss-Seidel iterations
@@ -160,9 +161,55 @@ Run the command line
 python main.py -c param.ini
 ```
 
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 #### External package
 
 In progress
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<!-- OUTPUTS -->
+
+## Outputs
+
+Pysco produces power spectra, snapshots, and information files.
+
+#### Power spectra
+
+Power spectra are written as ascii files in the directory _base_/power/
+where _base_ in given by the user.
+
+The name formatting is pk\__theory_\_ncoarse*N*\__XXXXX_.dat
+where _theory_ and _N_ are user inputs.
+
+The ascii file contains three columns: $k$ [$h$/Mpc], $P(k)$ [Mpc/$h$]$^3$, N_modes
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+#### Particle snapshots
+
+Particle snapshots are written as _parquet_ files in the directory _base_/output\__XXXXX_
+
+> Note that output_00000/ is used to write the initial conditions. The additional number of directories depend on the length of the input list z_out.
+
+The name formatting is particles\__theory_\_ncoarse*N*\__XXXXX_.parquet
+
+The parquet file contains six columns: x, y, z, vx, vy, vz
+
+Positions are given in box units, that is between 0 and 1.
+
+Velocities are given in supercomoving units. To recover km/s one need to multiply by _unit_l/unit_t_, where both quantities are written in the associated information file.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+#### Information files
+
+Alongside every power spectra or snapshot file there is an associated information file written in ascii.
+
+The name formatting is param\__theory_\_ncoarse*N*\__XXXXX_.txt
+
+It contains parameter file informations as well as useful quantities such as the scale factor and unit conversions (unit_l, unit_t, unit_d for length, time and density respectively) from Pysco units to SI.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -171,7 +218,6 @@ In progress
 ## Contributing
 
 If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
-Don't forget to give the project a star! Thanks again!
 
 1. Fork the Project
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
@@ -194,7 +240,6 @@ Distributed under the MIT License. See `LICENSE` for more information.
 ## Contact
 
 Michel-Andrès Breton - michel-andres.breton@obspm.fr
-
 Project Link: [https://github.com/mianbreton/pysco](https://github.com/mianbreton/pysco)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

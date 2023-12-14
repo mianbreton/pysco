@@ -1,4 +1,3 @@
-import sys
 from typing import List, Tuple
 import numpy as np
 import numpy.typing as npt

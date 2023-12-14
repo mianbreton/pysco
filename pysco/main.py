@@ -6,7 +6,7 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.1.20"
+__version__ = "0.2.0"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -113,6 +113,7 @@ def main():
     args = parser.parse_args()
     param = utils.read_param_file(args.config_file)
     print(param)
+    print(type(param))
     run(param)
 
 

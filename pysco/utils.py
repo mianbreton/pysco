@@ -1,17 +1,14 @@
-import ast
-import sys
 from time import perf_counter
 from typing import Tuple, Callable
 import math
-import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from astropy.constants import G, pc
-from numpy_atomic import atomic_add
 from numba import njit, prange
 import pyfftw
 
+from numpy_atomic import atomic_add
 import morton
 
 

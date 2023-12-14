@@ -1,14 +1,12 @@
 from typing import List, Tuple, Callable
-import matplotlib.pyplot as plt
-import multigrid
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from scipy.interpolate import interp1d
 from astropy.constants import c
 import mesh
+import multigrid
 import utils
-import laplacian
 import cubic
 import quartic
 

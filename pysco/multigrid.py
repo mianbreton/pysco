@@ -1,11 +1,9 @@
-from typing import List, Tuple, Callable
-import matplotlib.pyplot as plt
-import laplacian
-import cubic
-import quartic
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+import laplacian
+import cubic
+import quartic
 import mesh
 import utils
 

@@ -1,9 +1,7 @@
-import mesh
 import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange
-
-import utils
+import mesh
 
 
 @njit(["f4[:,:,::1](f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)

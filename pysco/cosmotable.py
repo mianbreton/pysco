@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
-from astropy.constants import G, M_sun, pc
-from astropy.cosmology import w0waCDM, FlatLambdaCDM
+from astropy.constants import pc
+from astropy.cosmology import w0waCDM
 from scipy.interpolate import interp1d
 import numpy.typing as npt
 from scipy import integrate
