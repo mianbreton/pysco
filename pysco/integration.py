@@ -59,6 +59,21 @@ def integrate(
     ------
     ValueError
         Integrator must be Euler or Leapfrog
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from scipy.interpolate import interp1d
+    >>> import pandas as pd
+    >>> from pysco.integration import integrate
+    >>> position = np.random.random((64, 3)).astype(np.float32)
+    >>> velocity = np.random.random((64, 3)).astype(np.float32)
+    >>> acceleration = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> potential = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> additional_field = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100)), ...]
+    >>> param = pd.Series({"Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
+    >>> integrate(position, velocity, acceleration, potential, additional_field, tables, param)
     """
     dt1 = dt_CFL_maxacc(acceleration, param)
     dt2 = dt_CFL_maxvel(velocity, param)
@@ -142,6 +157,21 @@ def euler(
     -------
     Tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]
         position, velocity, acceleration, potential, additional_field [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from scipy.interpolate import interp1d
+    >>> import pandas as pd
+    >>> from pysco.integration import euler
+    >>> position = np.random.random((64, 3)).astype(np.float32)
+    >>> velocity = np.random.random((64, 3)).astype(np.float32)
+    >>> acceleration = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> potential = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> additional_field = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100)), ...]
+    >>> param = pd.Series({"Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
+    >>> euler(position, velocity, acceleration, potential, additional_field, dt, tables, param)
     """
     # Drift
     utils.add_vector_scalar_inplace(position, velocity, dt)
@@ -201,6 +231,21 @@ def leapfrog(
     -------
     Tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]
         position, velocity, acceleration, potential, additional_field [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from scipy.interpolate import interp1d
+    >>> import pandas as pd
+    >>> from pysco.integration import leapfrog
+    >>> position = np.random.random((64, 3)).astype(np.float32)
+    >>> velocity = np.random.random((64, 3)).astype(np.float32)
+    >>> acceleration = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> potential = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> additional_field = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100)), ...]
+    >>> param = pd.Series({"Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
+    >>> leapfrog(position, velocity, acceleration, potential, additional_field, dt, tables, param)
     """
     half_dt = np.float32(0.5 * dt)
     # Kick
@@ -240,6 +285,15 @@ def dt_CFL_maxacc(
     -------
     np.float32
         Time step
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.integration import dt_CFL_maxacc
+    >>> acceleration = np.random.random((64, 3)).astype(np.float32)
+    >>> param = pd.Series({"ncoarse": 4, "Courant_factor": 1.0})
+    >>> dt_CFL_maxacc(acceleration, param)
     """
     dx = np.float32(0.5 ** param["ncoarse"])
     max_acc = utils.max_abs(acceleration)
@@ -262,6 +316,15 @@ def dt_CFL_maxvel(
     -------
     np.float32
         Time step
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.integration import dt_CFL_maxvel
+    >>> velocity = np.random.random((64, 3)).astype(np.float32)
+    >>> param = pd.Series({"ncoarse": 4, "Courant_factor": 1.0})
+    >>> dt_CFL_maxvel(velocity, param)
     """
     dx = np.float32(0.5 ** param["ncoarse"])
     max_vel = utils.max_abs(velocity)
@@ -285,5 +348,13 @@ def dt_weak_variation(
     -------
     np.float32
         Time step
+
+    Example
+    -------
+    >>> from scipy.interpolate import interp1d
+    >>> from pysco.integration import dt_weak_variation
+    >>> func_t_a = interp1d(np.linspace(0, 1, 100), np.random.random(100))
+    >>> param = pd.Series({"aexp": 1.0})
+    >>> dt_weak_variation(func_t_a, param)
     """
     return np.float32(func_t_a(1.1 * param["aexp"]) - func_t_a(param["aexp"]))

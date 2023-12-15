@@ -22,6 +22,14 @@ def operator(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float3
     -------
     npt.NDArray[np.float32]
         Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import operator
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> operator(x, h)
     """
     invh2 = np.float32(h ** (-2))
     six = np.float32(6)
@@ -76,6 +84,15 @@ def residual(
     -------
     npt.NDArray[np.float32]
         Residual of Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import residual
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> residual(x, b, h)
     """
     invh2 = np.float32(h ** (-2))
     six = np.float32(6)
@@ -137,6 +154,15 @@ def restrict_residual_half(
     -------
     npt.NDArray[np.float32]
         Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import restrict_residual_half
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> restrict_residual_half(x, b, h)
     """
     inveight = np.float32(0.125)
     three = np.float32(3.0)
@@ -222,6 +248,15 @@ def residual_error_half(
     -------
     np.float32
         Residual error
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import residual_error_half
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> residual_error_half(x, b, h)
     """
     six = np.float32(6.0)
     invh2 = np.float32(h ** (-2))
@@ -328,6 +363,14 @@ def truncation_error(x: npt.NDArray[np.float32], h: np.float32) -> np.float32:
     -------
     np.float32
         Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import truncation_error
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> truncation_error(x, h)
     """
     ncells_1d = x.shape[0] >> 1
     RLx = mesh.restriction(operator(x, h))
@@ -359,6 +402,14 @@ def truncation_knebe2(
     -------
     npt.NDArray[np.float32]
         Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import truncation_knebe2
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> truncation_knebe2(x, h)
     """
     return mesh.prolongation(operator(mesh.restriction(x), 2 * h)) - operator(x, h)
 
@@ -381,6 +432,13 @@ def truncation_knebe(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     -------
     npt.NDArray[np.float32]
         Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import truncation_knebe
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> truncation_knebe(b)
     """
     return mesh.prolongation(mesh.restriction(b)) - b
 
@@ -406,6 +464,13 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
     -------
     np.float32
          Truncation error
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import truncation_error_knebe
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> truncation_error_knebe(b)
     """
     truncation = np.float32(0)
     ncells_1d = b.shape[0]
@@ -563,6 +628,15 @@ def jacobi(
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
     h : np.float32
         Grid size
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import jacobi
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> jacobi(x, b, h)
     """
     h2 = np.float32(h**2)
     ncells_1d = x.shape[0]
@@ -611,6 +685,16 @@ def gauss_seidel(
         Grid size
     f_relax : np.float32
         Relaxation factor
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import gauss_seidel
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> f_relax = np.float32(1.3)
+    >>> gauss_seidel(x, b, h, f_relax)
     """
     # WARNING: If I replace the arguments in prange by some constant values (for example, doing imax = int(0.5*x.shape[0]), then prange(imax)...),
     #          then LLVM tries to fuse the red and black loops! And we really don't want that...
@@ -816,6 +900,15 @@ def gauss_seidel_no_overrelaxation(
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
     h : np.float32
         Grid size
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import gauss_seidel_no_overrelaxation
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> gauss_seidel_no_overrelaxation(x, b, h)
     """
     # WARNING: If I replace the arguments in prange by some constant values (for example, doing imax = int(0.5*x.shape[0]), then prange(imax)...),
     #          then LLVM tries to fuse the red and black loops! And we really don't want that...
@@ -967,6 +1060,16 @@ def smoothing(
         Grid size
     n_smoothing : int
         Number of smoothing iterations
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import smoothing
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> n_smoothing = 5
+    >>> smoothing(x, b, h, n_smoothing)
     """
     # No over-relaxation because half prolongated
     gauss_seidel_no_overrelaxation(x, b, h)

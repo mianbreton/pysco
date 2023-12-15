@@ -42,7 +42,7 @@
 
 ## About The Project
 
-Pysco is a multi-threaded Particle-Mesh code (no MPI parallelization) which currently contains Newtonian and [Hu & Sawicki (2007)](https://ui.adsabs.harvard.edu/abs/2007PhRvD..76f4004H/abstract) $f(R)$ gravity theories.
+PySCo is a multi-threaded Particle-Mesh code (no MPI parallelization) for cosmological simulations which currently contains Newtonian and [Hu & Sawicki (2007)](https://ui.adsabs.harvard.edu/abs/2007PhRvD..76f4004H/abstract) $f(R)$ gravity theories.
 
 The goal is to develop a Python-based N-body code that is user-friendly and efficient. Python was chosen for its widespread use and rapid development capabilities, making it well-suited for collaborative open-source projects. To address performance issues in Python, we utilize [Numba](https://github.com/numba/numba), a high-performance library that compiles Python functions using LLVM. Additionally, Numba facilitates straightforward loop parallelization.
 
@@ -225,7 +225,8 @@ param = {
 
 # Run simulation
 pysco.run(param)
-print("Finished!")
+
+print("Run completed!")
 
 ```
 

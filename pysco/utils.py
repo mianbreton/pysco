@@ -30,6 +30,16 @@ def time_me(func: Callable) -> Callable:
     -------
     Callable
         Function wrapper which prints time (in seconds)
+
+    Examples
+    --------
+    >>> from pysco.utils import time_me
+    >>> @time_me
+    ... def example_function():
+    ...     # Code to be timed
+    ...     pass
+    ...
+    ... example_function()
     """
 
     def time_func(*args, **kw):
@@ -62,6 +72,16 @@ def profile_me(func: Callable) -> Callable:
     -------
     Callable
         Exit system
+
+    Examples
+    --------
+    >>> from pysco.utils import profile_me
+    >>> @profile_me
+    ... def example_function():
+    ...     # Code to be profiled
+    ...     pass
+    ...
+    ... example_function()
     """
 
     def profiling_func(*args: int, **kw: int):
@@ -93,6 +113,11 @@ def profiling(filename: str, Function: Callable, *args: float) -> None:
         Output file containing the profiling
     Function : Callable
         Function to profile
+
+    Examples
+    --------
+    >>> from pysco.utils import profiling
+    >>> profiling("profile_output.prof", example_function)
     """
     import cProfile
     import pstats
@@ -119,6 +144,14 @@ def index_linear(ijk: npt.NDArray[np.int32], ncells_1d: int) -> npt.NDArray[np.i
     -------
     npt.NDArray[np.int64]
         Linear index [N_part, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import index_linear
+    >>> ijk_array = np.array([[1, 2, 3], [4, 5, 6]])
+    >>> ncells_1d = 32
+    >>> index_linear(ijk_array, ncells_1d)
     """
     return (ijk[:, 0] * ncells_1d**2 + ijk[:, 1] * ncells_1d + ijk[:, 2]).astype(
         np.int64
@@ -132,6 +165,14 @@ def set_units(param: pd.Series) -> None:
     ----------
     param : pd.Series
         Parameter container
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> from pysco.utils import set_units
+    >>> params = pd.Series({"H0": 70, "aexp": 1.0, "boxlen": 100.0, "Om_m": 0.3, "npart": 1000})
+    >>> set_units(params)
+    >>> print(params)
     """
     # Put in good units (Box Units to km,kg,s)
     # Get constants
@@ -159,6 +200,12 @@ def read_param_file(name: str) -> pd.Series:
     -------
     pd.Series
         Parameters container
+
+    Examples
+    --------
+    >>> from pysco.utils import read_param_file
+    >>> params = read_param_file("parameter_file.txt")
+    >>> print(params)
     """
     param = pd.read_csv(
         name,
@@ -225,6 +272,12 @@ def read_snapshot_particles_parquet(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [N_part, 3]
+
+    Examples
+    --------
+    >>> from pysco.utils import read_snapshot_particles_parquet
+    >>> position, velocity = read_snapshot_particles_parquet("snapshot.parquet")
+    >>> print(position)
     """
     import pyarrow.parquet as pq
 
@@ -242,6 +295,35 @@ def read_snapshot_particles_parquet(
 
 
 @time_me
+def write_snapshot_particles(
+    filename: str, position: npt.NDArray[np.float32], velocity: npt.NDArray[np.float32]
+) -> None:
+    """Write snapshot with particle information in parquet format
+
+    Parameters
+    ----------
+    filename : str
+        Filename
+    position : npt.NDArray[np.float32]
+        Position [N_part, 3]
+    velocity : npt.NDArray[np.float32]
+        Velocity [N_part, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import write_snapshot_particles
+    >>> position = np.random.rand(32**3, 3).astype(np.float32))
+    >>> velocity = np.random.rand(32**3, 3).astype(np.float32))
+    >>> write_snapshot_particles("snapshot.parquet", position, velocity)
+    """
+    if filename[-7:] == "parquet":
+        write_snapshot_particles_parquet(filename, position, velocity)
+    else:
+        write_snapshot_particles_hdf5(filename, position, velocity)
+
+
+@time_me
 def write_snapshot_particles_parquet(
     filename: str, position: npt.NDArray[np.float32], velocity: npt.NDArray[np.float32]
 ) -> None:  # TODO: do better, perhaps multithread this?
@@ -255,6 +337,14 @@ def write_snapshot_particles_parquet(
         Position [N_part, 3]
     velocity : npt.NDArray[np.float32]
         Velocity [N_part, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import write_snapshot_particles_parquet
+    >>> position = np.random.rand(32**3, 3).astype(np.float32))
+    >>> velocity = np.random.rand(32**3, 3).astype(np.float32))
+    >>> write_snapshot_particles_parquet("snapshot.parquet", position, velocity)
     """
     import pyarrow as pa
     import pyarrow.parquet as pq
@@ -273,6 +363,34 @@ def write_snapshot_particles_parquet(
     pq.write_table(table, filename)
 
 
+@time_me
+def write_snapshot_particles_hdf5(
+    filename: str, position: npt.NDArray[np.float32], velocity: npt.NDArray[np.float32]
+) -> None:
+    """Write snapshot with particle information in HDF5 format
+
+    Parameters
+    ----------
+    filename : str
+        Filename
+    position : npt.NDArray[np.float32]
+        Position [N_part, 3]
+    velocity : npt.NDArray[np.float32]
+        Velocity [N_part, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import write_snapshot_particles_hdf5
+    >>> position_data = np.random.rand(32**3, 3).astype(np.float32))
+    >>> velocity_data = np.random.rand(32**3, 3).astype(np.float32))
+    >>> write_snapshot_particles_hdf5("snapshot.h5", position_data, velocity_data)
+    """
+    import h5py
+
+    pass
+
+
 # Basic operations
 @njit(fastmath=True, cache=True, parallel=True)
 def min_abs(x: npt.NDArray[np.float32]) -> np.float32:
@@ -286,7 +404,14 @@ def min_abs(x: npt.NDArray[np.float32]) -> np.float32:
     Returns
     -------
     np.float32
-        Min absolute value
+        Min absolute
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import min_abs
+    >>> x_array = np.array([-2.0, 3.0, -5.0, 7.0])
+    >>> min_abs(x_array)
     """
     return np.min(np.abs(x))
 
@@ -304,6 +429,13 @@ def max_abs(x: npt.NDArray[np.float32]) -> np.float32:
     -------
     np.float32
         Max absolute value
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import max_abs
+    >>> x_array = np.array([-2.0, 3.0, -5.0, 7.0])
+    >>> max_abs(x_array)
     """
     return np.max(np.abs(x))
 
@@ -323,6 +455,15 @@ def add_vector_scalar_inplace(
         Array to add (same shape as y)
     a : np.float32
         Scalar
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import add_vector_scalar_inplace
+    >>> y_array = np.array([1.0, 2.0, 3.0])
+    >>> x_array = np.array([4.0, 5.0, 6.0])
+    >>> add_vector_scalar_inplace(y_array, x_array, 2.0)
+    >>> y_array
     """
     y_ravel = y.ravel()
     x_ravel = x.ravel()
@@ -348,6 +489,14 @@ def prod_vector_scalar_inplace(y: npt.NDArray[np.float32], a: np.float32) -> Non
         Mutable array
     a : np.float32
         Scalar
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_vector_scalar_inplace
+    >>> y_array = np.array([1.0, 2.0, 3.0])
+    >>> prod_vector_scalar_inplace(y_array, 2.0)
+    >>> y_array
     """
     y_ravel = y.ravel()
     for i in prange(y_ravel.shape[0]):
@@ -372,6 +521,13 @@ def prod_vector_scalar(
     -------
     npt.NDArray[np.float32]
         Product array
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_vector_scalar
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> prod_vector_scalar(x_array, 2.0)
     """
     result = np.empty_like(x)
     result_ravel = result.ravel()
@@ -403,6 +559,13 @@ def prod_add_vector_scalar_scalar(
     -------
     npt.NDArray[np.float32]
         Multiplied and added array
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_add_vector_scalar_scalar
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> prod_add_vector_scalar_scalar(x_array, 2.0, 1.0)
     """
     result = np.empty_like(x)
     result_ravel = result.ravel()
@@ -426,6 +589,15 @@ def prod_vector_vector_inplace(
         Array
     y : npt.NDArray[np.float32]
         Array    
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_vector_vector_inplace
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> y_array = np.array([2.0, 3.0, 4.0])
+    >>> prod_vector_vector_inplace(x_array, y_array)
+    >>> x_array
     """
     x_ravel = x.ravel()
     y_ravel = y.ravel()
@@ -449,7 +621,16 @@ def prod_gradient_vector_inplace(
     x : npt.NDArray[np.float32]
         Array
     y : npt.NDArray[np.float32]
-        Array    
+        Array   
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_gradient_vector_inplace
+    >>> array_x = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+    >>> array_y = np.array([2.0, 3.0], dtype=np.float32)
+    >>> prod_gradient_vector_inplace(array_x, array_y)
+    >>> array_x 
     """
     ndim = x.shape[-1]
     x_ravel = x.ravel()
@@ -484,6 +665,15 @@ def prod_add_vector_scalar_vector(
     -------
     npt.NDArray[np.float32]
         Multiplied and added array
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_add_vector_scalar_vector
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> a_scalar = 2.0
+    >>> b_array = np.array([3.0, 4.0, 5.0])
+    >>> prod_add_vector_scalar_vector(x_array, a_scalar, b_array)
     """
     result = np.empty_like(x)
     result_ravel = result.ravel()
@@ -508,6 +698,15 @@ def prod_minus_vector_inplace(
         Array
     y : npt.NDArray[np.float32]
         Array
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_minus_vector_inplace
+    >>> x_array = np.array([1.0, 2.0, 3.0], dtype=np.complex64)
+    >>> y_array = np.array([2.0, 3.0, 4.0], dtype=np.complex64)
+    >>> prod_minus_vector_inplace(x_array, y_array)
+    >>> x_array
     """
     result = np.empty_like(x)
     result_ravel = result.ravel()
@@ -539,6 +738,15 @@ def linear_operator(
         Scalar factor 1
     f2 : np.float32
         Scalar factor 2
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import linear_operator
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> f1_scalar = 2.0
+    >>> f2_scalar = 1.0
+    >>> linear_operator(x_array, f1_scalar, f2_scalar)
     """
     result = np.empty_like(x)
     x_ravel = x.ravel()
@@ -570,6 +778,16 @@ def linear_operator_inplace(
         Scalar factor 1
     f2 : np.float32
         Scalar factor 2
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import linear_operator_inplace
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> f1_scalar = 2.0
+    >>> f2_scalar = 1.0
+    >>> linear_operator_inplace(x_array, f1_scalar, f2_scalar)
+    >>> x_array
     """
     x_ravel = x.ravel()
     for i in prange(x_ravel.shape[0]):
@@ -606,6 +824,18 @@ def operator_fR_inplace(
         Scalar factor 2
     f3 : np.float32
         Scalar factor 3
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import operator_fR_inplace
+    >>> density_array = np.array([1.0, 2.0, 3.0])
+    >>> u_scalaron_array = np.array([2.0, 3.0, 4.0])
+    >>> f1_scalar = 2.0
+    >>> f2_scalar = 1.0
+    >>> f3_scalar = 3.0
+    >>> operator_fR_inplace(density_array, u_scalaron_array, f1_scalar, f2_scalar, f3_scalar)
+    >>> density_array
     """
     density_ravel = density.ravel()
     u_scalaron_ravel = u_scalaron.ravel()
@@ -629,6 +859,15 @@ def reorder_particles(
         Velocity [N_part, 3]
     acceleration : npt.NDArray[np.float32], optional
         Acceleration [N_part, 3], by default None
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import reorder_particles
+    >>> position_array = np.array([[0.2, 0.3, 0.1], [0.5, 0.6, 0.4], [0.8, 0.9, 0.7]])
+    >>> velocity_array = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]])
+    >>> reorder_particles(position_array, velocity_array)
+    >>> position_array
     """
     index = morton.positions_to_keys(position)
     arg = np.argsort(index, kind="mergesort")
@@ -646,6 +885,14 @@ def periodic_wrap(position: npt.NDArray[np.float32]) -> None:
     ----------
     position : npt.NDArray[np.float32]
         Position [Any]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import periodic_wrap
+    >>> position_array = np.array([-0.2, 1.3, 0.8])
+    >>> periodic_wrap(position_array)
+    >>> position_array
     """
     zero = np.float32(0)
     one = np.float32(1)
@@ -685,6 +932,14 @@ def fourier_grid_to_Pk(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         k [in h/Mpc], P(k) [in h/Mpc ** 3], Nmodes
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import fourier_grid_to_Pk
+    >>> density_k_array = np.array([[[1.0+0.0j, 2.0+0.0j], [3.0+0.0j, 4.0+0.0j]]], dtype=np.complex64)
+    >>> p_val = 2
+    >>> fourier_grid_to_Pk(density_k_array, p_val)
     """
     ncells_1d = density_k.shape[0]
     one = np.float32(1)
@@ -758,6 +1013,14 @@ def fft_3D_real(x: npt.NDArray[np.float32], threads: int) -> npt.NDArray[np.comp
     -------
     npt.NDArray[np.complex64]
         Fourier-space grid [N, N, N // 2 + 1]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import fft_3D_real
+    >>> real_grid = np.array([[[1.0, 2.0], [3.0, 4.0]]], dtype=np.float32)
+    >>> num_threads = 4
+    >>> fft_3D_real(real_grid, num_threads)
     """
     ncells_1d = len(x)
     # Prepare FFTW containers
@@ -797,6 +1060,14 @@ def fft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.complex
     -------
     npt.NDArray[np.complex64]
         Fourier-space grid [N, N, N]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import fft_3D
+    >>> complex_grid = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> num_threads = 4
+    >>> fft_3D(complex_grid, num_threads)
     """
     ncells_1d = len(x)
     # Prepare FFTW containers
@@ -836,6 +1107,14 @@ def fft_3D_grad(
     -------
     npt.NDArray[np.complex64]
         Fourier-space grid [N, N, N, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import fft_3D_grad
+    >>> complex_grid_3d = np.array([[[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]]], dtype=np.complex64)
+    >>> num_threads = 4
+    >>> fft_3D_grad(complex_grid_3d, num_threads)
     """
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
@@ -878,6 +1157,14 @@ def ifft_3D_real(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.f
     -------
     npt.NDArray[np.float32]
         Configuration-space grid [N, N, N]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import ifft_3D_real
+    >>> complex_grid = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> num_threads = 4
+    >>> ifft_3D_real(complex_grid, num_threads)
     """
     ncells_1d = len(x)
     # Prepare FFTW containers
@@ -917,6 +1204,14 @@ def ifft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.comple
     -------
     npt.NDArray[np.complex64]
         Configuration-space grid [N, N, N]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import ifft_3D
+    >>> complex_grid = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> num_threads = 4
+    >>> ifft_3D(complex_grid, num_threads)
     """
     ncells_1d = len(x)
     # Prepare FFTW containers
@@ -956,6 +1251,14 @@ def ifft_3D_real_grad(
     -------
     npt.NDArray[np.float32]
         Configuration-space grid [N, N, N, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import ifft_3D_real_grad
+    >>> complex_grid_3d = np.array([[[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]]], dtype=np.complex64)
+    >>> num_threads = 4
+    >>> ifft_3D_real_grad(complex_grid_3d, num_threads)
     """
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
@@ -1000,6 +1303,14 @@ def ifft_3D_grad(
     -------
     npt.NDArray[np.complex64]
         Configuration-space grid [N, N, N, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import ifft_3D_grad
+    >>> complex_grid_3d = np.array([[[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]]], dtype=np.complex64)
+    >>> num_threads = 4
+    >>> ifft_3D_grad(complex_grid_3d, num_threads)
     """
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
@@ -1040,6 +1351,13 @@ def divide_by_minus_k2_fourier(x: npt.NDArray[np.complex64]) -> None:
     ----------
     x : npt.NDArray[np.complex64]
         Fourier-space field [N, N, N//2 + 1]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import divide_by_minus_k2_fourier
+    >>> complex_grid = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> divide_by_minus_k2_fourier(complex_grid)
     """
     minus_fourpi2 = np.float32(-4.0 * np.pi**2)
     ncells_1d = len(x)
@@ -1087,6 +1405,14 @@ def divide_by_minus_k2_fourier_compensated(
         Fourier-space field [N, N, N//2 + 1]
     p : int
         Compensation order (NGP = 1, CIC = 2, TSC = 3)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import divide_by_minus_k2_fourier_compensated
+    >>> complex_grid = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> p_val = 2
+    >>> divide_by_minus_k2_fourier_compensated(complex_grid, p_val)
     """
     minus_fourpi2 = np.float32(-4.0 * np.pi**2)
     ncells_1d = len(x)
@@ -1145,6 +1471,13 @@ def compute_gradient_laplacian_fourier(
     -------
     npt.NDArray[np.complex64]
         Gradient of Laplacian [N, N, N//2 + 1, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import compute_gradient_laplacian_fourier
+    >>> complex_field = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> compute_gradient_laplacian_fourier(complex_field)
     """
     ii = np.complex64(1j)
     invtwopi = np.float32(0.5 / np.pi)
@@ -1206,6 +1539,14 @@ def compute_gradient_laplacian_fourier_compensated(
     -------
     npt.NDArray[np.complex64]
         Gradient of Laplacian [N, N, N//2 + 1, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import compute_gradient_laplacian_fourier_compensated
+    >>> complex_field = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> p_val = 2
+    >>> compute_gradient_laplacian_fourier_compensated(complex_field, p_val)
     """
     ii = np.complex64(1j)
     invtwopi = np.float32(0.5 / np.pi)

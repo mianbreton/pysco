@@ -25,6 +25,13 @@ def restriction(
     -------
     npt.NDArray[np.float32]
         Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import restriction
+    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> result = restriction(x)
     """
     inveighth = np.float32(0.125)
     result = np.empty(
@@ -68,6 +75,13 @@ def restriction_half(
     -------
     npt.NDArray[np.float32]
         Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import restriction_half
+    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> result = restriction_half(x)
     """
     inveighth = np.float32(0.125)
     result = np.empty(
@@ -107,6 +121,13 @@ def prolongation0(
     -------
     npt.NDArray[np.float32]
         Finer Potential [2*N_cells_1d, 2*N_cells_1d, 2*N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import prolongation0
+    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> result = prolongation0(x)
     """
     x_fine = np.empty(
         (x.shape[0] << 1, x.shape[1] << 1, x.shape[2] << 1), dtype=np.float32
@@ -150,6 +171,13 @@ def prolongation(
     -------
     npt.NDArray[np.float32]
         Finer Potential [2*N_cells_1d, 2*N_cells_1d, 2*N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import prolongation
+    >>> coarse_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> fine_field = prolongation(coarse_field)
     """
     f0 = np.float32(27.0 / 64)
     f1 = np.float32(9.0 / 64)
@@ -271,6 +299,14 @@ def add_prolongation_half(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     corr_c : npt.NDArray[np.float32]
         Correction field at coarser level [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import add_prolongation_half
+    >>> coarse_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> corr_correction = np.random.rand(16, 16, 16).astype(np.float32)
+    >>> add_prolongation_half(coarse_field, corr_correction)
     """
     f0 = np.float32(27.0 / 64)
     f1 = np.float32(9.0 / 64)
@@ -364,6 +400,13 @@ def derivative3(
     -------
     npt.NDArray[np.float32]
         Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative3
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative3(scalar_field)
     """
     ncells_1d = a.shape[0]
     halfinvh = np.float32(0.5 * ncells_1d)
@@ -403,6 +446,13 @@ def derivative5(
     -------
     npt.NDArray[np.float32]
         Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative5
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative5(scalar_field)
     """
     eight = np.float32(8)
     ncells_1d = a.shape[0]
@@ -455,6 +505,13 @@ def derivative7(
     -------
     npt.NDArray[np.float32]
         Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative7
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative7(scalar_field)
     """
     nine = np.float32(9)
     fortyfive = np.float32(45.0)
@@ -536,6 +593,13 @@ def derivative5_with_fR_n1(
     -------
     npt.NDArray[np.float32]
         Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative5_with_fR_n1
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative5_with_fR_n1(scalar_field)
     """
     eight = np.float32(8)
     ncells_1d = a.shape[0]
@@ -621,6 +685,13 @@ def add_derivative5_fR_n1(
     f : np.float32
         Multiplicative factor to additional field
 
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import add_derivative5_fR_n1
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
+    >>> add_derivative5_fR_n1(deriv_field, scalar_field)
     """
     eightf = np.float32(8 * f)
     ncells_1d = b.shape[0]
@@ -686,6 +757,13 @@ def derivative5_with_fR_n2(
     -------
     npt.NDArray[np.float32]
         Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative5_with_fR_n2
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative5_with_fR_n2(scalar_field)
     """
     eight = np.float32(8)
     ncells_1d = a.shape[0]
@@ -770,6 +848,14 @@ def add_derivative5_fR_n2(
         Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
     f : np.float32
         Multiplicative factor to additional field
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import add_derivative5_fR_n2
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
+    >>> add_derivative5_fR_n2(deriv_field, scalar_field)
     """
     eightf = np.float32(8 * f)
     ncells_1d = b.shape[0]
@@ -825,6 +911,13 @@ def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     -------
     npt.NDArray[np.float32]
         Density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import NGP
+    >>> particles = np.random.rand(32**3, 3).astype(np.float32)
+    >>> grid_density = NGP(particles, ncells_1d=64)
     """
     ncells_1d_f = np.float32(ncells_1d)
     ncells2 = ncells_1d**2
@@ -863,6 +956,13 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     -------
     npt.NDArray[np.float32]
         Density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import CIC
+    >>> particles = np.random.rand(32**3, 3).astype(np.float32)
+    >>> grid_density = CIC(particles, ncells_1d=64)
     """
     ncells_1d_f = np.float32(ncells_1d)
     one = np.float32(1)
@@ -937,6 +1037,13 @@ def TSC_seq(
     -------
     npt.NDArray[np.float32]
         Density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import TSC_seq
+    >>> particles = np.random.rand(32**3, 3).astype(np.float32)
+    >>> grid_density = TSC_seq(particles, ncells_1d=64)
     """
     ncells_1d_m1 = np.int16(ncells_1d - 1)
     one = np.int16(1)
@@ -1037,6 +1144,13 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     -------
     npt.NDArray[np.float32]
         Density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import TSC
+    >>> particles = np.random.rand(32**3, 3).astype(np.float32)
+    >>> grid_density = TSC(particles, ncells_1d=64)
     """
     ncells_1d_m1 = np.int16(ncells_1d - 1)
     one = np.int16(1)
@@ -1163,6 +1277,14 @@ def invNGP(
     -------
     npt.NDArray[np.float32]
         Interpolated Field [N_part]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import invNGP
+    >>> grid_density = np.random.rand(64, 64, 64).astype(np.float32)
+    >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
+    >>> interpolated_values = invNGP(grid_density, particle_positions)
     """
     ncells_1d = grid.shape[0]
     ncells_1d_f = np.float32(ncells_1d)
@@ -1196,6 +1318,14 @@ def invNGP_vec(
     -------
     npt.NDArray[np.float32]
         Interpolated Field [N_part, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import invNGP_vec
+    >>> grid_velocity = np.random.rand(64, 64, 64, 3).astype(np.float32)
+    >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
+    >>> interpolated_velocity = invNGP_vec(grid_velocity, particle_positions)
     """
     ncells_1d = grid.shape[0]  # The first 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
@@ -1229,6 +1359,14 @@ def invCIC(
     -------
     npt.NDArray[np.float32]
         Interpolated Field [N_part]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import invCIC
+    >>> grid_density = np.random.rand(64, 64, 64).astype(np.float32)
+    >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
+    >>> interpolated_values = invCIC(grid_density, particle_positions)
     """
     ncells_1d = grid.shape[0]
     ncells_1d_f = np.float32(ncells_1d)
@@ -1297,6 +1435,14 @@ def invCIC_vec(
     -------
     npt.NDArray[np.float32]
         Interpolated Field [N_part, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import invCIC_vec
+    >>> grid_velocity = np.random.rand(64, 64, 64, 3).astype(np.float32)
+    >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
+    >>> interpolated_velocity = invCIC_vec(grid_velocity, particle_positions)
     """
     ncells_1d = grid.shape[0]  # The first 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
@@ -1366,6 +1512,14 @@ def invTSC(
     -------
     npt.NDArray[np.float32]
         Interpolated Field [N_part]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import invTSC
+    >>> grid_density = np.random.rand(64, 64, 64).astype(np.float32)
+    >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
+    >>> interpolated_values = invTSC(grid_density, particle_positions)
     """
     ncells_1d = grid.shape[0]
     ncells_1d_m1 = np.int16(ncells_1d - 1)
@@ -1495,6 +1649,14 @@ def invTSC_vec(
     -------
     npt.NDArray[np.float32]
         Interpolated Field [N_part, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import invTSC_vec
+    >>> grid_velocity = np.random.rand(64, 64, 64, 3).astype(np.float32)
+    >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
+    >>> interpolated_velocity = invTSC_vec(grid_velocity, particle_positions)
     """
     ncells_1d = grid.shape[0]  # The first 3 dimensions should be the cubic grid size
     ncells_1d_m1 = np.int16(ncells_1d - 1)

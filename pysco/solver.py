@@ -47,6 +47,15 @@ def pm(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Acceleration, Potential, Additional field [N_cells_1d, N_cells_1d,N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import pm
+    >>> position = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype=np.float32)
+    >>> param = pd.Series({"ncoarse": 6, "save_power_spectrum": "all", "nthreads": 4})
+    >>> acceleration, potential, additional_field = pm(position, param)
     """
     ncells_1d = 2 ** (param["ncoarse"])
     h = np.float32(1.0 / ncells_1d)
@@ -195,6 +204,18 @@ def initialise_potential(
     -------
     npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import initialise_potential
+    >>> potential = np.empty(0, dtype=np.float32)
+    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> h = 1.0 / 32
+    >>> param = pd.Series({"compute_additional_field": False})
+    >>> tables = [interp1d([0, 1], [1, 2]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [1, 2])]
+    >>> potential = initialise_potential(potential, rhs, h, param, tables)
     """
     # Initialise
     if len(potential) == 0:
@@ -256,6 +277,18 @@ def get_additional_field(
     -------
     npt.NDArray[np.float32]
         Additional field
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import get_additional_field
+    >>> additional_field = np.empty(0, dtype=np.float32)
+    >>> density = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> h = 1.0 / 32
+    >>> param = pd.Series({"theory": "newton"})
+    >>> tables = [interp1d([0, 1], [1, 2]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [1, 2])]
+    >>> additional_field = get_additional_field(additional_field, density, h, param, tables)
     """
     if param["theory"].casefold() == "newton".casefold():
         return np.empty(0, dtype=np.float32)
@@ -314,6 +347,16 @@ def rhs_poisson(
         Additional field
     param : pd.Series
         Parameter container
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import rhs_poisson
+    >>> density = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> additional_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> param = pd.Series({"aexp": 1.0, "Om_m": 0.3})
+    >>> rhs_poisson(density, additional_field, param)
     """
     f1 = np.float32(1.5 * param["aexp"] * param["Om_m"])
     f2 = -f1
@@ -344,6 +387,15 @@ def fft(
     -------
     npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import fft
+    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> param = pd.Series({"nthreads": 4, "boxlen": 100.0, "npart": 1000000, "aexp": 1.0, "Om_m": 0.3})
+    >>> potential = fft(rhs, param)
     """
     rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
     if save_pk:
@@ -397,6 +449,15 @@ def fft_force(
     -------
     npt.NDArray[np.float32]
         Force [3, N_cells_1d, N_cells_1d,N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import fft_force
+    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> param = pd.Series({"nthreads": 4, "boxlen": 100.0, "npart": 1000000, "aexp": 1.0, "Om_m": 0.3})
+    >>> force = fft_force(rhs, param)
     """
     rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
     if MAS_index == 0:

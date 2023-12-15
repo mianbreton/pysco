@@ -36,6 +36,22 @@ def generate(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [Npart, 3]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import generate
+    >>> param = pd.Series({
+         'initial_conditions': '2LPT',
+         'z_start': 49.0,
+         'Om_m': 0.27,
+         'Om_lambda': 0.73,
+         'unit_t': 1.0,
+         'npart': 64,
+     })
+    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.rand(100)) for _ in range(4)]
+    >>> generate(param, tables)
     """
     if param["initial_conditions"][1:4].casefold() == "LPT".casefold():
         a_start = 1.0 / (1 + param["z_start"])
@@ -129,7 +145,38 @@ def generate(
         return position, velocity
 
 
-def finalise_initial_conditions(position, velocity, param):
+def finalise_initial_conditions(
+    position: npt.NDArray[np.float32],
+    velocity: npt.NDArray[np.float32],
+    param: pd.Series,
+) -> None:
+    """Wrap, reorder, and write initial conditions to output files.
+
+    This function wraps and reorders particle positions, writes the initial
+    distribution to a Parquet file, and saves parameter information to a CSV file.
+
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Particle positions [Npart, 3]
+    velocity : npt.NDArray[np.float32]
+        Particle velocities [Npart, 3]
+    param : pd.Series
+        Parameter container
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import finalise_initial_conditions
+    >>> position = np.random.rand(64, 3).astype(np.float32)
+    >>> velocity = np.random.rand(64, 3).astype(np.float32)
+    >>> param = pd.Series({
+         'base': '/path/to/base_directory',
+         'aexp': 0.8,
+     })
+    >>> finalise_initial_conditions(position, velocity, param)
+    """
     # Wrap and reorder particles
     utils.periodic_wrap(position)
     utils.reorder_particles(position, velocity)
@@ -154,6 +201,16 @@ def read_hdf5(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [3, Npart]
+
+    Example
+    -------
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import read_hdf5
+    >>> param = pd.Series({
+         'initial_conditions': '/path/to/snapshot.h5',
+         'npart': 64,
+     })
+    >>> position, velocity = read_hdf5(param)
     """
     import h5py
 
@@ -206,6 +263,16 @@ def read_gadget(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [3, Npart]
+
+    Example
+    -------
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import read_gadget
+    >>> param = pd.Series({
+         'initial_conditions': '/path/to/snapshot.gadget',
+         'npart': 64,
+     })
+    >>> position, velocity = read_gadget(param)
     """
     import readgadget  # From Pylians
 
@@ -261,6 +328,20 @@ def generate_density(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.floa
     -------
     npt.NDArray[np.float32]
         Initial density field and velocity field (delta, vx, vy, vz)
+
+    Example
+    -------
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import generate_density
+    >>> param = pd.Series({
+         'power_spectrum_file': 'path/to/power_spectrum.txt',
+         'npart': 64,
+         'seed': 42,
+         'fixed_ICS': False,
+         'paired_ICS': False,
+     })
+    >>> Dplus = 1.5
+    >>> generate_density(param, Dplus)
     """
     # Get Transfert function
     transfer_grid = get_transfer_grid(param, Dplus)
@@ -293,6 +374,20 @@ def generate_force(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.float3
     -------
     npt.NDArray[np.float32]
         Initial density field and velocity field (delta, vx, vy, vz)
+
+    Example
+    -------
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import generate_force
+    >>> param = pd.Series({
+         'power_spectrum_file': 'path/to/power_spectrum.txt',
+         'npart': 64,
+         'seed': 42,
+         'fixed_ICS': False,
+         'paired_ICS': False,
+     })
+    >>> Dplus = 1.5
+    >>> generate_force(param, Dplus)
     """
     # Get Transfert function
     transfer_grid = get_transfer_grid(param, Dplus)
@@ -328,6 +423,17 @@ def get_transfer_grid(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.flo
     -------
     npt.NDArray[np.float32]
         Initial density field and velocity field (delta, vx, vy, vz)
+
+    Example
+    -------
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import get_transfer_grid
+    >>> param = pd.Series({
+         'power_spectrum_file': 'path/to/power_spectrum.txt',
+         'npart': 64,
+     })
+    >>> Dplus = 1.5
+    >>> get_transfer_grid(param, Dplus)
     """
     # Get Transfert function
     k, Pk = np.loadtxt(param["power_spectrum_file"]).T
@@ -372,6 +478,13 @@ def white_noise_fourier(
     -------
     npt.NDArray[np.complex64]
         3D white-noise field for density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import white_noise_fourier
+    >>> white_noise = white_noise_fourier(64, np.random.default_rng())
+    >>> print(white_noise)
     """
     twopi = np.float32(2 * math.pi)
     ii = np.complex64(1j)
@@ -439,6 +552,13 @@ def white_noise_fourier_fixed(
     -------
     Tuple[npt.NDArray[np.complex64], npt.NDArray[np.complex64]]
         3D white-noise field for density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import white_noise_fourier_fixed
+    >>> paired_white_noise = white_noise_fourier_fixed(64, np.random.default_rng(), 1)
+    >>> print(paired_white_noise)
     """
     twopi = np.float32(2 * np.pi)
     ii = np.complex64(1j)
@@ -497,6 +617,14 @@ def white_noise_fourier_force(
     -------
     Tuple[npt.NDArray[np.complex64], npt.NDArray[np.complex64]]
         3D white-noise field for force [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import white_noise_fourier_force
+    >>> ncells_1d = 64
+    >>> rng = np.random.default_rng(42)
+    >>> white_noise_fourier_force(ncells_1d, rng)
     """
     invtwopi = np.float32(0.5 / np.pi)
     one = np.float32(1)
@@ -611,6 +739,15 @@ def white_noise_fourier_fixed_force(
     -------
     Tuple[npt.NDArray[np.complex64], npt.NDArray[np.complex64]]
         3D white-noise field for force [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import white_noise_fourier_fixed_force
+    >>> ncells_1d = 64
+    >>> rng = np.random.default_rng(42)
+    >>> is_paired = 1
+    >>> white_noise_fourier_fixed_force(ncells_1d, rng, is_paired)
     """
     invtwopi = np.float32(0.5 / np.pi)
     twopi = np.float32(2 * np.pi)
@@ -720,6 +857,13 @@ def compute_rhs_2ndorder(
     -------
     npt.NDArray[np.float32]
         Second-order right-hand side potential [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_rhs_2ndorder
+    >>> force_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_2ndorder(force_1storder)
     """
     ncells_1d = force.shape[0]
     eight = np.float32(8)
@@ -811,6 +955,14 @@ def compute_rhs_3rdorder(
     -------
     npt.NDArray[np.float32]
         Third-order right-hand side potentials [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_rhs_3rdorder
+    >>> force_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> force_2ndorder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_3rdorder(force_1storder, force_2ndorder)
     """
     ncells_1d = force.shape[0]
     eight = np.float32(8)
@@ -965,6 +1117,14 @@ def initialise_1LPT(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [N, N, N, 3]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import initialise_1LPT
+    >>> force_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> fH = 0.1
+    >>> initialise_1LPT(force_1storder, fH)
     """
     ncells_1d = force.shape[0]
     h = np.float32(1.0 / ncells_1d)
@@ -1014,6 +1174,15 @@ def add_2LPT(
     fH_2 : np.float32
         2nd-order growth rate times Hubble parameter
 
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import add_2LPT
+    >>> position_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> velocity_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> force_2ndorder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> fH_2 = 0.2
+    >>> add_2LPT(position_1storder, velocity_1storder, force_2ndorder, fH_2)
     """
     ncells_1d = force_2ndorder.shape[0]
     pos_factor_2ndorder = np.float32(3.0 / 7)
@@ -1071,6 +1240,19 @@ def add_3LPT(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [3, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import add_3LPT
+    >>> position_2ndorder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> velocity_2ndorder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> force_3rdorder_ab = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> force_Ax_3c = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> force_Ay_3c = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> force_Az_3c = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> fH_3 = 0.3
+    >>> add_3LPT(position_2ndorder, velocity_2ndorder, force_3rdorder_ab, force_Ax_3c, force_Ay_3c, force_Az_3c, fH_3)
     """
     ncells_1d = force_3rdorder_ab.shape[0]
     pos_factor_3a = np.float32(-1.0 / 3)
