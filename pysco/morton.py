@@ -70,7 +70,6 @@ def interleaving_64bits(
     >>> from pysco.morton import interleaving_64bits
     >>> x = 0.6
     >>> x_bits = interleaving_64bits(math.floor(x * 2**21))
-    >>> interleaving_64bits(x_bits)
     >>> np.binary_repr(x_bits)
     """
     x &= 0x1FFFFF  # Keep only the last 21-bits. Useful for Periodic Boundary Conditions as positions are automatically wrapped
