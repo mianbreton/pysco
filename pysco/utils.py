@@ -296,36 +296,57 @@ def read_snapshot_particles_parquet(
 
 @time_me
 def write_snapshot_particles(
-    filename: str, position: npt.NDArray[np.float32], velocity: npt.NDArray[np.float32]
+    position: npt.NDArray[np.float32],
+    velocity: npt.NDArray[np.float32],
+    param: pd.Series,
 ) -> None:
-    """Write snapshot with particle information in parquet format
+    """Write snapshot with particle information in HDF5 or Parquet format
 
     Parameters
     ----------
-    filename : str
-        Filename
     position : npt.NDArray[np.float32]
         Position [N_part, 3]
     velocity : npt.NDArray[np.float32]
         Velocity [N_part, 3]
+    param : pd.Series
+        Parameter container
 
     Examples
     --------
     >>> import numpy as np
+    >>> import pandas as pd
     >>> from pysco.utils import write_snapshot_particles
-    >>> position = np.random.rand(32**3, 3).astype(np.float32))
-    >>> velocity = np.random.rand(32**3, 3).astype(np.float32))
-    >>> write_snapshot_particles("snapshot.parquet", position, velocity)
+    >>> position = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
+    >>> velocity = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype=np.float32)
+    >>> parameters = pd.Series({"snapshot_format": "parquet", "base": "/path/to/base", "i_snap": 1, "extra": "extra_info", "aexp": 1.0})
+    >>> write_snapshot_particles(position, velocity, parameters)
+    >>> parameters = pd.Series({"snapshot_format": "hdf5", "base": "/path/to/base", "i_snap": 2, "extra": "extra_info", "aexp": 1.0})
+    >>> write_snapshot_particles(position, velocity, parameters)
     """
-    if filename[-7:] == "parquet":
+    if "parquet".casefold() == param["output_snapshot_format"].casefold():
+        filename = f"{param['base']}/output_{param['i_snap']:05d}/particles_{param['extra']}.parquet"
         write_snapshot_particles_parquet(filename, position, velocity)
+        param_filename = f"{param['base']}/output_{param['i_snap']:05d}/param_{param['extra']}_{param['i_snap']:05d}.txt"
+        param.to_csv(
+            param_filename,
+            sep="=",
+            header=False,
+        )
+        logging.warning(f"Parameter file written at ...{param_filename=}")
+    elif "hdf5".casefold() == param["output_snapshot_format"].casefold():
+        filename = f"{param['base']}/output_{param['i_snap']:05d}/particles_{param['extra']}.h5"
+        write_snapshot_particles_hdf5(filename, position, velocity, param)
     else:
-        write_snapshot_particles_hdf5(filename, position, velocity)
+        raise ValueError(f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'")
+
+    logging.warning(f"Snapshot written at ...{filename=} {param['aexp']=}")
 
 
 @time_me
 def write_snapshot_particles_parquet(
-    filename: str, position: npt.NDArray[np.float32], velocity: npt.NDArray[np.float32]
+    filename: str,
+    position: npt.NDArray[np.float32],
+    velocity: npt.NDArray[np.float32],
 ) -> None:  # TODO: do better, perhaps multithread this?
     """Write snapshot with particle information in parquet format
 
@@ -365,7 +386,10 @@ def write_snapshot_particles_parquet(
 
 @time_me
 def write_snapshot_particles_hdf5(
-    filename: str, position: npt.NDArray[np.float32], velocity: npt.NDArray[np.float32]
+    filename: str,
+    position: npt.NDArray[np.float32],
+    velocity: npt.NDArray[np.float32],
+    param: pd.Series,
 ) -> None:
     """Write snapshot with particle information in HDF5 format
 
@@ -377,18 +401,26 @@ def write_snapshot_particles_hdf5(
         Position [N_part, 3]
     velocity : npt.NDArray[np.float32]
         Velocity [N_part, 3]
+    param : pd.Series
+        Parameter container
 
     Examples
     --------
     >>> import numpy as np
+    >>> import pandas as pd
     >>> from pysco.utils import write_snapshot_particles_hdf5
-    >>> position_data = np.random.rand(32**3, 3).astype(np.float32))
-    >>> velocity_data = np.random.rand(32**3, 3).astype(np.float32))
-    >>> write_snapshot_particles_hdf5("snapshot.h5", position_data, velocity_data)
+    >>> position = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
+    >>> velocity = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype=np.float32)
+    >>> param = pd.Series({"time": 0.0, "temperature": 300.0})
+    >>> write_snapshot_particles_hdf5("snapshot.h5", position, velocity, param)
     """
     import h5py
 
-    pass
+    with h5py.File(filename, "w") as h5f:
+        h5f.create_dataset("position", data=position)
+        h5f.create_dataset("velocity", data=velocity)
+        for key, item in param.items():
+            h5f.attrs[key] = item
 
 
 # Basic operations
@@ -864,8 +896,8 @@ def reorder_particles(
     --------
     >>> import numpy as np
     >>> from pysco.utils import reorder_particles
-    >>> position_array = np.array([[0.2, 0.3, 0.1], [0.5, 0.6, 0.4], [0.8, 0.9, 0.7]])
-    >>> velocity_array = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]])
+    >>> position_array = np.random.rand(64, 3).astype(np.float32)
+    >>> velocity_array = np.random.rand(64, 3).astype(np.float32)
     >>> reorder_particles(position_array, velocity_array)
     >>> position_array
     """

@@ -28,6 +28,7 @@ param = {
     "initial_conditions": "3LPT",
     "base": "/home/mabreton/boxlen500_n256_lcdm_00000/",
     "z_out": "[10, 5, 2, 1, 0.5, 0]",
+    "output_snapshot_format": "HDF5",
     "save_power_spectrum": "all",
     "integrator": "leapfrog",
     "n_reorder": 25,

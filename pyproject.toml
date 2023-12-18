@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pysco"
-version = "0.2.2"
+version = "0.2.3"
 authors = [
     { name = "Michel-Andrès Breton", email = "michel-andres.breton@obspm.fr" },
 ]
@@ -17,6 +17,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "numpy",
     "astropy",
     "pyfftw",
     "numba",

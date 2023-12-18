@@ -29,10 +29,10 @@
       <ul>
         <li><a href="#power-spectra">Power spectra</a></li>
         <li><a href="#particle-snapshots">Particle snapshots</a></li>
-        <li><a href="#information-files">Information files</a></li>
        </ul>
     </li>
     <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#library-utilities">Library utilities</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
   </ol>
@@ -160,6 +160,7 @@ initial_conditions = 3LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or .h5 
 # Outputs
 base=/home/user/boxlen500_n256_lcdm/ # Base directory for storing simulation data
 z_out = [1.5, 1.0, 0.66666, 0.53846, 0.25, 0.0] # List of redshifts for output snapshots
+output_snapshot_format = parquet # Particle snapshot format. "parquet" or "HDF5"
 save_power_spectrum = all # Save power spectra. Either 'no', 'z_out' for specific redshifts given by z_out or 'all' to compute at every time step
 # Particles
 integrator = leapfrog # Integration scheme for time-stepping "Leapfrog" or "Euler"
@@ -212,6 +213,7 @@ param = {
     "initial_conditions": "3LPT",
     "base": "/home/user/boxlen500_n256_lcdm_00000/",
     "z_out": "[10, 5, 2, 1, 0.5, 0]",
+    "output_snapshot_format" : "parquet",
     "save_power_spectrum": "all",
     "integrator": "leapfrog",
     "n_reorder": 25,
@@ -236,7 +238,7 @@ print("Run completed!")
 
 ## Outputs
 
-Pysco produces power spectra, snapshots, and information files.
+Pysco produces power spectra, snapshots, and extra information.
 
 #### Power spectra
 
@@ -254,27 +256,101 @@ Additionally, the file header contains the scale factor, the box length and numb
 
 #### Particle snapshots
 
-Particle snapshots are written as _parquet_ files in the directory _base_/output\__XXXXX_
-
-> Note that output_00000/ is used to write the initial conditions. The additional number of directories depend on the length of the input list z_out.
-
-The name formatting is particles\__theory_\_ncoarse*N*\__XXXXX_.parquet
-
-The parquet file contains six columns: x, y, z, vx, vy, vz
+Particles are written as either HDF5 or Parquet format. For the former additional informations are written as attributes at the file root. For the latter, an extra ascii file is written.
 
 Positions are given in box units, that is between 0 and 1.
 
-Velocities are given in supercomoving units. To recover km/s one need to multiply by _unit_l/unit_t_, where both quantities are written in the associated information file.
+**Velocities are given in supercomoving units. To recover km/s one need to multiply by _unit_l/unit_t_**, where both quantities are written either in the attributes for HDF5 file or in the associated information file for parquet format.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+> Note that output_00000/ is used to write the initial conditions. The additional number of directories depend on the length of the input list z_out.
 
-#### Information files
+###### HDF5 format
+
+Particle snapshots are written as _parquet_ files in the directory _base_/output\__XXXXX_
+
+The name formatting is particles\__theory_\_ncoarse*N*\__XXXXX_.h5
+
+The HDF5 file contains two datasets: "position" and "velocity"
+as well as attributes. These files can be read as
+
+```python
+import h5py
+with h5py.File('file.h5', 'r') as h5r:
+  pos = h5r['position'][:]
+  vel = h5r['velocity'][:]
+  unit_t = h5r.attrs['unit_t']
+```
+
+###### Parquet format
+
+Particle snapshots are written as _parquet_ files in the directory _base_/output\__XXXXX_
+
+The name formatting is particles\__theory_\_ncoarse*N*\__XXXXX_.parquet
+
+The parquet file contains six columns: x, y, z, vx, vy, vz. These files can be read as
+
+```python
+import pandas
+df = pd.read_parquet('file.parquet')
+x = df['x']
+vx = df['vx']
+```
 
 Alongside every snapshot file there is an associated ascii information file.
 
 The name formatting is param\__theory_\_ncoarse*N*\__XXXXX_.txt
 
 It contains parameter file informations as well as useful quantities such as the scale factor and unit conversions (unit_l, unit_t, unit_d for length, time and density respectively) from Pysco units to SI.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<!-- Library -->
+
+## Library utilities
+
+As a side-product , PySCo can also be used as a library which contains utilities for particle and mesh computations.
+
+Since PySCo uses functionnal programming, it is straightforward to use functions on NumPy arrays for various purposes. We give a few examples below. **Please check the full API to see all the available functions**
+
+- Computing a density grid based on particle positions with a Triangular-Shaped Cloud scheme can be done as
+
+```python
+import numpy as np
+from pysco.mesh import TSC
+particles = np.random.rand(32**3, 3).astype(np.float32)
+grid_density = TSC(particles, ncells_1d=64)
+```
+
+- Interpolating to a finer grid
+
+```python
+import numpy as np
+from pysco.mesh import prolongation
+coarse_field = np.random.rand(32, 32, 32).astype(np.float32)
+fine_field = prolongation(coarse_field)
+```
+
+- Reordering particles according to Morton indices (great for data locality)
+
+```python
+import numpy as np
+from pysco.utils import reorder_particles
+position = np.random.rand(64, 3).astype(np.float32)
+velocity = np.random.rand(64, 3).astype(np.float32)
+reorder_particles(position, velocity)
+```
+
+- FFT a real-valued grid and compute power spectrum
+
+```python
+import numpy as np
+from pysco.utils import fourier_grid_to_Pk, fft_3D_real
+nthreads = 2
+density = np.random.rand(64, 64, 64).astype(np.float32)
+density_k = fft_3D_real(density, nthreads)
+MAS = 0 # Mass assignment scheme. # None = 0, NGP = 1, CIC = 2, TSC = 3
+k, pk, modes = fourier_grid_to_Pk(density_k, MAS)
+```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

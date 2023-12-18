@@ -6,7 +6,7 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -108,6 +108,7 @@ def run(param) -> None:
     # Get output redshifts
     while param["aexp"] < 1.0:
         param["nsteps"] += 1
+        param["i_snap"] = i_snap
         (
             position,
             velocity,
@@ -129,14 +130,7 @@ def run(param) -> None:
             logging.warning("Reordering particles")
             utils.reorder_particles(position, velocity, acceleration)
         if param["write_snapshot"]:
-            snap_name = f"{param['base']}/output_{i_snap:05d}/particles_{extra}.parquet"
-            logging.warning(f"Write snapshot...{snap_name=} {param['aexp']=}")
-            utils.write_snapshot_particles_parquet(f"{snap_name}", position, velocity)
-            param.to_csv(
-                f"{param['base']}/output_{i_snap:05d}/param_{extra}_{i_snap:05d}.txt",
-                sep="=",
-                header=False,
-            )
+            utils.write_snapshot_particles(position, velocity, param)
             i_snap += 1
         logging.warning(
             f"{param['nsteps']=} {param['aexp']=} z = {1.0 / param['aexp'] - 1}"
