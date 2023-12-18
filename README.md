@@ -1,3 +1,5 @@
+<a id="top"></a>
+
 <h3 align="center">PySCo: Python Simulations for Cosmology</h3>
 
   <p align="center">
@@ -31,8 +33,8 @@
         <li><a href="#particle-snapshots">Particle snapshots</a></li>
        </ul>
     </li>
-    <li><a href="#contributing">Contributing</a></li>
     <li><a href="#library-utilities">Library utilities</a></li>
+    <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
   </ol>
@@ -46,7 +48,7 @@ PySCo is a multi-threaded Particle-Mesh code (no MPI parallelization) for cosmol
 
 The goal is to develop a Python-based N-body code that is user-friendly and efficient. Python was chosen for its widespread use and rapid development capabilities, making it well-suited for collaborative open-source projects. To address performance issues in Python, we utilize [Numba](https://github.com/numba/numba), a high-performance library that compiles Python functions using LLVM. Additionally, Numba facilitates straightforward loop parallelization.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- GETTING STARTED -->
 
@@ -91,9 +93,12 @@ To run Pysco, you will need the following dependencies (the _conda_ installation
   conda install -c conda-forge rich
   ```
 - H5py (optional, to read HDF5 files)
+
   ```sh
   conda install -c anaconda h5py
   ```
+
+  <p align="right">(<a href="#top">back to top</a>)</p>
 
 ### Installation
 
@@ -111,7 +116,7 @@ cd pysco
 python -m pip install -e .
 ```
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- USAGE EXAMPLES -->
 
@@ -182,7 +187,7 @@ Run the command line
 python main.py -c param.ini
 ```
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#top">back to top</a>)</p>
 
 #### As package
 
@@ -232,7 +237,7 @@ print("Run completed!")
 
 ```
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- OUTPUTS -->
 
@@ -252,7 +257,7 @@ The ascii file contains three columns: $k$ [$h$/Mpc], $P(k)$ [Mpc/$h$]$^3$, N_mo
 
 Additionally, the file header contains the scale factor, the box length and number of particles.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#top">back to top</a>)</p>
 
 #### Particle snapshots
 
@@ -264,7 +269,7 @@ Positions are given in box units, that is between 0 and 1.
 
 > Note that output_00000/ is used to write the initial conditions. The additional number of directories depend on the length of the input list z_out.
 
-###### HDF5 format
+##### HDF5 format
 
 Particle snapshots are written as _parquet_ files in the directory _base_/output\__XXXXX_
 
@@ -281,7 +286,7 @@ with h5py.File('file.h5', 'r') as h5r:
   unit_t = h5r.attrs['unit_t']
 ```
 
-###### Parquet format
+##### Parquet format
 
 Particle snapshots are written as _parquet_ files in the directory _base_/output\__XXXXX_
 
@@ -290,7 +295,7 @@ The name formatting is particles\__theory_\_ncoarse*N*\__XXXXX_.parquet
 The parquet file contains six columns: x, y, z, vx, vy, vz. These files can be read as
 
 ```python
-import pandas
+import pandas as pd
 df = pd.read_parquet('file.parquet')
 x = df['x']
 vx = df['vx']
@@ -302,7 +307,7 @@ The name formatting is param\__theory_\_ncoarse*N*\__XXXXX_.txt
 
 It contains parameter file informations as well as useful quantities such as the scale factor and unit conversions (unit_l, unit_t, unit_d for length, time and density respectively) from Pysco units to SI.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- Library -->
 
@@ -330,7 +335,7 @@ coarse_field = np.random.rand(32, 32, 32).astype(np.float32)
 fine_field = prolongation(coarse_field)
 ```
 
-- Reordering particles according to Morton indices (great for data locality)
+- Reordering particles according to Morton ordering (to increase data locality)
 
 ```python
 import numpy as np
@@ -352,7 +357,7 @@ MAS = 0 # Mass assignment scheme. # None = 0, NGP = 1, CIC = 2, TSC = 3
 k, pk, modes = fourier_grid_to_Pk(density_k, MAS)
 ```
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- CONTRIBUTING -->
 
@@ -366,7 +371,7 @@ If you have a suggestion that would make this better, please fork the repo and c
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- LICENSE -->
 
@@ -374,7 +379,7 @@ If you have a suggestion that would make this better, please fork the repo and c
 
 Distributed under the MIT License. See `LICENSE` for more information.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- CONTACT -->
 
@@ -383,4 +388,4 @@ Distributed under the MIT License. See `LICENSE` for more information.
 Michel-Andrès Breton - michel-andres.breton@obspm.fr
 Project Link: [https://github.com/mianbreton/pysco](https://github.com/mianbreton/pysco)
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#top">back to top</a>)</p>
