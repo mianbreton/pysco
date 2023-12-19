@@ -44,7 +44,10 @@
 
 ## About The Project
 
-PySCo is a multi-threaded Particle-Mesh code (no MPI parallelization) for cosmological simulations which currently contains Newtonian and [Hu & Sawicki (2007)](https://ui.adsabs.harvard.edu/abs/2007PhRvD..76f4004H/abstract) $f(R)$ gravity theories.
+PySCo is a multi-threaded Particle-Mesh code (no MPI parallelization) for cosmological simulations with various gravity models such as (currently)
+
+- Newtonian gravity
+- $f(R)$ model from [Hu & Sawicki (2007)](https://ui.adsabs.harvard.edu/abs/2007PhRvD..76f4004H/abstract).
 
 The goal is to develop a Python-based N-body code that is user-friendly and efficient. Python was chosen for its widespread use and rapid development capabilities, making it well-suited for collaborative open-source projects. To address performance issues in Python, we utilize [Numba](https://github.com/numba/numba), a high-performance library that compiles Python functions using LLVM. Additionally, Numba facilitates straightforward loop parallelization.
 
@@ -56,7 +59,9 @@ The goal is to develop a Python-based N-body code that is user-friendly and effi
 
 ### Prerequisites
 
-To run Pysco, you will need the following dependencies (the _conda_ installation is shown, but the same result can be achieved with _pip_).
+<u>In principle, all dependencies are installed when using _pip install_. </u>
+
+If you prefer to install each of them by hand, then you will need the following dependencies (the _conda_ installation is shown, but the same result can be achieved with _pip_).
 
 - Numba
 
@@ -65,34 +70,57 @@ To run Pysco, you will need the following dependencies (the _conda_ installation
   ```
 
 - Numba Intel SVML (Optional, to improve performances)
+
   ```sh
   conda install -c numba icc_rt
   ```
+
+- NumPy
+
+  ```sh
+  conda install -c anaconda numpy
+  ```
+
 - Pandas
+
   ```sh
   conda install -c anaconda pandas
   ```
+
 - Astropy
+
   ```sh
   conda install -c conda-forge astropy
   ```
+
 - Scipy
+
   ```sh
   conda install -c anaconda scipy
   ```
+
 - PyFFTW
+
   ```sh
+  # For Unix users
   python -m pip install pyfftw
+  # For Mac users
+  conda install -c conda-forge pyfftw
   ```
-- Pyarrow
-  ```sh
-  conda install -c conda-forge pyarrow
-  ```
+
 - Rich
+
   ```sh
   conda install -c conda-forge rich
   ```
-- H5py (optional, to read HDF5 files)
+
+- Pyarrow (optional, to read and write Parquet files)
+
+  ```sh
+  conda install -c conda-forge pyarrow
+  ```
+
+- H5py (optional, to read and write HDF5 files)
 
   ```sh
   conda install -c anaconda h5py
@@ -116,13 +144,21 @@ cd pysco
 python -m pip install -e .
 ```
 
+_For mac users the pyfftw installation might fail. In this case the installation can be done manually with conda_
+
+```sh
+conda install -c conda-forge pyfftw
+```
+
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- USAGE EXAMPLES -->
 
 ## Usage
 
-There are two ways to use Pysco, either as command line with parameter file, or as an external package
+There are two ways to use Pysco, either as command line with parameter file, or as an external package.
+
+> Numba uses _Just-in-Time_ and/or _Ahead-of-Time_ compilation, meaning that for the former the function is compiled when it is reached for the first time, while the latter is compiled before running the code (happens when the input/output types are specified in the function decorator). This means that when the code is run for the first time, it will spend some time compiling the functions. These are then cached and subsequent runs will not have to compile the functions again.
 
 #### As command line
 
@@ -164,8 +200,8 @@ power_spectrum_file = /home/user/power_spectra.dat # File path to the power spec
 initial_conditions = 3LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or .h5 file. Else, assumes Gadget format
 # Outputs
 base=/home/user/boxlen500_n256_lcdm/ # Base directory for storing simulation data
-z_out = [1.5, 1.0, 0.66666, 0.53846, 0.25, 0.0] # List of redshifts for output snapshots
-output_snapshot_format = parquet # Particle snapshot format. "parquet" or "HDF5"
+z_out = [10, 5, 2, 1, 0.5, 0] # List of redshifts for output snapshots
+output_snapshot_format = HDF5 # Particle snapshot format. "parquet" or "HDF5"
 save_power_spectrum = all # Save power spectra. Either 'no', 'z_out' for specific redshifts given by z_out or 'all' to compute at every time step
 # Particles
 integrator = leapfrog # Integration scheme for time-stepping "Leapfrog" or "Euler"
@@ -218,7 +254,7 @@ param = {
     "initial_conditions": "3LPT",
     "base": "/home/user/boxlen500_n256_lcdm_00000/",
     "z_out": "[10, 5, 2, 1, 0.5, 0]",
-    "output_snapshot_format" : "parquet",
+    "output_snapshot_format" : "HDF5",
     "save_power_spectrum": "all",
     "integrator": "leapfrog",
     "n_reorder": 25,
@@ -261,26 +297,26 @@ Additionally, the file header contains the scale factor, the box length and numb
 
 #### Particle snapshots
 
-Particles are written as either HDF5 or Parquet format. For the former additional informations are written as attributes at the file root. For the latter, an extra ascii file is written.
+Particles are written as either HDF5 or Parquet format. For the former, additional informations are written as attributes at the file root. For the latter, an extra ascii file is written.
 
-Positions are given in box units, that is between 0 and 1.
+- Positions are given in box units (between 0 and 1).
 
-**Velocities are given in supercomoving units. To recover km/s one need to multiply by _unit_l/unit_t_**, where both quantities are written either in the attributes for HDF5 file or in the associated information file for parquet format.
+- **Velocities are given in supercomoving units. To recover km/s one need to multiply by _unit_l/unit_t_**, where both quantities are written either in the attributes for HDF5 file or in the associated information file for parquet format.
 
 > Note that output_00000/ is used to write the initial conditions. The additional number of directories depend on the length of the input list z_out.
 
 ##### HDF5 format
 
-Particle snapshots are written as _parquet_ files in the directory _base_/output\__XXXXX_
+Particle snapshots are written as HDF5 files in the directory `base/output_XXXXX`
 
-The name formatting is particles\__theory_\_ncoarse*N*\__XXXXX_.h5
+The name formatting is `particles_theory_ncoarseN_XXXXX.h5`
 
 The HDF5 file contains two datasets: "position" and "velocity"
 as well as attributes. These files can be read as
 
 ```python
 import h5py
-with h5py.File('file.h5', 'r') as h5r:
+with h5py.File('snapshot.h5', 'r') as h5r:
   pos = h5r['position'][:]
   vel = h5r['velocity'][:]
   unit_t = h5r.attrs['unit_t']
@@ -288,22 +324,22 @@ with h5py.File('file.h5', 'r') as h5r:
 
 ##### Parquet format
 
-Particle snapshots are written as _parquet_ files in the directory _base_/output\__XXXXX_
+Particle snapshots are written as _parquet_ files in the directory `base/output_XXXXX`
 
-The name formatting is particles\__theory_\_ncoarse*N*\__XXXXX_.parquet
+The name formatting is `particles_theory_ncoarseN_XXXXX.parquet`
 
 The parquet file contains six columns: x, y, z, vx, vy, vz. These files can be read as
 
 ```python
 import pandas as pd
-df = pd.read_parquet('file.parquet')
+df = pd.read_parquet('snapshot.parquet')
 x = df['x']
 vx = df['vx']
 ```
 
 Alongside every snapshot file there is an associated ascii information file.
 
-The name formatting is param\__theory_\_ncoarse*N*\__XXXXX_.txt
+The name formatting is `param_theory_ncoarseN_XXXXX.txt`
 
 It contains parameter file informations as well as useful quantities such as the scale factor and unit conversions (unit_l, unit_t, unit_d for length, time and density respectively) from Pysco units to SI.
 
@@ -315,9 +351,9 @@ It contains parameter file informations as well as useful quantities such as the
 
 As a side-product , PySCo can also be used as a library which contains utilities for particle and mesh computations.
 
-Since PySCo uses functionnal programming, it is straightforward to use functions on NumPy arrays for various purposes. We give a few examples below. **Please check the full API to see all the available functions**
+Since PySCo uses functionnal programming, it is straightforward to use functions on NumPy arrays for various purposes. **We give a few examples below**.
 
-- Computing a density grid based on particle positions with a Triangular-Shaped Cloud scheme can be done as
+- Computing a density grid based on particle positions with a Triangular-Shaped Cloud scheme
 
 ```python
 import numpy as np
@@ -335,7 +371,7 @@ coarse_field = np.random.rand(32, 32, 32).astype(np.float32)
 fine_field = prolongation(coarse_field)
 ```
 
-- Reordering particles according to Morton ordering (to increase data locality)
+- Re-ordering particles according to [Morton](https://en.wikipedia.org/wiki/Z-order_curve) indexing (to increase data locality)
 
 ```python
 import numpy as np
@@ -356,6 +392,8 @@ density_k = fft_3D_real(density, nthreads)
 MAS = 0 # Mass assignment scheme. # None = 0, NGP = 1, CIC = 2, TSC = 3
 k, pk, modes = fourier_grid_to_Pk(density_k, MAS)
 ```
+
+**Please check the full API at linktoreadthedocs to see all the available functions**
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -386,6 +424,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 ## Contact
 
 Michel-Andrès Breton - michel-andres.breton@obspm.fr
+
 Project Link: [https://github.com/mianbreton/pysco](https://github.com/mianbreton/pysco)
 
 <p align="right">(<a href="#top">back to top</a>)</p>

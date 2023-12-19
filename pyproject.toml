@@ -10,7 +10,7 @@ authors = [
 ]
 description = "A Python library to run N-body simulations with modified gravity"
 readme = "README.md"
-requires-python = ">=3.6"
+requires-python = ">=3.8, <3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -19,12 +19,13 @@ classifiers = [
 dependencies = [
     "numpy",
     "astropy",
-    "pyfftw",
     "numba",
     "pandas",
     "scipy",
     "pyarrow",
     "h5py",
+    "rich",
+    "pyfftw",
 ]
 
 [project.urls]

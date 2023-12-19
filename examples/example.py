@@ -42,4 +42,5 @@ param = {
 
 # Run simulation
 pysco.run(param)
+
 print("Finished!")
