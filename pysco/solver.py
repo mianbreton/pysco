@@ -1,17 +1,22 @@
+"""
+Particle-Mesh Acceleration Computation Solvers
+
+This module defines a function for computing Particle-Mesh (PM) acceleration using density meshing techniques. 
+It includes implementations for solving the Newtonian linear Poisson equation, 
+initializing potentials, and handling additional fields in modified gravity theories.
+"""
 from typing import List, Tuple, Callable
-import matplotlib.pyplot as plt
-import multigrid
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from scipy.interpolate import interp1d
 from astropy.constants import c
 import mesh
+import multigrid
 import utils
-import laplacian
 import cubic
 import quartic
-from rich import print
+import logging
 
 
 # @utils.profile_me
@@ -28,7 +33,7 @@ def pm(
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Positions [3,N_part]
+        Positions [N_part, 3]
     param : pd.Series
         Parameter container
     potential : npt.NDArray[np.float32], optional
@@ -42,6 +47,15 @@ def pm(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Acceleration, Potential, Additional field [N_cells_1d, N_cells_1d,N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import pm
+    >>> position = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype=np.float32)
+    >>> param = pd.Series({"ncoarse": 6, "save_power_spectrum": "all", "nthreads": 4})
+    >>> acceleration, potential, additional_field = pm(position, param)
     """
     ncells_1d = 2 ** (param["ncoarse"])
     h = np.float32(1.0 / ncells_1d)
@@ -54,8 +68,10 @@ def pm(
     ):
         save_pk = True
     # Compute density mesh from particles and put in BU units
-    density = mesh.TSC(position, ncells_1d)
-    # print("After TSC!")
+    if param["nthreads"] < 5:
+        density = mesh.TSC_seq(position, ncells_1d)
+    else:
+        density = mesh.TSC(position, ncells_1d)
     # Normalise density to RU
     if ncells_1d**3 != param["npart"]:
         conversion = np.float32(ncells_1d**3 / param["npart"])
@@ -76,17 +92,17 @@ def pm(
         output_pk = (
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
-        print(f"Write P(k) in {output_pk}")
+        logging.warning(f"Write P(k) in {output_pk}")
         np.savetxt(
             f"{output_pk}",
             np.c_[k, Pk, Nmodes],
-            header="k [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
+            header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
         )
-        param.to_csv(
+        """ param.to_csv(
             f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
             sep="=",
             header=False,
-        )
+        ) """
     # Compute RHS of the final Poisson equation
     rhs_poisson(density, additional_field, param)
     rhs = density
@@ -188,10 +204,22 @@ def initialise_potential(
     -------
     npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import initialise_potential
+    >>> potential = np.empty(0, dtype=np.float32)
+    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> h = 1.0 / 32
+    >>> param = pd.Series({"compute_additional_field": False})
+    >>> tables = [interp1d([0, 1], [1, 2]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [1, 2])]
+    >>> potential = initialise_potential(potential, rhs, h, param, tables)
     """
     # Initialise
     if len(potential) == 0:
-        print("Assign potential from density field")
+        logging.warning("Assign potential from density field")
         if param["compute_additional_field"]:
             q = param["fR_q"]
             if param["fR_n"] == 1:
@@ -205,7 +233,7 @@ def initialise_potential(
         else:
             potential = utils.prod_vector_scalar(rhs, (-1.0 / 6 * h**2))
     else:  # Rescale
-        print("Rescale potential from previous step")
+        logging.warning("Rescale potential from previous step")
         if param["compute_additional_field"]:
             scaling = (
                 param["aexp"] / param["aexp_old"]
@@ -249,6 +277,18 @@ def get_additional_field(
     -------
     npt.NDArray[np.float32]
         Additional field
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import get_additional_field
+    >>> additional_field = np.empty(0, dtype=np.float32)
+    >>> density = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> h = 1.0 / 32
+    >>> param = pd.Series({"theory": "newton"})
+    >>> tables = [interp1d([0, 1], [1, 2]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [1, 2])]
+    >>> additional_field = get_additional_field(additional_field, density, h, param, tables)
     """
     if param["theory"].casefold() == "newton".casefold():
         return np.empty(0, dtype=np.float32)
@@ -279,15 +319,15 @@ def get_additional_field(
         q = np.float32(-param["aexp"] ** 4 * Rbar / (18 * c2)) / (-fR_a)
         # Compute the scalaron field
         param["fR_q"] = q
-        print(f"initialise")
+        logging.warning(f"initialise")
         u_scalaron = initialise_potential(additional_field, dens_term, h, param, tables)
         u_scalaron = multigrid.FAS(u_scalaron, dens_term, h, param)
-        # print(f"{1./ubar_scalaron=}")
+        # logging.warning(f"{1./ubar_scalaron=}")
         if (param["nsteps"]) % 10 == 0:  # Check
-            print(
+            logging.info(
                 f"{np.mean(u_scalaron)=}, should be close to 1 (actually <1/u_sclaron> should be conserved)"
             )
-        print(f"{fR_a=}")
+        logging.info(f"{fR_a=}")
         return u_scalaron
 
 
@@ -307,6 +347,16 @@ def rhs_poisson(
         Additional field
     param : pd.Series
         Parameter container
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import rhs_poisson
+    >>> density = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> additional_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> param = pd.Series({"aexp": 1.0, "Om_m": 0.3})
+    >>> rhs_poisson(density, additional_field, param)
     """
     f1 = np.float32(1.5 * param["aexp"] * param["Om_m"])
     f2 = -f1
@@ -337,6 +387,15 @@ def fft(
     -------
     npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import fft
+    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> param = pd.Series({"nthreads": 4, "boxlen": 100.0, "npart": 1000000, "aexp": 1.0, "Om_m": 0.3})
+    >>> potential = fft(rhs, param)
     """
     rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
     if save_pk:
@@ -348,17 +407,17 @@ def fft(
         output_pk = (
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
-        print(f"Write P(k) in {output_pk}")
+        logging.warning(f"Write P(k) in {output_pk}")
         np.savetxt(
             f"{output_pk}",
             np.c_[k, Pk, Nmodes],
-            header="k [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
+            header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
         )
-        param.to_csv(
+        """ param.to_csv(
             f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
             sep="=",
             header=False,
-        )
+        ) """
     if MAS_index == 0:
         utils.divide_by_minus_k2_fourier(rhs_fourier)
     else:
@@ -390,6 +449,15 @@ def fft_force(
     -------
     npt.NDArray[np.float32]
         Force [3, N_cells_1d, N_cells_1d,N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import fft_force
+    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> param = pd.Series({"nthreads": 4, "boxlen": 100.0, "npart": 1000000, "aexp": 1.0, "Om_m": 0.3})
+    >>> force = fft_force(rhs, param)
     """
     rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
     if MAS_index == 0:
@@ -408,16 +476,16 @@ def fft_force(
         output_pk = (
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
-        print(f"Write P(k) in {output_pk}")
+        logging.warning(f"Write P(k) in {output_pk}")
         np.savetxt(
             f"{output_pk}",
             np.c_[k, Pk, Nmodes],
-            header="k [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
+            header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
         )
-        param.to_csv(
+        """ param.to_csv(
             f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
             sep="=",
             header=False,
-        )
+        ) """
     rhs_fourier = 0
     return utils.ifft_3D_real_grad(force, param["nthreads"])

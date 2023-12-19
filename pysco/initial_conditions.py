@@ -1,4 +1,10 @@
-import matplotlib.pyplot as plt
+"""
+Cosmological Initial Conditions Generator
+
+This script generates cosmological initial conditions for N-body simulations. 
+It provides functions to generate density and force fields based on the linear power spectrum 
+and various Lagrangian Perturbation Theory (LPT) approximations.
+"""
 import math
 import numpy as np
 import numpy.typing as npt
@@ -8,11 +14,9 @@ from numba import config, njit, prange
 import numpy.typing as npt
 from scipy.interpolate import interp1d
 import solver
-import mesh
 import utils
 from astropy.constants import pc
-
-# from rich import print
+import logging
 
 
 def generate(
@@ -31,11 +35,27 @@ def generate(
     Returns
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
-        Position, Velocity [3, Npart]
+        Position, Velocity [Npart, 3]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import generate
+    >>> param = pd.Series({
+         'initial_conditions': '2LPT',
+         'z_start': 49.0,
+         'Om_m': 0.27,
+         'Om_lambda': 0.73,
+         'unit_t': 1.0,
+         'npart': 64,
+     })
+    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.rand(100)) for _ in range(4)]
+    >>> generate(param, tables)
     """
     if param["initial_conditions"][1:4].casefold() == "LPT".casefold():
         a_start = 1.0 / (1 + param["z_start"])
-        print(f"{param['z_start']=}")
+        logging.warning(f"{param['z_start']=}")
         Omz = (
             param["Om_m"]
             * a_start ** (-3)
@@ -50,43 +70,11 @@ def generate(
         # force = mesh.derivative(solver.fft(density_initial, param))
         # 1LPT
 
-        """ import density_field_library as DFL
-
-        k, Pk = np.loadtxt(param["power_spectrum_file"]).T
-        df_3D = DFL.gaussian_field_3D(
-            2 ** param["ncoarse"],
-            k.astype(np.float32),
-            Pk.astype(np.float32),
-            0,
-            param["seed"],
-            param["boxlen"],
-            threads=1,
-            verbose=True,
-        )
-        km, Pkm = utils.grid2Pk(density_initial, param, "None")
-        kp, Pkp = utils.grid2Pk(df_3D, param, "None")
-        # kf, Pkfx = utils.grid2Pk(force[0], param, "None")
-        # kf, Pkfy = utils.grid2Pk(force[1], param, "None")
-        # kf, Pkfz = utils.grid2Pk(force[2], param, "None")
-        # kr, Pkr = np.loadtxt(
-        #    "/home/mabreton/boxlen500_n512_lcdmw7v2_00000/RAMSES/initial/power_spectrum.txt"
-        # ).T
-        # kl, Pkl = np.loadtxt(
-        #    "/home/mabreton/boxlen500_n512_lcdmw7v2_00000/seed1/power/pk_newton_ncoarse9_00000.dat"
-        # ).T
-        plt.loglog(k, Pk * Dplus**2, label="Linear")
-        plt.loglog(km, Pkm, label="MAB")
-        plt.loglog(kp, Pkp * Dplus**2, label="Pylians")
-        # plt.loglog(kl, Pkl, label="MAB part")
-        # plt.loglog(kr, Pkr, label="RAMSES")
-        plt.legend()
-        plt.show() """
-
         fH_1 = np.float32(Omz**0.55 * Hz)
         position, velocity = initialise_1LPT(force, fH_1)
         if param["initial_conditions"].casefold() == "1LPT".casefold():
-            position = position.reshape(3, param["npart"])
-            velocity = velocity.reshape(3, param["npart"])
+            position = position.reshape(param["npart"], 3)
+            velocity = velocity.reshape(param["npart"], 3)
             finalise_initial_conditions(position, velocity, param)
             return position, velocity
         # 2LPT
@@ -98,8 +86,8 @@ def generate(
         rhs_2ndorder = 0
         add_2LPT(position, velocity, force_2ndorder, fH_2)
         if param["initial_conditions"].casefold() == "2LPT".casefold():
-            position = position.reshape(3, param["npart"])
-            velocity = velocity.reshape(3, param["npart"])
+            position = position.reshape(param["npart"], 3)
+            velocity = velocity.reshape(param["npart"], 3)
             finalise_initial_conditions(position, velocity, param)
             return position, velocity
         elif param["initial_conditions"].casefold() == "3LPT".casefold():
@@ -139,8 +127,8 @@ def generate(
                 force_Az_3c,
                 fH_3,
             )
-            position = position.reshape(3, param["npart"])
-            velocity = velocity.reshape(3, param["npart"])
+            position = position.reshape(param["npart"], 3)
+            velocity = velocity.reshape(param["npart"], 3)
             finalise_initial_conditions(position, velocity, param)
             return position, velocity
         else:
@@ -157,13 +145,44 @@ def generate(
         return position, velocity
 
 
-def finalise_initial_conditions(position, velocity, param):
+def finalise_initial_conditions(
+    position: npt.NDArray[np.float32],
+    velocity: npt.NDArray[np.float32],
+    param: pd.Series,
+) -> None:
+    """Wrap, reorder, and write initial conditions to output files.
+
+    This function wraps and reorders particle positions, writes the initial
+    distribution to a Parquet file, and saves parameter information to a CSV file.
+
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Particle positions [Npart, 3]
+    velocity : npt.NDArray[np.float32]
+        Particle velocities [Npart, 3]
+    param : pd.Series
+        Parameter container
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import finalise_initial_conditions
+    >>> position = np.random.rand(64, 3).astype(np.float32)
+    >>> velocity = np.random.rand(64, 3).astype(np.float32)
+    >>> param = pd.Series({
+         'base': '/path/to/base_directory',
+         'aexp': 0.8,
+     })
+    >>> finalise_initial_conditions(position, velocity, param)
+    """
     # Wrap and reorder particles
     utils.periodic_wrap(position)
     utils.reorder_particles(position, velocity)
     # Write initial distribution
     snap_name = f"{param['base']}/output_00000/particles.parquet"
-    print(f"Write initial snapshot...{snap_name=} {param['aexp']=}")
+    logging.warning(f"Write initial snapshot...{snap_name=} {param['aexp']=}")
     utils.write_snapshot_particles_parquet(f"{snap_name}", position, velocity)
     param.to_csv(f"{param['base']}/output_00000/param.txt", sep="=", header=False)
 
@@ -182,35 +201,45 @@ def read_hdf5(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [3, Npart]
+
+    Example
+    -------
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import read_hdf5
+    >>> param = pd.Series({
+         'initial_conditions': '/path/to/snapshot.h5',
+         'npart': 64,
+     })
+    >>> position, velocity = read_hdf5(param)
     """
     import h5py
 
     # Open file
-    print(f"Read {param['initial_conditions']}")
+    logging.warning(f"Read {param['initial_conditions']}")
     f = h5py.File(param["initial_conditions"], "r")
     # Get scale factor
     param["aexp"] = f["metadata/ramses_info"].attrs["aexp"][0]
-    print(f"Initial redshift snapshot at z = {1./param['aexp'] - 1}")
+    logging.warning(f"Initial redshift snapshot at z = {1./param['aexp'] - 1}")
     utils.set_units(param)
     # Get positions
     npart = int(f["metadata/npart_file"][:])
     if npart != param["npart"]:
         raise ValueError(f"{npart=} and {param['npart']} should be equal.")
-    position = np.empty((3, npart), dtype=np.float32)
+    position = np.empty((npart, 3), dtype=np.float32)
     velocity = np.empty_like(position, dtype=np.float32)
     npart_grp_array = f["metadata/npart_grp_array"][:]
 
-    print(f"{npart=}")
+    logging.info(f"{npart=}")
     data = f["data"]
     istart = 0
     for i in range(npart_grp_array.shape[0]):
         name = f"group{(i + 1):08d}"
-        position[:, istart : istart + npart_grp_array[i]] = data[
-            name + "/position_part"
-        ][:].T
-        velocity[:, istart : istart + npart_grp_array[i]] = data[
-            name + "/velocity_part"
-        ][:].T
+        position[istart : istart + npart_grp_array[i]] = data[name + "/position_part"][
+            :
+        ]
+        velocity[istart : istart + npart_grp_array[i]] = data[name + "/velocity_part"][
+            :
+        ]
         istart += npart_grp_array[i]
 
     return position, velocity
@@ -234,10 +263,20 @@ def read_gadget(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [3, Npart]
+
+    Example
+    -------
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import read_gadget
+    >>> param = pd.Series({
+         'initial_conditions': '/path/to/snapshot.gadget',
+         'npart': 64,
+     })
+    >>> position, velocity = read_gadget(param)
     """
     import readgadget  # From Pylians
 
-    print(f"Read {param['initial_conditions']}")
+    logging.warning(f"Read {param['initial_conditions']}")
     # Open file
     filename = param["initial_conditions"]
     ptype = 1  # DM particles
@@ -252,7 +291,7 @@ def read_gadget(
     # Get scale factor
     param["aexp"] = aexp
     param["z_start"] = 1.0 / aexp - 1
-    print(f"Initial redshift snapshot at z = {1./param['aexp'] - 1}")
+    logging.warning(f"Initial redshift snapshot at z = {1./param['aexp'] - 1}")
     utils.set_units(param)
     # Check that Npart and cosmology are correct
     npart = int(Nall[ptype])
@@ -267,9 +306,6 @@ def read_gadget(
     # Read position and velocity
     position = readgadget.read_block(filename, "POS ", [ptype])
     velocity = readgadget.read_block(filename, "VEL ", [ptype])
-    # Transpose from (N,3) to (3,N) vector and make contiguous
-    position = np.ascontiguousarray(np.transpose(position))
-    velocity = np.ascontiguousarray(np.transpose(velocity))
     # Pysco Units
     vel_factor = param["unit_t"] / param["unit_l"]
     utils.prod_vector_scalar_inplace(position, np.float32(1.0 / BoxSize))
@@ -292,6 +328,20 @@ def generate_density(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.floa
     -------
     npt.NDArray[np.float32]
         Initial density field and velocity field (delta, vx, vy, vz)
+
+    Example
+    -------
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import generate_density
+    >>> param = pd.Series({
+         'power_spectrum_file': 'path/to/power_spectrum.txt',
+         'npart': 64,
+         'seed': 42,
+         'fixed_ICS': False,
+         'paired_ICS': False,
+     })
+    >>> Dplus = 1.5
+    >>> generate_density(param, Dplus)
     """
     # Get Transfert function
     transfer_grid = get_transfer_grid(param, Dplus)
@@ -324,6 +374,20 @@ def generate_force(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.float3
     -------
     npt.NDArray[np.float32]
         Initial density field and velocity field (delta, vx, vy, vz)
+
+    Example
+    -------
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import generate_force
+    >>> param = pd.Series({
+         'power_spectrum_file': 'path/to/power_spectrum.txt',
+         'npart': 64,
+         'seed': 42,
+         'fixed_ICS': False,
+         'paired_ICS': False,
+     })
+    >>> Dplus = 1.5
+    >>> generate_force(param, Dplus)
     """
     # Get Transfert function
     transfer_grid = get_transfer_grid(param, Dplus)
@@ -359,6 +423,17 @@ def get_transfer_grid(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.flo
     -------
     npt.NDArray[np.float32]
         Initial density field and velocity field (delta, vx, vy, vz)
+
+    Example
+    -------
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import get_transfer_grid
+    >>> param = pd.Series({
+         'power_spectrum_file': 'path/to/power_spectrum.txt',
+         'npart': 64,
+     })
+    >>> Dplus = 1.5
+    >>> get_transfer_grid(param, Dplus)
     """
     # Get Transfert function
     k, Pk = np.loadtxt(param["power_spectrum_file"]).T
@@ -403,6 +478,13 @@ def white_noise_fourier(
     -------
     npt.NDArray[np.complex64]
         3D white-noise field for density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import white_noise_fourier
+    >>> white_noise = white_noise_fourier(64, np.random.default_rng())
+    >>> print(white_noise)
     """
     twopi = np.float32(2 * math.pi)
     ii = np.complex64(1j)
@@ -470,6 +552,13 @@ def white_noise_fourier_fixed(
     -------
     Tuple[npt.NDArray[np.complex64], npt.NDArray[np.complex64]]
         3D white-noise field for density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import white_noise_fourier_fixed
+    >>> paired_white_noise = white_noise_fourier_fixed(64, np.random.default_rng(), 1)
+    >>> print(paired_white_noise)
     """
     twopi = np.float32(2 * np.pi)
     ii = np.complex64(1j)
@@ -527,14 +616,22 @@ def white_noise_fourier_force(
     Returns
     -------
     Tuple[npt.NDArray[np.complex64], npt.NDArray[np.complex64]]
-        3D white-noise field for force [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        3D white-noise field for force [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import white_noise_fourier_force
+    >>> ncells_1d = 64
+    >>> rng = np.random.default_rng(42)
+    >>> white_noise_fourier_force(ncells_1d, rng)
     """
     invtwopi = np.float32(0.5 / np.pi)
     one = np.float32(1)
     twopi = np.float32(2 * np.pi)
     ii = np.complex64(1j)
     middle = ncells_1d // 2
-    force = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.complex64)
+    force = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.complex64)
     # Must compute random before parallel loop to ensure reproductability
     rng_amplitudes = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
     rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
@@ -577,12 +674,12 @@ def white_noise_fourier_force(
                 result_lower = real - ii * imaginary
                 result_upper = real + ii * imaginary
                 # Assign force fields
-                force[0, im, jm, km] = -ii * invtwopi * result_lower * kx / k2
-                force[0, i, j, k] = ii * invtwopi * result_upper * kx / k2
-                force[1, im, jm, km] = -ii * invtwopi * result_lower * ky / k2
-                force[1, i, j, k] = ii * invtwopi * result_upper * ky / k2
-                force[2, im, jm, km] = -ii * invtwopi * result_lower * kz / k2
-                force[2, i, j, k] = ii * invtwopi * result_upper * kz / k2
+                force[im, jm, km, 0] = -ii * invtwopi * result_lower * kx / k2
+                force[i, j, k, 0] = ii * invtwopi * result_upper * kx / k2
+                force[im, jm, km, 1] = -ii * invtwopi * result_lower * ky / k2
+                force[i, j, k, 1] = ii * invtwopi * result_upper * ky / k2
+                force[im, jm, km, 2] = -ii * invtwopi * result_lower * kz / k2
+                force[i, j, k, 2] = ii * invtwopi * result_upper * kz / k2
     rng_phases = 0
     rng_amplitudes = 0
     # Fix edges
@@ -590,30 +687,30 @@ def white_noise_fourier_force(
     inv3 = np.float32(1.0 / 3)
     invkmiddle = np.float32((twopi * middle) ** (-1))
 
-    force[0, 0, 0, 0] = force[1, 0, 0, 0] = force[2, 0, 0, 0] = 0
+    force[0, 0, 0, 0] = force[0, 0, 0, 1] = force[0, 0, 0, 2] = 0
 
-    force[0, middle, 0, 0] = force[1, middle, 0, 0] = force[
-        2, middle, 0, 0
+    force[0, middle, 0, 0] = force[0, middle, 0, 1] = force[
+        0, middle, 0, 2
     ] = invkmiddle * math.sqrt(-math.log(rng.random(dtype=np.float32)))
-    force[0, 0, middle, 0] = force[1, 0, middle, 0] = force[
-        2, 0, middle, 0
+    force[0, 0, middle, 0] = force[0, 0, middle, 1] = force[
+        0, 0, middle, 2
     ] = invkmiddle * math.sqrt(-math.log(rng.random(dtype=np.float32)))
-    force[0, 0, 0, middle] = force[1, 0, 0, middle] = force[
-        2, 0, 0, middle
+    force[middle, 0, 0, 0] = force[middle, 0, 0, 1] = force[
+        middle, 0, 0, 2
     ] = invkmiddle * math.sqrt(-math.log(rng.random(dtype=np.float32)))
 
-    force[0, middle, middle, 0] = force[1, middle, middle, 0] = force[
-        2, middle, middle, 0
+    force[0, middle, middle, 0] = force[0, middle, middle, 1] = force[
+        0, middle, middle, 2
     ] = (invkmiddle * inv2 * math.sqrt(-math.log(rng.random(dtype=np.float32))))
-    force[0, middle, 0, middle] = force[1, middle, 0, middle] = force[
-        2, middle, 0, middle
+    force[middle, middle, 0, 0] = force[middle, middle, 0, 1] = force[
+        middle, middle, 0, 2
     ] = (invkmiddle * inv2 * math.sqrt(-math.log(rng.random(dtype=np.float32))))
-    force[0, 0, middle, middle] = force[1, 0, middle, middle] = force[
-        2, 0, middle, middle
+    force[middle, 0, middle, 0] = force[middle, 0, middle, 1] = force[
+        middle, 0, middle, 2
     ] = (invkmiddle * inv2 * math.sqrt(-math.log(rng.random(dtype=np.float32))))
 
-    force[0, middle, middle, middle] = force[1, middle, middle, middle] = force[
-        2, middle, middle, middle
+    force[middle, middle, middle, 0] = force[middle, middle, middle, 1] = force[
+        middle, middle, middle, 2
     ] = (invkmiddle * inv3 * math.sqrt(-math.log(rng.random(dtype=np.float32))))
     return force
 
@@ -641,7 +738,16 @@ def white_noise_fourier_fixed_force(
     Returns
     -------
     Tuple[npt.NDArray[np.complex64], npt.NDArray[np.complex64]]
-        3D white-noise field for force [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        3D white-noise field for force [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import white_noise_fourier_fixed_force
+    >>> ncells_1d = 64
+    >>> rng = np.random.default_rng(42)
+    >>> is_paired = 1
+    >>> white_noise_fourier_fixed_force(ncells_1d, rng, is_paired)
     """
     invtwopi = np.float32(0.5 / np.pi)
     twopi = np.float32(2 * np.pi)
@@ -651,7 +757,7 @@ def white_noise_fourier_fixed_force(
         shift = np.float32(math.pi)
     else:
         shift = np.float32(0)
-    force = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.complex64)
+    force = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.complex64)
     rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
     for i in prange(middle + 1):
         im = -np.int32(i)  # By default i is uint64
@@ -687,45 +793,45 @@ def white_noise_fourier_fixed_force(
                 result_lower = real - ii * imaginary
                 result_upper = real + ii * imaginary
                 # Assign force fields
-                force[0, im, jm, km] = -ii * invtwopi * result_lower * kx / k2
-                force[0, i, j, k] = ii * invtwopi * result_upper * kx / k2
-                force[1, im, jm, km] = -ii * invtwopi * result_lower * ky / k2
-                force[1, i, j, k] = ii * invtwopi * result_upper * ky / k2
-                force[2, im, jm, km] = -ii * invtwopi * result_lower * kz / k2
-                force[2, i, j, k] = ii * invtwopi * result_upper * kz / k2
+                force[im, jm, km, 0] = -ii * invtwopi * result_lower * kx / k2
+                force[i, j, k, 0] = ii * invtwopi * result_upper * kx / k2
+                force[im, jm, km, 1] = -ii * invtwopi * result_lower * ky / k2
+                force[i, j, k, 1] = ii * invtwopi * result_upper * ky / k2
+                force[im, jm, km, 2] = -ii * invtwopi * result_lower * kz / k2
+                force[i, j, k, 2] = ii * invtwopi * result_upper * kz / k2
     rng_phases = 0
     # Fix edges
     inv2 = np.float32(0.5)
     inv3 = np.float32(1.0 / 3)
     invkmiddle = np.float32((twopi * middle) ** (-1))
 
-    force[0, 0, 0, 0] = force[1, 0, 0, 0] = force[2, 0, 0, 0] = 0
-    force[0, middle, 0, 0] = force[0, 0, middle, 0] = force[0, 0, 0, middle] = force[
-        1, middle, 0, 0
-    ] = force[1, 0, middle, 0] = force[1, 0, 0, middle] = force[
-        2, middle, 0, 0
+    force[0, 0, 0, 0] = force[0, 0, 0, 1] = force[0, 0, 0, 2] = 0
+    force[0, middle, 0, 0] = force[0, 0, middle, 0] = force[middle, 0, 0, 0] = force[
+        0, middle, 0, 1
+    ] = force[0, 0, middle, 1] = force[middle, 0, 0, 1] = force[
+        0, middle, 0, 2
     ] = force[
-        2, 0, middle, 0
+        0, 0, middle, 2
     ] = force[
-        2, 0, 0, middle
+        middle, 0, 0, 2
     ] = invkmiddle
 
-    force[0, middle, middle, 0] = force[0, 0, middle, middle] = force[
-        0, middle, 0, middle
-    ] = force[1, middle, middle, 0] = force[1, 0, middle, middle] = force[
-        1, middle, 0, middle
+    force[0, middle, middle, 0] = force[middle, 0, middle, 0] = force[
+        middle, middle, 0, 0
+    ] = force[0, middle, middle, 1] = force[middle, 0, middle, 1] = force[
+        middle, middle, 0, 1
     ] = force[
-        2, middle, middle, 0
+        0, middle, middle, 2
     ] = force[
-        2, 0, middle, middle
+        middle, 0, middle, 2
     ] = force[
-        2, middle, 0, middle
+        middle, middle, 0, 2
     ] = (
         invkmiddle * inv2
     )
 
-    force[0, middle, middle, middle] = force[1, middle, middle, middle] = force[
-        2, middle, middle, middle
+    force[middle, middle, middle, 0] = force[middle, middle, middle, 1] = force[
+        middle, middle, middle, 2
     ] = (invkmiddle * inv3)
     return force
 
@@ -745,63 +851,71 @@ def compute_rhs_2ndorder(
     Parameters
     ----------
     force : npt.NDArray[np.float32]
-        First-order force field [3, N, N, N]
+        First-order force field [N, N, N, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
         Second-order right-hand side potential [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_rhs_2ndorder
+    >>> force_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_2ndorder(force_1storder)
     """
-    ncells_1d = force.shape[-1]
+    ncells_1d = force.shape[0]
     eight = np.float32(8)
-    inv12h = np.float32(force.shape[-1] / 12.0)
+    inv12h = np.float32(ncells_1d / 12.0)
     # Initialise mesh
     result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     # Compute
-    for i in prange(-1, ncells_1d - 1):
+    for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
         ip2 = i + 2
         im2 = i - 2
-        for j in prange(-1, ncells_1d - 1):
+        for j in prange(-2, ncells_1d - 2):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
-            for k in prange(-1, ncells_1d - 1):
+            for k in prange(-2, ncells_1d - 2):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                phixx = inv12h * (
-                    eight * (force[0, im1, j, k] - force[0, ip1, j, k])
-                    - force[0, im2, j, k]
-                    + force[0, ip2, j, k]
-                )
-                phixy = inv12h * (
-                    eight * (force[0, i, jm1, k] - force[0, i, jp1, k])
-                    - force[0, i, jm2, k]
-                    + force[0, i, jp2, k]
-                )
                 phixz = inv12h * (
-                    eight * (force[0, i, j, km1] - force[0, i, j, kp1])
-                    - force[0, i, j, km2]
-                    + force[0, i, j, kp2]
-                )
-                phiyy = inv12h * (
-                    eight * (force[1, i, jm1, k] - force[1, i, jp1, k])
-                    - force[1, i, jm2, k]
-                    + force[1, i, jp2, k]
+                    eight * (force[i, j, km1, 0] - force[i, j, kp1, 0])
+                    - force[i, j, km2, 0]
+                    + force[i, j, kp2, 0]
                 )
                 phiyz = inv12h * (
-                    eight * (force[1, i, j, km1] - force[1, i, j, kp1])
-                    - force[1, i, j, km2]
-                    + force[1, i, j, kp2]
+                    eight * (force[i, j, km1, 1] - force[i, j, kp1, 1])
+                    - force[i, j, km2, 1]
+                    + force[i, j, kp2, 1]
                 )
                 phizz = inv12h * (
-                    eight * (force[2, i, j, km1] - force[2, i, j, kp1])
-                    - force[2, i, j, km2]
-                    + force[2, i, j, kp2]
+                    eight * (force[i, j, km1, 2] - force[i, j, kp1, 2])
+                    - force[i, j, km2, 2]
+                    + force[i, j, kp2, 2]
+                )
+                phixy = inv12h * (
+                    eight * (force[i, jm1, k, 0] - force[i, jp1, k, 0])
+                    - force[i, jm2, k, 0]
+                    + force[i, jp2, k, 0]
+                )
+
+                phiyy = inv12h * (
+                    eight * (force[i, jm1, k, 1] - force[i, jp1, k, 1])
+                    - force[i, jm2, k, 1]
+                    + force[i, jp2, k, 1]
+                )
+                phixx = inv12h * (
+                    eight * (force[im1, j, k, 0] - force[ip1, j, k, 0])
+                    - force[im2, j, k, 0]
+                    + force[ip2, j, k, 0]
                 )
                 result[i, j, k] = (
                     phixx * (phiyy + phizz)
@@ -833,20 +947,28 @@ def compute_rhs_3rdorder(
     Parameters
     ----------
     force : npt.NDArray[np.float32]
-        First-order force field [3, N, N, N]
+        First-order force field [N, N, N, 3]
     force_2ndorder : npt.NDArray[np.float32]
-        Second-order force field [3, N, N, N]
+        Second-order force field [N, N, N, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
         Third-order right-hand side potentials [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_rhs_3rdorder
+    >>> force_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> force_2ndorder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_3rdorder(force_1storder, force_2ndorder)
     """
-    ncells_1d = force.shape[-1]
+    ncells_1d = force.shape[0]
     eight = np.float32(8)
     two = np.float32(2)
     half = np.float32(0.5)
-    inv12h = np.float32(force.shape[-1] / 12.0)
+    inv12h = np.float32(ncells_1d / 12.0)
     # Initialise mesh
     result_3a = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     result_3b = np.empty_like(result_3a)
@@ -854,86 +976,87 @@ def compute_rhs_3rdorder(
     result_Ay_3c = np.empty_like(result_3a)
     result_Az_3c = np.empty_like(result_3a)
     # Compute
-    for i in prange(-1, ncells_1d - 1):
+    for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
         ip2 = i + 2
         im2 = i - 2
-        for j in prange(-1, ncells_1d - 1):
+        for j in prange(-2, ncells_1d - 2):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
-            for k in prange(-1, ncells_1d - 1):
+            for k in prange(-2, ncells_1d - 2):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                phixx = inv12h * (
-                    eight * (force[0, im1, j, k] - force[0, ip1, j, k])
-                    - force[0, im2, j, k]
-                    + force[0, ip2, j, k]
-                )
-                phixy = inv12h * (
-                    eight * (force[0, i, jm1, k] - force[0, i, jp1, k])
-                    - force[0, i, jm2, k]
-                    + force[0, i, jp2, k]
-                )
+
                 phixz = inv12h * (
-                    eight * (force[0, i, j, km1] - force[0, i, j, kp1])
-                    - force[0, i, j, km2]
-                    + force[0, i, j, kp2]
-                )
-                phiyy = inv12h * (
-                    eight * (force[1, i, jm1, k] - force[1, i, jp1, k])
-                    - force[1, i, jm2, k]
-                    + force[1, i, jp2, k]
+                    eight * (force[i, j, km1, 0] - force[i, j, kp1, 0])
+                    - force[i, j, km2, 0]
+                    + force[i, j, kp2, 0]
                 )
                 phiyz = inv12h * (
-                    eight * (force[1, i, j, km1] - force[1, i, j, kp1])
-                    - force[1, i, j, km2]
-                    + force[1, i, j, kp2]
+                    eight * (force[i, j, km1, 1] - force[i, j, kp1, 1])
+                    - force[i, j, km2, 1]
+                    + force[i, j, kp2, 1]
                 )
                 phizz = inv12h * (
-                    eight * (force[2, i, j, km1] - force[2, i, j, kp1])
-                    - force[2, i, j, km2]
-                    + force[2, i, j, kp2]
+                    eight * (force[i, j, km1, 2] - force[i, j, kp1, 2])
+                    - force[i, j, km2, 2]
+                    + force[i, j, kp2, 2]
                 )
-                phi_2_xx = inv12h * (
-                    eight
-                    * (force_2ndorder[0, im1, j, k] - force_2ndorder[0, ip1, j, k])
-                    - force_2ndorder[0, im2, j, k]
-                    + force_2ndorder[0, ip2, j, k]
+                phixy = inv12h * (
+                    eight * (force[i, jm1, k, 0] - force[i, jp1, k, 0])
+                    - force[i, jm2, k, 0]
+                    + force[i, jp2, k, 0]
                 )
-                phi_2_xy = inv12h * (
-                    eight
-                    * (force_2ndorder[0, i, jm1, k] - force_2ndorder[0, i, jp1, k])
-                    - force_2ndorder[0, i, jm2, k]
-                    + force_2ndorder[0, i, jp2, k]
+                phiyy = inv12h * (
+                    eight * (force[i, jm1, k, 1] - force[i, jp1, k, 1])
+                    - force[i, jm2, k, 1]
+                    + force[i, jp2, k, 1]
+                )
+                phixx = inv12h * (
+                    eight * (force[im1, j, k, 0] - force[ip1, j, k, 0])
+                    - force[im2, j, k, 0]
+                    + force[ip2, j, k, 0]
                 )
                 phi_2_xz = inv12h * (
                     eight
-                    * (force_2ndorder[0, i, j, km1] - force_2ndorder[0, i, j, kp1])
-                    - force_2ndorder[0, i, j, km2]
-                    + force_2ndorder[0, i, j, kp2]
-                )
-                phi_2_yy = inv12h * (
-                    eight
-                    * (force_2ndorder[1, i, jm1, k] - force_2ndorder[1, i, jp1, k])
-                    - force_2ndorder[1, i, jm2, k]
-                    + force_2ndorder[1, i, jp2, k]
+                    * (force_2ndorder[i, j, km1, 0] - force_2ndorder[i, j, kp1, 0])
+                    - force_2ndorder[i, j, km2, 0]
+                    + force_2ndorder[i, j, kp2, 0]
                 )
                 phi_2_yz = inv12h * (
                     eight
-                    * (force_2ndorder[1, i, j, km1] - force_2ndorder[1, i, j, kp1])
-                    - force_2ndorder[1, i, j, km2]
-                    + force_2ndorder[1, i, j, kp2]
+                    * (force_2ndorder[i, j, km1, 1] - force_2ndorder[i, j, kp1, 1])
+                    - force_2ndorder[i, j, km2, 1]
+                    + force_2ndorder[i, j, kp2, 1]
                 )
                 phi_2_zz = inv12h * (
                     eight
-                    * (force_2ndorder[2, i, j, km1] - force_2ndorder[2, i, j, kp1])
-                    - force_2ndorder[2, i, j, km2]
-                    + force_2ndorder[2, i, j, kp2]
+                    * (force_2ndorder[i, j, km1, 2] - force_2ndorder[i, j, kp1, 2])
+                    - force_2ndorder[i, j, km2, 2]
+                    + force_2ndorder[i, j, kp2, 2]
+                )
+                phi_2_xy = inv12h * (
+                    eight
+                    * (force_2ndorder[i, jm1, k, 0] - force_2ndorder[i, jp1, k, 0])
+                    - force_2ndorder[i, jm2, k, 0]
+                    + force_2ndorder[i, jp2, k, 0]
+                )
+                phi_2_yy = inv12h * (
+                    eight
+                    * (force_2ndorder[i, jm1, k, 1] - force_2ndorder[i, jp1, k, 1])
+                    - force_2ndorder[i, jm2, k, 1]
+                    + force_2ndorder[i, jp2, k, 1]
+                )
+                phi_2_xx = inv12h * (
+                    eight
+                    * (force_2ndorder[im1, j, k, 0] - force_2ndorder[ip1, j, k, 0])
+                    - force_2ndorder[im2, j, k, 0]
+                    + force_2ndorder[ip2, j, k, 0]
                 )
                 result_3a[i, j, k] = (
                     phixx * phiyy * phizz
@@ -986,21 +1109,29 @@ def initialise_1LPT(
     Parameters
     ----------
     force : npt.NDArray[np.float32]
-        Force field [3, N, N, N]
+        Force field [N, N, N, 3]
     fH : np.float32
         Growth rate times Hubble parameter
 
     Returns
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
-        Position, Velocity [3, N, N, N]
+        Position, Velocity [N, N, N, 3]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import initialise_1LPT
+    >>> force_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> fH = 0.1
+    >>> initialise_1LPT(force_1storder, fH)
     """
-    ncells_1d = force.shape[-1]
+    ncells_1d = force.shape[0]
     h = np.float32(1.0 / ncells_1d)
     half_h = np.float32(0.5 / ncells_1d)
     # Initialise arrays
-    position = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
-    velocity = np.empty_like(position)
+    position = np.empty_like(force)
+    velocity = np.empty_like(force)
     # Compute
     for i in prange(ncells_1d):
         x = half_h + i * h
@@ -1008,12 +1139,12 @@ def initialise_1LPT(
             y = half_h + j * h
             for k in prange(ncells_1d):
                 z = half_h + k * h
-                position[0, i, j, k] = x + force[0, i, j, k]
-                position[1, i, j, k] = y + force[1, i, j, k]
-                position[2, i, j, k] = z + force[2, i, j, k]
-                velocity[0, i, j, k] = fH * force[0, i, j, k]
-                velocity[1, i, j, k] = fH * force[1, i, j, k]
-                velocity[2, i, j, k] = fH * force[2, i, j, k]
+                position[i, j, k, 0] = x + force[i, j, k, 0]
+                position[i, j, k, 1] = y + force[i, j, k, 1]
+                position[i, j, k, 2] = z + force[i, j, k, 2]
+                velocity[i, j, k, 0] = fH * force[i, j, k, 0]
+                velocity[i, j, k, 1] = fH * force[i, j, k, 1]
+                velocity[i, j, k, 2] = fH * force[i, j, k, 2]
     return position, velocity
 
 
@@ -1035,28 +1166,37 @@ def add_2LPT(
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        1LPT position [3, N, N, N]
+        1LPT position [N, N, N, 3]
     velocity : npt.NDArray[np.float32]
-        1LPT velocity [3, N, N, N]
+        1LPT velocity [N, N, N, 3]
     force_2ndorder : npt.NDArray[np.float32]
-        Force field [3, N, N, N]
+        Force field [N, N, N, 3]
     fH_2 : np.float32
         2nd-order growth rate times Hubble parameter
 
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import add_2LPT
+    >>> position_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> velocity_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> force_2ndorder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> fH_2 = 0.2
+    >>> add_2LPT(position_1storder, velocity_1storder, force_2ndorder, fH_2)
     """
-    ncells_1d = force_2ndorder.shape[-1]
+    ncells_1d = force_2ndorder.shape[0]
     pos_factor_2ndorder = np.float32(3.0 / 7)
     vel_factor_2ndorder = np.float32(3.0 / 7 * fH_2)
     # Compute
     for i in prange(ncells_1d):
         for j in prange(ncells_1d):
             for k in prange(ncells_1d):
-                position[0, i, j, k] += pos_factor_2ndorder * force_2ndorder[0, i, j, k]
-                position[1, i, j, k] += pos_factor_2ndorder * force_2ndorder[1, i, j, k]
-                position[2, i, j, k] += pos_factor_2ndorder * force_2ndorder[2, i, j, k]
-                velocity[0, i, j, k] += vel_factor_2ndorder * force_2ndorder[0, i, j, k]
-                velocity[1, i, j, k] += vel_factor_2ndorder * force_2ndorder[1, i, j, k]
-                velocity[2, i, j, k] += vel_factor_2ndorder * force_2ndorder[2, i, j, k]
+                position[i, j, k, 0] += pos_factor_2ndorder * force_2ndorder[i, j, k, 0]
+                position[i, j, k, 1] += pos_factor_2ndorder * force_2ndorder[i, j, k, 1]
+                position[i, j, k, 2] += pos_factor_2ndorder * force_2ndorder[i, j, k, 2]
+                velocity[i, j, k, 0] += vel_factor_2ndorder * force_2ndorder[i, j, k, 0]
+                velocity[i, j, k, 1] += vel_factor_2ndorder * force_2ndorder[i, j, k, 1]
+                velocity[i, j, k, 2] += vel_factor_2ndorder * force_2ndorder[i, j, k, 2]
 
 
 @utils.time_me
@@ -1082,17 +1222,17 @@ def add_3LPT(
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        2LPT position [3, N, N, N]
+        2LPT position [N, N, N, 3]
     velocity : npt.NDArray[np.float32]
-        2LPT velocity [3, N, N, N]
+        2LPT velocity [N, N, N, 3]
     force_3rdorder_ab : npt.NDArray[np.float32]
-        3rd-order (a - 30/21 b) force field [3, N, N, N]
+        3rd-order (a - 30/21 b) force field [N, N, N, 3]
     force_Ax_3c : npt.NDArray[np.float32]
-        3rd-order (Ax 3c) force field [3, N, N, N]
+        3rd-order (Ax 3c) force field [N, N, N, 3]
     force_Ay_3c : npt.NDArray[np.float32]
-        3rd-order (Ay 3c) force field [3, N, N, N]
+        3rd-order (Ay 3c) force field [N, N, N, 3]
     force_Az_3c : npt.NDArray[np.float32]
-        3rd-order (Az 3c) force field [3, N, N, N]
+        3rd-order (Az 3c) force field [N, N, N, 3]
     fH_3 : np.float32
         3rd-order growth rate times Hubble parameter
 
@@ -1100,8 +1240,21 @@ def add_3LPT(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [3, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import add_3LPT
+    >>> position_2ndorder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> velocity_2ndorder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> force_3rdorder_ab = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> force_Ax_3c = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> force_Ay_3c = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> force_Az_3c = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> fH_3 = 0.3
+    >>> add_3LPT(position_2ndorder, velocity_2ndorder, force_3rdorder_ab, force_Ax_3c, force_Ay_3c, force_Az_3c, fH_3)
     """
-    ncells_1d = force_3rdorder_ab.shape[-1]
+    ncells_1d = force_3rdorder_ab.shape[0]
     pos_factor_3a = np.float32(-1.0 / 3)
     vel_factor_3a = np.float32(-1.0 / 3 * fH_3)
     pos_factor_3c = np.float32(-1.0 / 7)
@@ -1110,21 +1263,21 @@ def add_3LPT(
     for i in prange(ncells_1d):
         for j in prange(ncells_1d):
             for k in prange(ncells_1d):
-                position[0, i, j, k] += +pos_factor_3a * force_3rdorder_ab[
-                    0, i, j, k
-                ] + pos_factor_3c * (force_Az_3c[0, i, j, k] - force_Ay_3c[0, i, j, k])
-                position[1, i, j, k] += +pos_factor_3a * force_3rdorder_ab[
-                    1, i, j, k
-                ] + pos_factor_3c * (force_Ax_3c[1, i, j, k] - force_Az_3c[1, i, j, k])
-                position[2, i, j, k] += +pos_factor_3a * force_3rdorder_ab[
-                    1, i, j, k
-                ] + pos_factor_3c * (force_Ay_3c[2, i, j, k] - force_Ax_3c[2, i, j, k])
-                velocity[0, i, j, k] += +vel_factor_3a * force_3rdorder_ab[
-                    0, i, j, k
-                ] + vel_factor_3c * (force_Az_3c[0, i, j, k] - force_Ay_3c[0, i, j, k])
-                velocity[1, i, j, k] += +vel_factor_3a * force_3rdorder_ab[
-                    1, i, j, k
-                ] + vel_factor_3c * (force_Ax_3c[1, i, j, k] - force_Az_3c[1, i, j, k])
-                velocity[2, i, j, k] += +vel_factor_3a * force_3rdorder_ab[
-                    2, i, j, k
-                ] + vel_factor_3c * (force_Ay_3c[2, i, j, k] - force_Ax_3c[2, i, j, k])
+                position[i, j, k, 0] += +pos_factor_3a * force_3rdorder_ab[
+                    i, j, k, 0
+                ] + pos_factor_3c * (force_Az_3c[i, j, k, 0] - force_Ay_3c[i, j, k, 0])
+                position[i, j, k, 1] += +pos_factor_3a * force_3rdorder_ab[
+                    i, j, k, 1
+                ] + pos_factor_3c * (force_Ax_3c[i, j, k, 1] - force_Az_3c[i, j, k, 1])
+                position[i, j, k, 2] += +pos_factor_3a * force_3rdorder_ab[
+                    i, j, k, 2
+                ] + pos_factor_3c * (force_Ay_3c[i, j, k, 2] - force_Ax_3c[i, j, k, 2])
+                velocity[i, j, k, 0] += +vel_factor_3a * force_3rdorder_ab[
+                    i, j, k, 0
+                ] + vel_factor_3c * (force_Az_3c[i, j, k, 0] - force_Ay_3c[i, j, k, 0])
+                velocity[i, j, k, 1] += +vel_factor_3a * force_3rdorder_ab[
+                    i, j, k, 1
+                ] + vel_factor_3c * (force_Ax_3c[i, j, k, 1] - force_Az_3c[i, j, k, 1])
+                velocity[i, j, k, 2] += +vel_factor_3a * force_3rdorder_ab[
+                    i, j, k, 2
+                ] + vel_factor_3c * (force_Ay_3c[i, j, k, 2] - force_Ax_3c[i, j, k, 2])

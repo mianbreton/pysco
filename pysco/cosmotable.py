@@ -1,11 +1,16 @@
+"""
+This module provides functions for generating time and scale factor interpolators
+from cosmological parameters or RAMSES files. It includes a function to compute
+the growth factor based on the w0waCDM cosmology model.
+"""
 import numpy as np
 import pandas as pd
-from astropy.constants import G, M_sun, pc
-from astropy.cosmology import w0waCDM, FlatLambdaCDM
+from astropy.constants import pc
+from astropy.cosmology import w0waCDM
 from scipy.interpolate import interp1d
 import numpy.typing as npt
-from scipy import integrate
 from typing import List
+import logging
 
 
 def generate(param: pd.Series) -> List[interp1d]:
@@ -20,18 +25,42 @@ def generate(param: pd.Series) -> List[interp1d]:
     -------
     List[interp1d]
         Interpolated functions [a(t), t(a), Dplus(a)]
+
+     Examples
+    --------
+    >>> import pandas as pd
+    >>> from pysco.cosmotable import generate
+    >>> params_cosmo = pd.Series({
+         "evolution_table": "no",
+         "H0": 70.0,
+         "Om_m": 0.3,
+         "Om_lambda": 0.7,
+         "w0": -1.0,
+         "wa": 0.0,
+         "base": "path/to/base/directory"
+     })
+    >>> interpolators_cosmo = generate(params_cosmo)
+    >>> a_interp, t_interp, Dplus_interp, H_interp = interpolators_cosmo
+
+    >>> params_ramses = pd.Series({
+         "evolution_table": "path/to/evolution_table.txt",
+         "mpgrafic_table": "path/to/mpgrafic_table.txt",
+         "H0": 70.0,
+         "base": "path/to/base/directory"
+     })
+    >>> interpolators_ramses = generate(params_ramses)
+    >>> a_interp_ramses, t_interp_ramses, Dplus_interp_ramses, H_interp_ramses = interpolators_ramses
     """
     # Get cosmo
-    # TODO: Add Standard cosmologies (Planck18 etc...)
     if param["evolution_table"] == "no":
-        print(f"No evolution table read: computes all quantities")
+        logging.warning(f"No evolution table read: computes all quantities")
         cosmo = w0waCDM(  # type: ignore
             H0=param["H0"],
             Om0=param["Om_m"],
             Ode0=param["Om_lambda"],
             w0=param["w0"],
             wa=param["wa"],
-        )  # Can get something else like Planck18...
+        )  # Can get something else like Planck18
         # Do stuff
         zmax = 150
         a = np.linspace(1.15, 1.0 / (1 + zmax), 100_000)
@@ -52,8 +81,8 @@ def generate(param: pd.Series) -> List[interp1d]:
         )
     # Use RAMSES tables
     else:
-        print(f"Read RAMSES evolution: {param['evolution_table']}")
-        print(f"Read MPGRAFIC table: {param['mpgrafic_table']}")
+        logging.warning(f"Read RAMSES evolution: {param['evolution_table']}")
+        logging.warning(f"Read MPGRAFIC table: {param['mpgrafic_table']}")
         evo = np.loadtxt(param["evolution_table"]).T
         a = evo[0]
         t_supercomoving = evo[2]
@@ -87,6 +116,15 @@ def Dplus(cosmo: w0waCDM, z: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]
     -------
     npt.NDArray[np.float64]
         Growth factor array
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from astropy.cosmology import w0waCDM
+    >>> from pysco.cosmotable import Dplus
+    >>> cosmo_example = w0waCDM(H0=70.0, Om0=0.3, Ode0=0.7, w0=-1.0, wa=0.0)
+    >>> redshifts = np.linspace(0, 2, 100)
+    >>> growth_factor = Dplus(cosmo_example, redshifts)
     """
     omega = cosmo.Om(z)
     lamb = 1 - omega

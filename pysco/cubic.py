@@ -1,3 +1,11 @@
+"""
+Cubic Operator Solver Module
+
+This module provides functions for solving the cubic operator equation in the context
+of f(R) gravity, as described by Bose et al. (2017). The cubic operator equation is
+given by u^3 + pu + q = 0, where p and q are determined from the given field and density
+terms.
+"""
 import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange
@@ -36,20 +44,31 @@ def operator(
     -------
     npt.NDArray[np.float32]
         Cubic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.cubic import operator
+    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> h = 1./32
+    >>> q = 0.05
+    >>> result = operator(x, b, h, q)
     """
     h2 = np.float32(h**2)
+    ncells_1d = x.shape[0]
     qh2 = q * h2
     invsix = np.float32(1.0 / 6)
     # Initialise mesh
-    result = np.empty((x.shape[0], x.shape[1], x.shape[2]), dtype=np.float32)
+    result = np.empty_like(x)
     # Computation
-    for i in prange(-1, x.shape[0] - 1):
+    for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, x.shape[1] - 1):
+        for j in prange(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, x.shape[2] - 1):
+            for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 # Put in array
@@ -89,6 +108,13 @@ def solution_cubic_equation(
     -------
     np.float32
         Solution of the cubic equation
+
+    Examples
+    --------
+    >>> from pysco.cubic import solution_cubic_equation
+    >>> p = 0.1
+    >>> d1 = 2.7
+    >>> solution = solution_cubic_equation(p, d1)
     """  # TODO: Optimize but keep double precision
     inv3 = 1.0 / 3
     d1 = np.float64(d1)
@@ -146,6 +172,15 @@ def initialise_potential(
     -------
     npt.NDArray[np.float32]
         Reduced scalaron field initialised
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.cubic import initialise_potential
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> h = 1./32
+    >>> q = 0.01
+    >>> potential = initialise_potential(b, h, q)
     """
     threeh2 = np.float32(3 * h**2)
     four = np.float32(4)
@@ -153,10 +188,10 @@ def initialise_potential(
     half = np.float32(0.5)
     inv3 = np.float32(1.0 / 3)
     u_scalaron = np.empty_like(b)
-    size = b.shape[0]
-    for i in prange(size):
-        for j in prange(size):
-            for k in prange(size):
+    ncells_1d = b.shape[0]
+    for i in prange(ncells_1d):
+        for j in prange(ncells_1d):
+            for k in prange(ncells_1d):
                 d0 = -threeh2 * b[i, j, k]
                 C = (half * (d1 + np.sqrt(d1**2 - four * d0**3))) ** inv3
                 u_scalaron[i, j, k] = -inv3 * (C + d0 / C)
@@ -193,6 +228,15 @@ def gauss_seidel(
     q : np.float32
         Constant value in the cubic equation
     
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.cubic import gauss_seidel
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 1.0
+    >>> gauss_seidel(x, b, h, q)
     """
     invsix = np.float32(1.0 / 6)
     h2 = np.float32(h**2)
@@ -356,6 +400,16 @@ def gauss_seidel_with_rhs(
     rhs : npt.NDArray[np.float32]
         Right-hand side of the cubic equation [N_cells_1d, N_cells_1d, N_cells_1d]
     
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.cubic import gauss_seidel_with_rhs
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 1.0
+    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> gauss_seidel_with_rhs(x, b, h, q, rhs)
     """
     invsix = np.float32(1.0 / 6)
     h2 = np.float32(h**2)
@@ -524,6 +578,16 @@ def residual_half(
     -------
     npt.NDArray[np.float32]
         Residual
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.cubic import residual_half
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 1.0
+    >>> residual = residual_half(x, b, h, q)
     """
     invsix = np.float32(1.0 / 6)
     ncells_1d = x.shape[0] >> 1
@@ -625,22 +689,33 @@ def residual_error_half(
     -------
     np.float32
         Residual error
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.cubic import residual_error_half
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 1.0
+    >>> error = residual_error_half(x, b, h, q)
     """
     invsix = np.float32(1.0 / 6)
     h2 = np.float32(h**2)
+    ncells_1d = x.shape[0] >> 1
     qh2 = q * h2
     result = np.float32(0)
-    for i in prange(-1, (x.shape[0] >> 1) - 1):
+    for i in prange(-1, ncells_1d - 1):
         ii = 2 * i
         iim1 = ii - 1
         iim2 = iim1 - 1
         iip1 = ii + 1
-        for j in prange(-1, (x.shape[1] >> 1) - 1):
+        for j in prange(-1, ncells_1d - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjm2 = jjm1 - 1
             jjp1 = jj + 1
-            for k in prange(-1, (x.shape[2] >> 1) - 1):
+            for k in prange(-1, ncells_1d - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
@@ -729,6 +804,16 @@ def restrict_residual_half(
     -------
     npt.NDArray[np.float32]
         Restricted half residual
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.cubic import restrict_residual_half
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 1.0
+    >>> restricted_residual = restrict_residual_half(x, b, h, q)
     """
     invsix = np.float32(1.0 / 6)
     inveight = np.float32(0.125)
@@ -834,6 +919,16 @@ def truncation_error(
     -------
     np.float32
         Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.cubic import truncation_error
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 1.0
+    >>> error_estimate = truncation_error(x, b, h, q)
     """
     ncells_1d = x.shape[0] >> 1
     RLx = mesh.restriction(operator(x, b, h, q))
@@ -868,6 +963,17 @@ def smoothing(
         Constant value in the cubic equation
     n_smoothing : int
         Number of smoothing iterations
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.cubic import smoothing
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 1.0
+    >>> n_iterations = 5
+    >>> smoothing(x, b, h, q, n_iterations)
     """
     for _ in range(n_smoothing):
         gauss_seidel(x, b, h, q)
@@ -898,6 +1004,18 @@ def smoothing_with_rhs(
         Number of smoothing iterations
     rhs : npt.NDArray[np.float32]
         Right-hand side of the cubic equation [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.cubic import smoothing_with_rhs
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 1.0
+    >>> n_iterations = 5
+    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> smoothing_with_rhs(x, b, h, q, n_iterations, rhs)
     """
     for _ in range(n_smoothing):
         gauss_seidel_with_rhs(x, b, h, q, rhs)

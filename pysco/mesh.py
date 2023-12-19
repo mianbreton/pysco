@@ -1,12 +1,11 @@
-import sys
-from typing import List, Tuple, Callable
-
-import matplotlib.pyplot as plt
+"""
+This module contains various utility functions for mesh calculations 
+such as prolongation, restriction, derivatives, projections and de-projections.
+"""
 import numpy as np
 import numpy.typing as npt
-import pandas as pd
 from numba import config, njit, prange
-
+from numpy_atomic import atomic_add
 import utils
 
 
@@ -26,6 +25,13 @@ def restriction(
     -------
     npt.NDArray[np.float32]
         Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import restriction
+    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> result = restriction(x)
     """
     inveighth = np.float32(0.125)
     result = np.empty(
@@ -69,6 +75,13 @@ def restriction_half(
     -------
     npt.NDArray[np.float32]
         Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import restriction_half
+    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> result = restriction_half(x)
     """
     inveighth = np.float32(0.125)
     result = np.empty(
@@ -108,6 +121,13 @@ def prolongation0(
     -------
     npt.NDArray[np.float32]
         Finer Potential [2*N_cells_1d, 2*N_cells_1d, 2*N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import prolongation0
+    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> result = prolongation0(x)
     """
     x_fine = np.empty(
         (x.shape[0] << 1, x.shape[1] << 1, x.shape[2] << 1), dtype=np.float32
@@ -151,6 +171,13 @@ def prolongation(
     -------
     npt.NDArray[np.float32]
         Finer Potential [2*N_cells_1d, 2*N_cells_1d, 2*N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import prolongation
+    >>> coarse_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> fine_field = prolongation(coarse_field)
     """
     f0 = np.float32(27.0 / 64)
     f1 = np.float32(9.0 / 64)
@@ -272,6 +299,14 @@ def add_prolongation_half(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     corr_c : npt.NDArray[np.float32]
         Correction field at coarser level [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import add_prolongation_half
+    >>> coarse_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> corr_correction = np.random.rand(16, 16, 16).astype(np.float32)
+    >>> add_prolongation_half(coarse_field, corr_correction)
     """
     f0 = np.float32(27.0 / 64)
     f1 = np.float32(9.0 / 64)
@@ -364,25 +399,32 @@ def derivative3(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative3
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative3(scalar_field)
     """
-    halfinvh = np.float32(0.5 * a.shape[-1])
-    ncells_1d = a.shape[-1]
+    ncells_1d = a.shape[0]
+    halfinvh = np.float32(0.5 * ncells_1d)
     # Initialise mesh
-    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     # Compute
-    for i in prange(-1, a.shape[-3] - 1):
+    for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
         im1 = i - 1
-        for j in prange(-1, a.shape[-2] - 1):
+        for j in prange(-1, ncells_1d - 1):
             jp1 = j + 1
             jm1 = j - 1
-            for k in prange(-1, a.shape[-1] - 1):
+            for k in prange(-1, ncells_1d - 1):
                 kp1 = k + 1
                 km1 = k - 1
-                result[0, i, j, k] = halfinvh * (a[im1, j, k] - a[ip1, j, k])
-                result[1, i, j, k] = halfinvh * (a[i, jm1, k] - a[i, jp1, k])
-                result[2, i, j, k] = halfinvh * (a[i, j, km1] - a[i, j, kp1])
+                result[i, j, k, 0] = halfinvh * (a[im1, j, k] - a[ip1, j, k])
+                result[i, j, k, 1] = halfinvh * (a[i, jm1, k] - a[i, jp1, k])
+                result[i, j, k, 2] = halfinvh * (a[i, j, km1] - a[i, j, kp1])
     return result
 
 
@@ -403,13 +445,20 @@ def derivative5(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative5
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative5(scalar_field)
     """
     eight = np.float32(8)
-    inv12h = np.float32(a.shape[-1] / 12.0)
-    ncells_1d = a.shape[-1]
+    ncells_1d = a.shape[0]
+    inv12h = np.float32(ncells_1d / 12.0)
     # Initialise mesh
-    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
@@ -426,13 +475,13 @@ def derivative5(
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                result[0, i, j, k] = inv12h * (
+                result[i, j, k, 0] = inv12h * (
                     eight * (a[im1, j, k] - a[ip1, j, k]) - a[im2, j, k] + a[ip2, j, k]
                 )
-                result[1, i, j, k] = inv12h * (
+                result[i, j, k, 1] = inv12h * (
                     eight * (a[i, jm1, k] - a[i, jp1, k]) - a[i, jm2, k] + a[i, jp2, k]
                 )
-                result[2, i, j, k] = inv12h * (
+                result[i, j, k, 2] = inv12h * (
                     eight * (a[i, j, km1] - a[i, j, kp1]) - a[i, j, km2] + a[i, j, kp2]
                 )
     return result
@@ -455,14 +504,21 @@ def derivative7(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative7
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative7(scalar_field)
     """
     nine = np.float32(9)
     fortyfive = np.float32(45.0)
-    inv60h = np.float32(a.shape[-1] / 60.0)
-    ncells_1d = a.shape[-1]
+    ncells_1d = a.shape[0]
+    inv60h = np.float32(ncells_1d / 60.0)
     # Initialise mesh
-    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     # Compute
     for i in prange(-3, ncells_1d - 3):
         ip1 = i + 1
@@ -485,19 +541,19 @@ def derivative7(
                 km2 = k - 2
                 kp3 = k + 3
                 km3 = k - 3
-                result[0, i, j, k] = inv60h * (
+                result[i, j, k, 0] = inv60h * (
                     fortyfive * (a[im1, j, k] - a[ip1, j, k])
                     + nine * (-a[im2, j, k] + a[ip2, j, k])
                     + a[im3, j, k]
                     - a[ip3, j, k]
                 )
-                result[1, i, j, k] = inv60h * (
+                result[i, j, k, 1] = inv60h * (
                     fortyfive * (a[i, jm1, k] - a[i, jp1, k])
                     + nine * (-a[i, jm2, k] + a[i, jp2, k])
                     + a[i, jm3, k]
                     - a[i, jp3, k]
                 )
-                result[2, i, j, k] = inv60h * (
+                result[i, j, k, 2] = inv60h * (
                     fortyfive * (a[i, j, km1] - a[i, j, kp1])
                     + nine * (-a[i, j, km2] + a[i, j, kp2])
                     + a[i, j, km3]
@@ -536,13 +592,20 @@ def derivative5_with_fR_n1(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative5_with_fR_n1
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative5_with_fR_n1(scalar_field)
     """
     eight = np.float32(8)
-    inv12h = np.float32(a.shape[-1] / 12.0)
-    ncells_1d = a.shape[-1]
+    ncells_1d = a.shape[0]
+    inv12h = np.float32(ncells_1d / 12.0)
     # Initialise mesh
-    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
@@ -559,7 +622,7 @@ def derivative5_with_fR_n1(
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                result[0, i, j, k] = inv12h * (
+                result[i, j, k, 0] = inv12h * (
                     eight
                     * (
                         a[im1, j, k]
@@ -570,7 +633,7 @@ def derivative5_with_fR_n1(
                     + a[ip2, j, k]
                     + f * (-b[im2, j, k] ** 2 + b[ip2, j, k] ** 2)
                 )
-                result[1, i, j, k] = inv12h * (
+                result[i, j, k, 1] = inv12h * (
                     eight
                     * (
                         a[i, jm1, k]
@@ -581,7 +644,7 @@ def derivative5_with_fR_n1(
                     + a[i, jp2, k]
                     + f * (-b[i, jm2, k] ** 2 + b[i, jp2, k] ** 2)
                 )
-                result[2, i, j, k] = inv12h * (
+                result[i, j, k, 2] = inv12h * (
                     eight
                     * (
                         a[i, j, km1]
@@ -616,16 +679,23 @@ def add_derivative5_fR_n1(
     Parameters
     ----------
     force : npt.NDArray[np.float32]
-        Force field [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Force field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     b : npt.NDArray[np.float32]
         Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
     f : np.float32
         Multiplicative factor to additional field
 
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import add_derivative5_fR_n1
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
+    >>> add_derivative5_fR_n1(deriv_field, scalar_field)
     """
     eightf = np.float32(8 * f)
-    inv12h = np.float32(b.shape[-1] / 12.0)
-    ncells_1d = b.shape[-1]
+    ncells_1d = b.shape[0]
+    inv12h = np.float32(ncells_1d / 12.0)
     # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
@@ -642,15 +712,15 @@ def add_derivative5_fR_n1(
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                force[0, i, j, k] += inv12h * (
+                force[i, j, k, 0] += inv12h * (
                     eightf * (b[im1, j, k] ** 2 - b[ip1, j, k] ** 2)
                     + f * (-b[im2, j, k] ** 2 + b[ip2, j, k] ** 2)
                 )
-                force[1, i, j, k] += inv12h * (
+                force[i, j, k, 1] += inv12h * (
                     eightf * (b[i, jm1, k] ** 2 - b[i, jp1, k] ** 2)
                     + f * (-b[i, jm2, k] ** 2 + b[i, jp2, k] ** 2)
                 )
-                force[2, i, j, k] += inv12h * (
+                force[i, j, k, 2] += inv12h * (
                     eightf * (b[i, j, km1] ** 2 - b[i, j, kp1] ** 2)
                     + f * (-b[i, j, km2] ** 2 + b[i, j, kp2] ** 2)
                 )
@@ -686,13 +756,20 @@ def derivative5_with_fR_n2(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative5_with_fR_n2
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative5_with_fR_n2(scalar_field)
     """
     eight = np.float32(8)
-    inv12h = np.float32(a.shape[-1] / 12.0)
-    ncells_1d = a.shape[-1]
+    ncells_1d = a.shape[0]
+    inv12h = np.float32(ncells_1d / 12.0)
     # Initialise mesh
-    result = np.empty((3, ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
@@ -709,7 +786,7 @@ def derivative5_with_fR_n2(
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                result[0, i, j, k] = inv12h * (
+                result[i, j, k, 0] = inv12h * (
                     eight
                     * (
                         a[im1, j, k]
@@ -720,7 +797,7 @@ def derivative5_with_fR_n2(
                     + a[ip2, j, k]
                     + f * (-b[im2, j, k] ** 3 + b[ip2, j, k] ** 3)
                 )
-                result[1, i, j, k] = inv12h * (
+                result[i, j, k, 1] = inv12h * (
                     eight
                     * (
                         a[i, jm1, k]
@@ -731,7 +808,7 @@ def derivative5_with_fR_n2(
                     + a[i, jp2, k]
                     + f * (-b[i, jm2, k] ** 3 + b[i, jp2, k] ** 3)
                 )
-                result[2, i, j, k] = inv12h * (
+                result[i, j, k, 2] = inv12h * (
                     eight
                     * (
                         a[i, j, km1]
@@ -771,10 +848,18 @@ def add_derivative5_fR_n2(
         Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
     f : np.float32
         Multiplicative factor to additional field
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import add_derivative5_fR_n2
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
+    >>> add_derivative5_fR_n2(deriv_field, scalar_field)
     """
     eightf = np.float32(8 * f)
-    inv12h = np.float32(b.shape[-1] / 12.0)
-    ncells_1d = b.shape[-1]
+    ncells_1d = b.shape[0]
+    inv12h = np.float32(ncells_1d / 12.0)
     # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
@@ -791,31 +876,34 @@ def add_derivative5_fR_n2(
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                force[0, i, j, k] += inv12h * (
+                force[i, j, k, 0] += inv12h * (
                     eightf * (b[im1, j, k] ** 3 - b[ip1, j, k] ** 3)
                     + f * (-b[im2, j, k] ** 3 + b[ip2, j, k] ** 3)
                 )
-                force[1, i, j, k] += inv12h * (
+                force[i, j, k, 1] += inv12h * (
                     eightf * (b[i, jm1, k] ** 3 - b[i, jp1, k] ** 3)
                     + f * (-b[i, jm2, k] ** 3 + b[i, jp2, k] ** 3)
                 )
-                force[2, i, j, k] += inv12h * (
+                force[i, j, k, 2] += inv12h * (
                     eightf * (b[i, j, km1] ** 3 - b[i, j, kp1] ** 3)
                     + f * (-b[i, j, km2] ** 3 + b[i, j, kp2] ** 3)
                 )
 
 
-@njit(
-    ["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=False
-)  # FIXME: NOT THREAD SAFE
+# TODO: To be improved when numba atomics are available
+@utils.time_me
+@njit(["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=True)
 def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
-    """Nearest Grid Point interpolation \\
-    Computes density on a grid from particle distribution
+    """Nearest Grid Point interpolation
+
+    Computes density on a grid from particle distribution.
+
+    Uses atomic operations for thread safety
 
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
     ncells_1d : int
         Number of cells along one direction
 
@@ -823,31 +911,44 @@ def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     -------
     npt.NDArray[np.float32]
         Density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import NGP
+    >>> particles = np.random.rand(32**3, 3).astype(np.float32)
+    >>> grid_density = NGP(particles, ncells_1d=64)
     """
     ncells_1d_f = np.float32(ncells_1d)
+    ncells2 = ncells_1d**2
     one = np.float32(1)
     # Initialise mesh
     result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result_ravel = result.ravel()
     # Loop over particles
-    for n in prange(position.shape[-1]):
-        i = np.int16(position[0, n] * ncells_1d_f)  # For float32 precision
-        j = np.int16(position[1, n] * ncells_1d_f)  # For float32 precision
-        k = np.int16(position[2, n] * ncells_1d_f)  # For float32 precision)
-        result[i, j, k] += one
+    for n in prange(position.shape[0]):
+        i = np.int16(position[n, 0] * ncells_1d_f)
+        j = np.int16(position[n, 1] * ncells_1d_f)
+        k = np.int16(position[n, 2] * ncells_1d_f)
+        idx = i * ncells2 + j * ncells_1d + k
+        atomic_add(result_ravel, idx, one)
     return result
 
 
-@njit(
-    ["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=False
-)  # FIXME: NOT THREAD SAFE
+# TODO: To be improved when numba atomics are available
+@utils.time_me
+@njit(["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=True)
 def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
-    """Cloud-in-Cell interpolation \\
+    """Cloud-in-Cell interpolation
+
     Computes density on a grid from particle distribution
+
+    Uses atomic operations for thread safety
 
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
     ncells_1d : int
         Number of cells along one direction
 
@@ -855,6 +956,13 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     -------
     npt.NDArray[np.float32]
         Density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import CIC
+    >>> particles = np.random.rand(32**3, 3).astype(np.float32)
+    >>> grid_density = CIC(particles, ncells_1d=64)
     """
     ncells_1d_f = np.float32(ncells_1d)
     one = np.float32(1)
@@ -862,11 +970,11 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     # Initialise mesh
     result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     # Loop over particles
-    for n in prange(position.shape[-1]):
+    for n in prange(position.shape[0]):
         # Get particle position
-        x_part = position[0, n] * ncells_1d_f
-        y_part = position[1, n] * ncells_1d_f
-        z_part = position[2, n] * ncells_1d_f
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
         # Get closest cell indices
         i = np.int16(x_part)
         j = np.int16(y_part)
@@ -890,29 +998,38 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
         j2 = (j + signy) % ncells_1d
         k2 = (k + signz) % ncells_1d
         # 8 neighbours
-        result[i, j, k] += wx * wy * wz
-        result[i, j, k2] += wx * wy * dz
-        result[i, j2, k] += wx * dy * wz
-        result[i, j2, k2] += wx * dy * dz
-        result[i2, j, k] += dx * wy * wz
-        result[i2, j, k2] += dx * wy * dz
-        result[i2, j2, k] += dx * dy * wz
-        result[i2, j2, k2] += dx * dy * dz
+        weight = wx * wy * wz
+        atomic_add(result, (i, j, k), weight)
+        weight = wx * wy * dz
+        atomic_add(result, (i, j, k2), weight)
+        weight = wx * dy * wz
+        atomic_add(result, (i, j2, k), weight)
+        weight = wx * dy * dz
+        atomic_add(result, (i, j2, k2), weight)
+        weight = dx * wy * wz
+        atomic_add(result, (i2, j, k), weight)
+        weight = dx * wy * dz
+        atomic_add(result, (i2, j, k2), weight)
+        weight = dx * dy * wz
+        atomic_add(result, (i2, j2, k), weight)
+        weight = dx * dy * dz
+        atomic_add(result, (i2, j2, k2), weight)
     return result
 
 
 @utils.time_me
-@njit(
-    ["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=False
-)  # FIXME: NOT THREAD SAFE
-def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
-    """Triangular-Shaped Cloud interpolation \\
+@njit(["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True)
+def TSC_seq(
+    position: npt.NDArray[np.float32], ncells_1d: int
+) -> npt.NDArray[np.float32]:
+    """Triangular-Shaped Cloud interpolation (sequential)
+
     Computes density on a grid from particle distribution
 
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
     ncells_1d : int
         Number of cells along one direction
 
@@ -920,6 +1037,13 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     -------
     npt.NDArray[np.float32]
         Density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import TSC_seq
+    >>> particles = np.random.rand(32**3, 3).astype(np.float32)
+    >>> grid_density = TSC_seq(particles, ncells_1d=64)
     """
     ncells_1d_m1 = np.int16(ncells_1d - 1)
     one = np.int16(1)
@@ -929,11 +1053,11 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     # Initialise mesh
     result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     # Loop over particles
-    for n in prange(position.shape[-1]):
+    for n in range(position.shape[0]):
         # Get particle position
-        x_part = position[0, n] * ncells_1d_f
-        y_part = position[1, n] * ncells_1d_f
-        z_part = position[2, n] * ncells_1d_f
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
         # Get closest cell indices
         i = np.int16(x_part)
         j = np.int16(y_part)
@@ -999,6 +1123,142 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     return result
 
 
+# TODO: To be improved when numba atomics are available
+@utils.time_me
+@njit(["f4[:,:,::1](f4[:,::1], i2)"], fastmath=True, cache=True, parallel=True)
+def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.float32]:
+    """Triangular-Shaped Cloud interpolation
+
+    Computes density on a grid from particle distribution
+
+    Uses atomic operations for thread safety
+
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Position [N_part, 3]
+    ncells_1d : int
+        Number of cells along one direction
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import TSC
+    >>> particles = np.random.rand(32**3, 3).astype(np.float32)
+    >>> grid_density = TSC(particles, ncells_1d=64)
+    """
+    ncells_1d_m1 = np.int16(ncells_1d - 1)
+    one = np.int16(1)
+    ncells_1d_f = np.float32(ncells_1d)
+    half = np.float32(0.5)
+    threequarters = np.float32(0.75)
+    # Initialise mesh
+    result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    # Loop over particles
+    for n in prange(position.shape[0]):
+        # Get particle position
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
+        # Get closest cell indices
+        i = np.int16(x_part)
+        j = np.int16(y_part)
+        k = np.int16(z_part)
+        # Distance to closest cell center
+        dx = x_part - half - np.float32(i)
+        dy = y_part - half - np.float32(j)
+        dz = z_part - half - np.float32(k)
+        # Weights
+        wx = threequarters - dx**2
+        wy = threequarters - dy**2
+        wz = threequarters - dz**2
+        wx_m1 = half * (half - dx) ** 2
+        wy_m1 = half * (half - dy) ** 2
+        wz_m1 = half * (half - dz) ** 2
+        wx_p1 = half * (half + dx) ** 2
+        wy_p1 = half * (half + dy) ** 2
+        wz_p1 = half * (half + dz) ** 2
+        wx_m1_y_m1 = wx_m1 * wy_m1
+        wx_m1_y = wx_m1 * wy
+        wx_m1_y_p1 = wx_m1 * wy_p1
+        wx_y_m1 = wx * wy_m1
+        wx_y = wx * wy
+        wx_y_p1 = wx * wy_p1
+        wx_p1_y_m1 = wx_p1 * wy_m1
+        wx_p1_y = wx_p1 * wy
+        wx_p1_y_p1 = wx_p1 * wy_p1
+        # Get other indices
+        i_m1 = i - one
+        j_m1 = j - one
+        k_m1 = k - one
+        i_p1 = i - ncells_1d_m1
+        j_p1 = j - ncells_1d_m1
+        k_p1 = k - ncells_1d_m1
+        # 27 neighbours
+        weight = wx_m1_y_m1 * wz_m1
+        atomic_add(result, (i_m1, j_m1, k_m1), weight)
+        weight = wx_m1_y_m1 * wz
+        atomic_add(result, (i_m1, j_m1, k), weight)
+        weight = wx_m1_y_m1 * wz_p1
+        atomic_add(result, (i_m1, j_m1, k_p1), weight)
+        weight = wx_m1_y * wz_m1
+        atomic_add(result, (i_m1, j, k_m1), weight)
+        weight = wx_m1_y * wz
+        atomic_add(result, (i_m1, j, k), weight)
+        weight = wx_m1_y * wz_p1
+        atomic_add(result, (i_m1, j, k_p1), weight)
+        weight = wx_m1_y_p1 * wz_m1
+        atomic_add(result, (i_m1, j_p1, k_m1), weight)
+        weight = wx_m1_y_p1 * wz
+        atomic_add(result, (i_m1, j_p1, k), weight)
+        weight = wx_m1_y_p1 * wz_p1
+        atomic_add(result, (i_m1, j_p1, k_p1), weight)
+        weight = wx_y_m1 * wz_m1
+        atomic_add(result, (i, j_m1, k_m1), weight)
+        weight = wx_y_m1 * wz
+        atomic_add(result, (i, j_m1, k), weight)
+        weight = wx_y_m1 * wz_p1
+        atomic_add(result, (i, j_m1, k_p1), weight)
+        weight = wx_y * wz_m1
+        atomic_add(result, (i, j, k_m1), weight)
+        weight = wx_y * wz
+        atomic_add(result, (i, j, k), weight)
+        weight = wx_y * wz_p1
+        atomic_add(result, (i, j, k_p1), weight)
+        weight = wx_y_p1 * wz_m1
+        atomic_add(result, (i, j_p1, k_m1), weight)
+        weight = wx_y_p1 * wz
+        atomic_add(result, (i, j_p1, k), weight)
+        weight = wx_y_p1 * wz_p1
+        atomic_add(result, (i, j_p1, k_p1), weight)
+        weight = wx_p1_y_m1 * wz_m1
+        atomic_add(result, (i_p1, j_m1, k_m1), weight)
+        weight = wx_p1_y_m1 * wz
+        atomic_add(result, (i_p1, j_m1, k), weight)
+        weight = wx_p1_y_m1 * wz_p1
+        atomic_add(result, (i_p1, j_m1, k_p1), weight)
+        weight = wx_p1_y * wz_m1
+        atomic_add(result, (i_p1, j, k_m1), weight)
+        weight = wx_p1_y * wz
+        atomic_add(result, (i_p1, j, k), weight)
+        weight = wx_p1_y * wz_p1
+        atomic_add(result, (i_p1, j, k_p1), weight)
+        weight = wx_p1_y_p1 * wz_m1
+        atomic_add(result, (i_p1, j_p1, k_m1), weight)
+        weight = wx_p1_y_p1 * wz
+        atomic_add(result, (i_p1, j_p1, k), weight)
+        weight = wx_p1_y_p1 * wz_p1
+        atomic_add(result, (i_p1, j_p1, k_p1), weight)
+
+    return result
+
+
+@utils.time_me
 @njit(["f4[:](f4[:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
 def invNGP(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
@@ -1011,26 +1271,35 @@ def invNGP(
     grid : npt.NDArray[np.float32]
         Field [N_cells_1d, N_cells_1d, N_cells_1d]
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
         Interpolated Field [N_part]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import invNGP
+    >>> grid_density = np.random.rand(64, 64, 64).astype(np.float32)
+    >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
+    >>> interpolated_values = invNGP(grid_density, particle_positions)
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[0]
     ncells_1d_f = np.float32(ncells_1d)
     # Initialise mesh
-    result = np.empty(position.shape[-1], dtype=np.float32)
+    result = np.empty(position.shape[0], dtype=np.float32)
     # Scalar grid
-    for n in prange(position.shape[-1]):
-        i = np.int16(position[0, n] * ncells_1d_f)  # For float32 precision
-        j = np.int16(position[1, n] * ncells_1d_f)  # For float32 precision
-        k = np.int16(position[2, n] * ncells_1d_f)  # For float32 precision
+    for n in prange(position.shape[0]):
+        i = np.int16(position[n, 0] * ncells_1d_f)
+        j = np.int16(position[n, 1] * ncells_1d_f)
+        k = np.int16(position[n, 2] * ncells_1d_f)
         result[n] = grid[i, j, k]
     return result
 
 
+@utils.time_me
 @njit(["f4[:,::1](f4[:,:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
 def invNGP_vec(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
@@ -1041,29 +1310,37 @@ def invNGP_vec(
     Parameters
     ----------
     grid : npt.NDArray[np.float32]
-        Field [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Interpolated Field [3, N_part]
+        Interpolated Field [N_part, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import invNGP_vec
+    >>> grid_velocity = np.random.rand(64, 64, 64, 3).astype(np.float32)
+    >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
+    >>> interpolated_velocity = invNGP_vec(grid_velocity, particle_positions)
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[0]  # The first 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
-    # Initialise mesh
-    result = np.empty((3, position.shape[-1]), dtype=np.float32)
+    result = np.empty_like(position)
     # Vector grid
-    for n in prange(position.shape[-1]):
-        i = np.int16(position[0, n] * ncells_1d_f)  # For float32 precision
-        j = np.int16(position[1, n] * ncells_1d_f)  # For float32 precision
-        k = np.int16(position[2, n] * ncells_1d_f)  # For float32 precision)
+    for n in prange(position.shape[0]):
+        i = np.int16(position[n, 0] * ncells_1d_f)
+        j = np.int16(position[n, 1] * ncells_1d_f)
+        k = np.int16(position[n, 2] * ncells_1d_f)
         for m in prange(3):
-            result[m, n] = grid[m, i, j, k]
+            result[n, m] = grid[i, j, k, m]
     return result
 
 
+@utils.time_me
 @njit(["f4[:](f4[:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
 def invCIC(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
@@ -1076,25 +1353,33 @@ def invCIC(
     grid : npt.NDArray[np.float32]
         Field [N_cells_1d, N_cells_1d, N_cells_1d]
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
         Interpolated Field [N_part]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import invCIC
+    >>> grid_density = np.random.rand(64, 64, 64).astype(np.float32)
+    >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
+    >>> interpolated_values = invCIC(grid_density, particle_positions)
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[0]
     ncells_1d_f = np.float32(ncells_1d)
     one = np.float32(1)
     half = np.float32(0.5)
     # Initialise mesh
-    result = np.empty(position.shape[-1], dtype=np.float32)
+    result = np.empty(position.shape[0], dtype=np.float32)
     # Loop over particles
-    for n in prange(position.shape[-1]):
+    for n in prange(position.shape[0]):
         # Get particle position
-        x_part = position[0, n] * ncells_1d_f
-        y_part = position[1, n] * ncells_1d_f
-        z_part = position[2, n] * ncells_1d_f
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
         # Get closest cell indices
         i = np.int16(x_part)
         j = np.int16(y_part)
@@ -1131,6 +1416,7 @@ def invCIC(
     return result
 
 
+@utils.time_me
 @njit(["f4[:,::1](f4[:,:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
 def invCIC_vec(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
@@ -1141,27 +1427,35 @@ def invCIC_vec(
     Parameters
     ----------
     grid : npt.NDArray[np.float32]
-        Field [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Interpolated Field [3, N_part]
+        Interpolated Field [N_part, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import invCIC_vec
+    >>> grid_velocity = np.random.rand(64, 64, 64, 3).astype(np.float32)
+    >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
+    >>> interpolated_velocity = invCIC_vec(grid_velocity, particle_positions)
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[0]  # The first 3 dimensions should be the cubic grid sizes
     ncells_1d_f = np.float32(ncells_1d)
     one = np.float32(1)
     half = np.float32(0.5)
     # Initialise mesh
-    result = np.empty((3, position.shape[-1]), np.float32)
+    result = np.empty_like(position)
     # Loop over particles
-    for n in prange(position.shape[-1]):
+    for n in prange(position.shape[0]):
         # Get particle position
-        x_part = position[0, n] * ncells_1d_f
-        y_part = position[1, n] * ncells_1d_f
-        z_part = position[2, n] * ncells_1d_f
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
         # Get closest cell indices
         i = np.int16(x_part)
         j = np.int16(y_part)
@@ -1186,19 +1480,20 @@ def invCIC_vec(
         k2 = (k + signz) % ncells_1d
         for m in prange(3):
             # 8 neighbours
-            result[m, n] = (
-                wx * wy * wz * grid[m, i, j, k]
-                + wx * wy * dz * grid[m, i, j, k2]
-                + wx * dy * wz * grid[m, i, j2, k]
-                + wx * dy * dz * grid[m, i, j2, k2]
-                + dx * wy * wz * grid[m, i2, j, k]
-                + dx * wy * dz * grid[m, i2, j, k2]
-                + dx * dy * wz * grid[m, i2, j2, k]
-                + dx * dy * dz * grid[m, i2, j2, k2]
+            result[n, m] = (
+                wx * wy * wz * grid[i, j, k, m]
+                + wx * wy * dz * grid[i, j, k2, m]
+                + wx * dy * wz * grid[i, j2, k, m]
+                + wx * dy * dz * grid[i, j2, k2, m]
+                + dx * wy * wz * grid[i2, j, k, m]
+                + dx * wy * dz * grid[i2, j, k2, m]
+                + dx * dy * wz * grid[i2, j2, k, m]
+                + dx * dy * dz * grid[i2, j2, k2, m]
             )
     return result
 
 
+@utils.time_me
 @njit(["f4[:](f4[:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
 def invTSC(
     grid: npt.NDArray[np.float32], position: npt.NDArray[np.float32]
@@ -1211,27 +1506,35 @@ def invTSC(
     grid : npt.NDArray[np.float32]
         Field [N_cells_1d, N_cells_1d, N_cells_1d]
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
         Interpolated Field [N_part]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import invTSC
+    >>> grid_density = np.random.rand(64, 64, 64).astype(np.float32)
+    >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
+    >>> interpolated_values = invTSC(grid_density, particle_positions)
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[0]
     ncells_1d_m1 = np.int16(ncells_1d - 1)
     one = np.int16(1)
     ncells_1d_f = np.float32(ncells_1d)
     half = np.float32(0.5)
     threequarters = np.float32(0.75)
     # Initialise mesh
-    result = np.empty(position.shape[-1], dtype=np.float32)
+    result = np.empty(position.shape[0], dtype=np.float32)
     # Loop over particles
-    for n in prange(position.shape[-1]):
+    for n in prange(position.shape[0]):
         # Get particle position
-        x_part = position[0, n] * ncells_1d_f
-        y_part = position[1, n] * ncells_1d_f
-        z_part = position[2, n] * ncells_1d_f
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
         # Get closest cell indices
         i = np.int16(x_part)
         j = np.int16(y_part)
@@ -1338,29 +1641,37 @@ def invTSC_vec(
     Parameters
     ----------
     grid : npt.NDArray[np.float32]
-        Field [3, N_cells_1d, N_cells_1d, N_cells_1d]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Interpolated Field [3, N_part]
+        Interpolated Field [N_part, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import invTSC_vec
+    >>> grid_velocity = np.random.rand(64, 64, 64, 3).astype(np.float32)
+    >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
+    >>> interpolated_velocity = invTSC_vec(grid_velocity, particle_positions)
     """
-    ncells_1d = grid.shape[-1]  # The last 3 dimensions should be the cubic grid size
+    ncells_1d = grid.shape[0]  # The first 3 dimensions should be the cubic grid size
     ncells_1d_m1 = np.int16(ncells_1d - 1)
     one = np.int16(1)
     ncells_1d_f = np.float32(ncells_1d)
     half = np.float32(0.5)
     threequarters = np.float32(0.75)
     # Initialise mesh
-    result = np.zeros((3, position.shape[-1]), dtype=np.float32)
+    result = np.empty_like(position)
     # Loop over particles
-    for n in prange(position.shape[-1]):
+    for n in prange(position.shape[0]):
         # Get particle position
-        x_part = position[0, n] * ncells_1d_f
-        y_part = position[1, n] * ncells_1d_f
-        z_part = position[2, n] * ncells_1d_f
+        x_part = position[n, 0] * ncells_1d_f
+        y_part = position[n, 1] * ncells_1d_f
+        z_part = position[n, 2] * ncells_1d_f
         # Get closest cell indices
         i = np.int16(x_part)
         j = np.int16(y_part)
@@ -1422,37 +1733,35 @@ def invTSC_vec(
         i_p1 = i - ncells_1d_m1
         j_p1 = j - ncells_1d_m1
         k_p1 = k - ncells_1d_m1
-        for m in prange(
-            3
-        ):  # TODO: check if not better to do [n,m] for acceleration and force
+        for m in prange(3):
             # 27 neighbours
-            result[m, n] = (
-                wx_m1_y_m1_z_m1 * grid[m, i_m1, j_m1, k_m1]
-                + wx_m1_y_m1_z * grid[m, i_m1, j_m1, k]
-                + wx_m1_y_m1_z_p1 * grid[m, i_m1, j_m1, k_p1]
-                + wx_m1_y_z_m1 * grid[m, i_m1, j, k_m1]
-                + wx_m1_y_z * grid[m, i_m1, j, k]
-                + wx_m1_y_z_p1 * grid[m, i_m1, j, k_p1]
-                + wx_m1_y_p1_z_m1 * grid[m, i_m1, j_p1, k_m1]
-                + wx_m1_y_p1_z * grid[m, i_m1, j_p1, k]
-                + wx_m1_y_p1_z_p1 * grid[m, i_m1, j_p1, k_p1]
-                + wx_y_m1_z_m1 * grid[m, i, j_m1, k_m1]
-                + wx_y_m1_z * grid[m, i, j_m1, k]
-                + wx_y_m1_z_p1 * grid[m, i, j_m1, k_p1]
-                + wx_y_z_m1 * grid[m, i, j, k_m1]
-                + wx_y_z * grid[m, i, j, k]
-                + wx_y_z_p1 * grid[m, i, j, k_p1]
-                + wx_y_p1_z_m1 * grid[m, i, j_p1, k_m1]
-                + wx_y_p1_z * grid[m, i, j_p1, k]
-                + wx_y_p1_z_p1 * grid[m, i, j_p1, k_p1]
-                + wx_p1_y_m1_z_m1 * grid[m, i_p1, j_m1, k_m1]
-                + wx_p1_y_m1_z * grid[m, i_p1, j_m1, k]
-                + wx_p1_y_m1_z_p1 * grid[m, i_p1, j_m1, k_p1]
-                + wx_p1_y_z_m1 * grid[m, i_p1, j, k_m1]
-                + wx_p1_y_z * grid[m, i_p1, j, k]
-                + wx_p1_y_z_p1 * grid[m, i_p1, j, k_p1]
-                + wx_p1_y_p1_z_m1 * grid[m, i_p1, j_p1, k_m1]
-                + wx_p1_y_p1_z * grid[m, i_p1, j_p1, k]
-                + wx_p1_y_p1_z_p1 * grid[m, i_p1, j_p1, k_p1]
+            result[n, m] = (
+                wx_m1_y_m1_z_m1 * grid[i_m1, j_m1, k_m1, m]
+                + wx_m1_y_m1_z * grid[i_m1, j_m1, k, m]
+                + wx_m1_y_m1_z_p1 * grid[i_m1, j_m1, k_p1, m]
+                + wx_m1_y_z_m1 * grid[i_m1, j, k_m1, m]
+                + wx_m1_y_z * grid[i_m1, j, k, m]
+                + wx_m1_y_z_p1 * grid[i_m1, j, k_p1, m]
+                + wx_m1_y_p1_z_m1 * grid[i_m1, j_p1, k_m1, m]
+                + wx_m1_y_p1_z * grid[i_m1, j_p1, k, m]
+                + wx_m1_y_p1_z_p1 * grid[i_m1, j_p1, k_p1, m]
+                + wx_y_m1_z_m1 * grid[i, j_m1, k_m1, m]
+                + wx_y_m1_z * grid[i, j_m1, k, m]
+                + wx_y_m1_z_p1 * grid[i, j_m1, k_p1, m]
+                + wx_y_z_m1 * grid[i, j, k_m1, m]
+                + wx_y_z * grid[i, j, k, m]
+                + wx_y_z_p1 * grid[i, j, k_p1, m]
+                + wx_y_p1_z_m1 * grid[i, j_p1, k_m1, m]
+                + wx_y_p1_z * grid[i, j_p1, k, m]
+                + wx_y_p1_z_p1 * grid[i, j_p1, k_p1, m]
+                + wx_p1_y_m1_z_m1 * grid[i_p1, j_m1, k_m1, m]
+                + wx_p1_y_m1_z * grid[i_p1, j_m1, k, m]
+                + wx_p1_y_m1_z_p1 * grid[i_p1, j_m1, k_p1, m]
+                + wx_p1_y_z_m1 * grid[i_p1, j, k_m1, m]
+                + wx_p1_y_z * grid[i_p1, j, k, m]
+                + wx_p1_y_z_p1 * grid[i_p1, j, k_p1, m]
+                + wx_p1_y_p1_z_m1 * grid[i_p1, j_p1, k_m1, m]
+                + wx_p1_y_p1_z * grid[i_p1, j_p1, k, m]
+                + wx_p1_y_p1_z_p1 * grid[i_p1, j_p1, k_p1, m]
             )
     return result

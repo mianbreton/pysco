@@ -1,9 +1,10 @@
-import ast
-import sys
+"""
+This module contains various utility functions and decorators for profiling and timing, 
+as well as several numerical operations and Fast Fourier Transforms management.
+"""
 from time import perf_counter
 from typing import Tuple, Callable
 import math
-import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
@@ -11,7 +12,9 @@ from astropy.constants import G, pc
 from numba import njit, prange
 import pyfftw
 
+from numpy_atomic import atomic_add
 import morton
+import logging
 
 
 def time_me(func: Callable) -> Callable:
@@ -27,6 +30,16 @@ def time_me(func: Callable) -> Callable:
     -------
     Callable
         Function wrapper which prints time (in seconds)
+
+    Examples
+    --------
+    >>> from pysco.utils import time_me
+    >>> @time_me
+    ... def example_function():
+    ...     # Code to be timed
+    ...     pass
+    ...
+    ... example_function()
     """
 
     def time_func(*args, **kw):
@@ -39,7 +52,7 @@ def time_me(func: Callable) -> Callable:
         """
         t1 = perf_counter()
         result = func(*args, **kw)
-        print(
+        logging.info(
             f"Function {func.__name__:->40} took {perf_counter() - t1:.12f} seconds{'':{'-'}<{10}}"
         )
         return result
@@ -59,6 +72,16 @@ def profile_me(func: Callable) -> Callable:
     -------
     Callable
         Exit system
+
+    Examples
+    --------
+    >>> from pysco.utils import profile_me
+    >>> @profile_me
+    ... def example_function():
+    ...     # Code to be profiled
+    ...     pass
+    ...
+    ... example_function()
     """
 
     def profiling_func(*args: int, **kw: int):
@@ -90,6 +113,11 @@ def profiling(filename: str, Function: Callable, *args: float) -> None:
         Output file containing the profiling
     Function : Callable
         Function to profile
+
+    Examples
+    --------
+    >>> from pysco.utils import profiling
+    >>> profiling("profile_output.prof", example_function)
     """
     import cProfile
     import pstats
@@ -108,16 +136,26 @@ def index_linear(ijk: npt.NDArray[np.int32], ncells_1d: int) -> npt.NDArray[np.i
     Parameters
     ----------
     ijk : npt.NDArray[np.int32]
-         i,j,k array [3, N_part]
+         i,j,k array [N_part, 3]
     ncells_1d : int
         Number of cells along one direction
 
     Returns
     -------
     npt.NDArray[np.int64]
-        Linear index [3, N_part]
+        Linear index [N_part, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import index_linear
+    >>> ijk_array = np.array([[1, 2, 3], [4, 5, 6]])
+    >>> ncells_1d = 32
+    >>> index_linear(ijk_array, ncells_1d)
     """
-    return (ijk[0] * ncells_1d**2 + ijk[1] * ncells_1d + ijk[2]).astype(np.int64)
+    return (ijk[:, 0] * ncells_1d**2 + ijk[:, 1] * ncells_1d + ijk[:, 2]).astype(
+        np.int64
+    )
 
 
 def set_units(param: pd.Series) -> None:
@@ -127,6 +165,14 @@ def set_units(param: pd.Series) -> None:
     ----------
     param : pd.Series
         Parameter container
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> from pysco.utils import set_units
+    >>> params = pd.Series({"H0": 70, "aexp": 1.0, "boxlen": 100.0, "Om_m": 0.3, "npart": 1000})
+    >>> set_units(params)
+    >>> print(params)
     """
     # Put in good units (Box Units to km,kg,s)
     # Get constants
@@ -154,6 +200,12 @@ def read_param_file(name: str) -> pd.Series:
     -------
     pd.Series
         Parameters container
+
+    Examples
+    --------
+    >>> from pysco.utils import read_param_file
+    >>> params = read_param_file("parameter_file.txt")
+    >>> print(params)
     """
     param = pd.read_csv(
         name,
@@ -196,6 +248,7 @@ def read_param_file(name: str) -> pd.Series:
             "Npost": int,
             "epsrel": float,
             "Courant_factor": float,
+            "verbose": int,
         }
     )
     param["write_snapshot"] = False
@@ -218,27 +271,22 @@ def read_snapshot_particles_parquet(
     Returns
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
-        Position, Velocity [3, N_part]
+        Position, Velocity [N_part, 3]
+
+    Examples
+    --------
+    >>> from pysco.utils import read_snapshot_particles_parquet
+    >>> position, velocity = read_snapshot_particles_parquet("snapshot.parquet")
+    >>> print(position)
     """
-    import pyarrow as pa
     import pyarrow.parquet as pq
 
-    position = np.array(pq.read_table(filename, columns=["x", "y", "z"]))
-    velocity = np.array(pq.read_table(filename, columns=["vx", "vy", "vz"]))
-
-    return (position, velocity)
-
-
-def read_snapshot_particles_hdf5(
-    filename: str,
-) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
-    # TODO: Write routine!
-    import h5py
-
-    f = h5py.File(filename, "r")
-    data = f["data"]
-    position = np.zeros(1)
-    velocity = np.zeros(1)
+    position = np.ascontiguousarray(
+        np.array(pq.read_table(filename, columns=["x", "y", "z"])).T
+    )
+    velocity = np.ascontiguousarray(
+        np.array(pq.read_table(filename, columns=["vx", "vy", "vz"])).T
+    )
 
     return (position, velocity)
 
@@ -247,8 +295,58 @@ def read_snapshot_particles_hdf5(
 
 
 @time_me
+def write_snapshot_particles(
+    position: npt.NDArray[np.float32],
+    velocity: npt.NDArray[np.float32],
+    param: pd.Series,
+) -> None:
+    """Write snapshot with particle information in HDF5 or Parquet format
+
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        Position [N_part, 3]
+    velocity : npt.NDArray[np.float32]
+        Velocity [N_part, 3]
+    param : pd.Series
+        Parameter container
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.utils import write_snapshot_particles
+    >>> position = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
+    >>> velocity = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype=np.float32)
+    >>> parameters = pd.Series({"snapshot_format": "parquet", "base": "/path/to/base", "i_snap": 1, "extra": "extra_info", "aexp": 1.0})
+    >>> write_snapshot_particles(position, velocity, parameters)
+    >>> parameters = pd.Series({"snapshot_format": "hdf5", "base": "/path/to/base", "i_snap": 2, "extra": "extra_info", "aexp": 1.0})
+    >>> write_snapshot_particles(position, velocity, parameters)
+    """
+    if "parquet".casefold() == param["output_snapshot_format"].casefold():
+        filename = f"{param['base']}/output_{param['i_snap']:05d}/particles_{param['extra']}.parquet"
+        write_snapshot_particles_parquet(filename, position, velocity)
+        param_filename = f"{param['base']}/output_{param['i_snap']:05d}/param_{param['extra']}_{param['i_snap']:05d}.txt"
+        param.to_csv(
+            param_filename,
+            sep="=",
+            header=False,
+        )
+        logging.warning(f"Parameter file written at ...{param_filename=}")
+    elif "hdf5".casefold() == param["output_snapshot_format"].casefold():
+        filename = f"{param['base']}/output_{param['i_snap']:05d}/particles_{param['extra']}.h5"
+        write_snapshot_particles_hdf5(filename, position, velocity, param)
+    else:
+        raise ValueError(f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'")
+
+    logging.warning(f"Snapshot written at ...{filename=} {param['aexp']=}")
+
+
+@time_me
 def write_snapshot_particles_parquet(
-    filename: str, position: npt.NDArray[np.float32], velocity: npt.NDArray[np.float32]
+    filename: str,
+    position: npt.NDArray[np.float32],
+    velocity: npt.NDArray[np.float32],
 ) -> None:  # TODO: do better, perhaps multithread this?
     """Write snapshot with particle information in parquet format
 
@@ -257,25 +355,72 @@ def write_snapshot_particles_parquet(
     filename : str
         Filename
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
     velocity : npt.NDArray[np.float32]
-        Velocity [3, N_part]
+        Velocity [N_part, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import write_snapshot_particles_parquet
+    >>> position = np.random.rand(32**3, 3).astype(np.float32))
+    >>> velocity = np.random.rand(32**3, 3).astype(np.float32))
+    >>> write_snapshot_particles_parquet("snapshot.parquet", position, velocity)
     """
     import pyarrow as pa
     import pyarrow.parquet as pq
 
     table = pa.table(
         {
-            "x": position[0],
-            "y": position[1],
-            "z": position[2],
-            "vx": velocity[0],
-            "vy": velocity[1],
-            "vz": velocity[2],
+            "x": position[:, 0],
+            "y": position[:, 1],
+            "z": position[:, 2],
+            "vx": velocity[:, 0],
+            "vy": velocity[:, 1],
+            "vz": velocity[:, 2],
         }
     )
 
     pq.write_table(table, filename)
+
+
+@time_me
+def write_snapshot_particles_hdf5(
+    filename: str,
+    position: npt.NDArray[np.float32],
+    velocity: npt.NDArray[np.float32],
+    param: pd.Series,
+) -> None:
+    """Write snapshot with particle information in HDF5 format
+
+    Parameters
+    ----------
+    filename : str
+        Filename
+    position : npt.NDArray[np.float32]
+        Position [N_part, 3]
+    velocity : npt.NDArray[np.float32]
+        Velocity [N_part, 3]
+    param : pd.Series
+        Parameter container
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.utils import write_snapshot_particles_hdf5
+    >>> position = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
+    >>> velocity = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype=np.float32)
+    >>> param = pd.Series({"time": 0.0, "temperature": 300.0})
+    >>> write_snapshot_particles_hdf5("snapshot.h5", position, velocity, param)
+    """
+    import h5py
+
+    with h5py.File(filename, "w") as h5f:
+        h5f.create_dataset("position", data=position)
+        h5f.create_dataset("velocity", data=velocity)
+        for key, item in param.items():
+            h5f.attrs[key] = item
 
 
 # Basic operations
@@ -291,7 +436,14 @@ def min_abs(x: npt.NDArray[np.float32]) -> np.float32:
     Returns
     -------
     np.float32
-        Min absolute value
+        Min absolute
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import min_abs
+    >>> x_array = np.array([-2.0, 3.0, -5.0, 7.0])
+    >>> min_abs(x_array)
     """
     return np.min(np.abs(x))
 
@@ -309,6 +461,13 @@ def max_abs(x: npt.NDArray[np.float32]) -> np.float32:
     -------
     np.float32
         Max absolute value
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import max_abs
+    >>> x_array = np.array([-2.0, 3.0, -5.0, 7.0])
+    >>> max_abs(x_array)
     """
     return np.max(np.abs(x))
 
@@ -328,6 +487,15 @@ def add_vector_scalar_inplace(
         Array to add (same shape as y)
     a : np.float32
         Scalar
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import add_vector_scalar_inplace
+    >>> y_array = np.array([1.0, 2.0, 3.0])
+    >>> x_array = np.array([4.0, 5.0, 6.0])
+    >>> add_vector_scalar_inplace(y_array, x_array, 2.0)
+    >>> y_array
     """
     y_ravel = y.ravel()
     x_ravel = x.ravel()
@@ -353,6 +521,14 @@ def prod_vector_scalar_inplace(y: npt.NDArray[np.float32], a: np.float32) -> Non
         Mutable array
     a : np.float32
         Scalar
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_vector_scalar_inplace
+    >>> y_array = np.array([1.0, 2.0, 3.0])
+    >>> prod_vector_scalar_inplace(y_array, 2.0)
+    >>> y_array
     """
     y_ravel = y.ravel()
     for i in prange(y_ravel.shape[0]):
@@ -377,6 +553,13 @@ def prod_vector_scalar(
     -------
     npt.NDArray[np.float32]
         Product array
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_vector_scalar
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> prod_vector_scalar(x_array, 2.0)
     """
     result = np.empty_like(x)
     result_ravel = result.ravel()
@@ -408,6 +591,13 @@ def prod_add_vector_scalar_scalar(
     -------
     npt.NDArray[np.float32]
         Multiplied and added array
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_add_vector_scalar_scalar
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> prod_add_vector_scalar_scalar(x_array, 2.0, 1.0)
     """
     result = np.empty_like(x)
     result_ravel = result.ravel()
@@ -431,6 +621,15 @@ def prod_vector_vector_inplace(
         Array
     y : npt.NDArray[np.float32]
         Array    
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_vector_vector_inplace
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> y_array = np.array([2.0, 3.0, 4.0])
+    >>> prod_vector_vector_inplace(x_array, y_array)
+    >>> x_array
     """
     x_ravel = x.ravel()
     y_ravel = y.ravel()
@@ -454,16 +653,26 @@ def prod_gradient_vector_inplace(
     x : npt.NDArray[np.float32]
         Array
     y : npt.NDArray[np.float32]
-        Array    
+        Array   
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_gradient_vector_inplace
+    >>> array_x = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+    >>> array_y = np.array([2.0, 3.0], dtype=np.float32)
+    >>> prod_gradient_vector_inplace(array_x, array_y)
+    >>> array_x 
     """
-    ndim = len(x)
+    ndim = x.shape[-1]
     x_ravel = x.ravel()
     y_ravel = y.ravel()
-    size = len(y_ravel)
+    size = y_ravel.shape[0]
     for i in prange(size):
-        yvalue = y_ravel[i]
+        y_tmp = y_ravel[i]
+        ii = i * ndim
         for j in prange(ndim):
-            x_ravel[i + j * size] *= yvalue
+            x_ravel[ii + j] *= y_tmp
 
 
 @njit(fastmath=True, cache=True, parallel=True)
@@ -488,6 +697,15 @@ def prod_add_vector_scalar_vector(
     -------
     npt.NDArray[np.float32]
         Multiplied and added array
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_add_vector_scalar_vector
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> a_scalar = 2.0
+    >>> b_array = np.array([3.0, 4.0, 5.0])
+    >>> prod_add_vector_scalar_vector(x_array, a_scalar, b_array)
     """
     result = np.empty_like(x)
     result_ravel = result.ravel()
@@ -512,6 +730,15 @@ def prod_minus_vector_inplace(
         Array
     y : npt.NDArray[np.float32]
         Array
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import prod_minus_vector_inplace
+    >>> x_array = np.array([1.0, 2.0, 3.0], dtype=np.complex64)
+    >>> y_array = np.array([2.0, 3.0, 4.0], dtype=np.complex64)
+    >>> prod_minus_vector_inplace(x_array, y_array)
+    >>> x_array
     """
     result = np.empty_like(x)
     result_ravel = result.ravel()
@@ -543,6 +770,15 @@ def linear_operator(
         Scalar factor 1
     f2 : np.float32
         Scalar factor 2
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import linear_operator
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> f1_scalar = 2.0
+    >>> f2_scalar = 1.0
+    >>> linear_operator(x_array, f1_scalar, f2_scalar)
     """
     result = np.empty_like(x)
     x_ravel = x.ravel()
@@ -574,6 +810,16 @@ def linear_operator_inplace(
         Scalar factor 1
     f2 : np.float32
         Scalar factor 2
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import linear_operator_inplace
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> f1_scalar = 2.0
+    >>> f2_scalar = 1.0
+    >>> linear_operator_inplace(x_array, f1_scalar, f2_scalar)
+    >>> x_array
     """
     x_ravel = x.ravel()
     for i in prange(x_ravel.shape[0]):
@@ -610,6 +856,18 @@ def operator_fR_inplace(
         Scalar factor 2
     f3 : np.float32
         Scalar factor 3
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import operator_fR_inplace
+    >>> density_array = np.array([1.0, 2.0, 3.0])
+    >>> u_scalaron_array = np.array([2.0, 3.0, 4.0])
+    >>> f1_scalar = 2.0
+    >>> f2_scalar = 1.0
+    >>> f3_scalar = 3.0
+    >>> operator_fR_inplace(density_array, u_scalaron_array, f1_scalar, f2_scalar, f3_scalar)
+    >>> density_array
     """
     density_ravel = density.ravel()
     u_scalaron_ravel = u_scalaron.ravel()
@@ -628,18 +886,27 @@ def reorder_particles(
     Parameters
     ----------
     position : npt.NDArray[np.float32]
-        Position [3, N_part]
+        Position [N_part, 3]
     velocity : npt.NDArray[np.float32]
-        Velocity [3, N_part]
+        Velocity [N_part, 3]
     acceleration : npt.NDArray[np.float32], optional
-        Acceleration [3, N_part], by default None
+        Acceleration [N_part, 3], by default None
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import reorder_particles
+    >>> position_array = np.random.rand(64, 3).astype(np.float32)
+    >>> velocity_array = np.random.rand(64, 3).astype(np.float32)
+    >>> reorder_particles(position_array, velocity_array)
+    >>> position_array
     """
     index = morton.positions_to_keys(position)
-    arg = np.argsort(index)
-    position[:] = position[:, arg]
-    velocity[:] = velocity[:, arg]
+    arg = np.argsort(index, kind="mergesort")
+    position[:] = position[arg, :]
+    velocity[:] = velocity[arg, :]
     if acceleration is not None:
-        acceleration[:] = acceleration[:, arg]
+        acceleration[:] = acceleration[arg, :]
 
 
 @njit(fastmath=True, cache=True, parallel=True)
@@ -650,6 +917,14 @@ def periodic_wrap(position: npt.NDArray[np.float32]) -> None:
     ----------
     position : npt.NDArray[np.float32]
         Position [Any]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import periodic_wrap
+    >>> position_array = np.array([-0.2, 1.3, 0.8])
+    >>> periodic_wrap(position_array)
+    >>> position_array
     """
     zero = np.float32(0)
     one = np.float32(1)
@@ -669,44 +944,14 @@ def periodic_wrap(position: npt.NDArray[np.float32]) -> None:
 
 
 @time_me
-def grid2Pk(
-    x: npt.NDArray[np.float32], param: pd.Series, MAS: str = "TSC"
-) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
-    """Compute Power Spectrum from 3D grid using Pylians
-
-    Parameters
-    ----------
-    x : npt.NDArray[np.float32]
-        3D density field [N, N, N]
-    param : np.float32
-        Parameter container
-    MAS : str, optional
-        Mass Assignment Scheme (None, NGP, CIC, TSC or PCS), by default "TSC"
-
-    Returns
-    -------
-    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
-        k [in h/Mpc], P(k) [in h/Mpc ** 3]
-    """
-    import Pk_library as PKL
-
-    Pk = PKL.Pk(
-        x, param["boxlen"], axis=0, MAS=MAS, threads=param["nthreads"], verbose=False
-    )
-    return Pk.k3D, Pk.Pk[:, 0]
-
-
-@time_me
-@njit(
-    ["UniTuple(f4[:],3)(c8[:,:,::1], i8)"],
-    fastmath=True,
-    cache=True,
-    parallel=False,
-)
+@njit(["UniTuple(f4[:],3)(c8[:,:,::1], i8)"], fastmath=True, cache=True, parallel=True)
 def fourier_grid_to_Pk(
-    density_k: npt.NDArray[np.complex64], p: int
+    density_k: npt.NDArray[np.complex64],
+    p: int,
 ) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Compute P(k) from Fourier-space density grid with compensated Kernel (Jing 2005)
+
+    Parallelized on the outer index (max_threads = ncells_1d)
 
     Parameters
     ----------
@@ -719,16 +964,26 @@ def fourier_grid_to_Pk(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         k [in h/Mpc], P(k) [in h/Mpc ** 3], Nmodes
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import fourier_grid_to_Pk
+    >>> density_k_array = np.array([[[1.0+0.0j, 2.0+0.0j], [3.0+0.0j, 4.0+0.0j]]], dtype=np.complex64)
+    >>> p_val = 2
+    >>> fourier_grid_to_Pk(density_k_array, p_val)
     """
-    ncells_1d = len(density_k)
+    ncells_1d = density_k.shape[0]
     one = np.float32(1)
     minus_p = -p
     prefactor = np.float32(1.0 / ncells_1d)
     middle = ncells_1d // 2
-    k_array = np.zeros(ncells_1d, dtype=np.float32)
-    nmodes = np.zeros_like(k_array)
-    pk_array = np.zeros_like(k_array)
-    for i in prange(ncells_1d):  # FIXME: Make thread safe
+    # Arrays
+    k_arrays = np.zeros((ncells_1d, ncells_1d), dtype=np.float32)
+    nmodes_arrays = np.zeros_like(k_arrays)
+    pk_arrays = np.zeros_like(k_arrays)
+    # Parallel run
+    for i in prange(ncells_1d):
         if i == 0:
             i_iszero = True
         else:
@@ -739,7 +994,7 @@ def fourier_grid_to_Pk(
             kx = np.float32(i)
         kx2 = kx**2
         w_x = np.sinc(kx * prefactor)
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             if j == 0:
                 j_iszero = True
             else:
@@ -750,7 +1005,7 @@ def fourier_grid_to_Pk(
                 ky = np.float32(j)
             w_xy = w_x * np.sinc(ky * prefactor)
             kx2_ky2 = kx2 + ky**2
-            for k in prange(middle + 1):
+            for k in range(middle + 1):
                 if i_iszero and j_iszero and k == 0:
                     density_k[0, 0, 0] = 0
                     continue
@@ -760,10 +1015,12 @@ def fourier_grid_to_Pk(
                 delta2 = tmp.real**2 + tmp.imag**2
                 k_norm = math.sqrt(kx2_ky2 + kz**2)
                 k_index = int(k_norm)
-                nmodes[k_index] += one
-                k_array[k_index] += k_norm
-                pk_array[k_index] += delta2
-
+                nmodes_arrays[i, k_index] += one
+                k_arrays[i, k_index] += k_norm
+                pk_arrays[i, k_index] += delta2
+    k_array = np.sum(k_arrays, axis=0)
+    pk_array = np.sum(pk_arrays, axis=0)
+    nmodes = np.sum(nmodes_arrays, axis=0)
     kmax_orszag = int(2 * middle / 3)
     return (
         k_array[1:kmax_orszag] / nmodes[1:kmax_orszag],
@@ -780,14 +1037,22 @@ def fft_3D_real(x: npt.NDArray[np.float32], threads: int) -> npt.NDArray[np.comp
     Parameters
     ----------
     x : npt.NDArray[np.float32]
-        Real grid
+        Real grid [N, N, N]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.complex64]
-        Fourier-space grid
+        Fourier-space grid [N, N, N // 2 + 1]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import fft_3D_real
+    >>> real_grid = np.array([[[1.0, 2.0], [3.0, 4.0]]], dtype=np.float32)
+    >>> num_threads = 4
+    >>> fft_3D_real(real_grid, num_threads)
     """
     ncells_1d = len(x)
     # Prepare FFTW containers
@@ -819,14 +1084,22 @@ def fft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.complex
     Parameters
     ----------
     x : npt.NDArray[np.complex64]
-        Real grid
+        Real grid [N, N, N]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.complex64]
-        Fourier-space grid
+        Fourier-space grid [N, N, N]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import fft_3D
+    >>> complex_grid = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> num_threads = 4
+    >>> fft_3D(complex_grid, num_threads)
     """
     ncells_1d = len(x)
     # Prepare FFTW containers
@@ -858,29 +1131,37 @@ def fft_3D_grad(
     Parameters
     ----------
     x : npt.NDArray[np.complex64]
-        Real grid
+        Real grid [N, N, N, 3]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.complex64]
-        Fourier-space grid
+        Fourier-space grid [N, N, N, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import fft_3D_grad
+    >>> complex_grid_3d = np.array([[[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]]], dtype=np.complex64)
+    >>> num_threads = 4
+    >>> fft_3D_grad(complex_grid_3d, num_threads)
     """
-    ndim = len(x)
-    ncells_1d = x.shape[-1]
+    ndim = x.shape[-1]
+    ncells_1d = x.shape[0]
     # Prepare FFTW containers
     x_in = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
+        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="complex64"
     )
     x_out = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
+        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="complex64"
     )
     # plan FFTW over three axes
     fftw_plan = pyfftw.FFTW(
         x_in,
         x_out,
-        axes=(1, 2, 3),
+        axes=(0, 1, 2),
         flags=("FFTW_ESTIMATE",),
         direction="FFTW_FORWARD",
         threads=threads,
@@ -900,14 +1181,22 @@ def ifft_3D_real(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.f
     Parameters
     ----------
     x : npt.NDArray[np.complex64]
-        Fourier-space real grid
+        Fourier-space real grid [N, N, N//2 + 1]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Configuration-space grid
+        Configuration-space grid [N, N, N]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import ifft_3D_real
+    >>> complex_grid = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> num_threads = 4
+    >>> ifft_3D_real(complex_grid, num_threads)
     """
     ncells_1d = len(x)
     # Prepare FFTW containers
@@ -939,14 +1228,22 @@ def ifft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.comple
     Parameters
     ----------
     x : npt.NDArray[np.complex64]
-        Fourier-space grid
+        Fourier-space grid [N, N, N]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.complex64]
-        Configuration-space grid
+        Configuration-space grid [N, N, N]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import ifft_3D
+    >>> complex_grid = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> num_threads = 4
+    >>> ifft_3D(complex_grid, num_threads)
     """
     ncells_1d = len(x)
     # Prepare FFTW containers
@@ -978,29 +1275,37 @@ def ifft_3D_real_grad(
     Parameters
     ----------
     x : npt.NDArray[np.complex64]
-        Fourier-space real grid
+        Fourier-space real grid [N, N, N//2 + 1, 3]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Configuration-space grid
+        Configuration-space grid [N, N, N, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import ifft_3D_real_grad
+    >>> complex_grid_3d = np.array([[[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]]], dtype=np.complex64)
+    >>> num_threads = 4
+    >>> ifft_3D_real_grad(complex_grid_3d, num_threads)
     """
-    ndim = len(x)
-    ncells_1d = x.shape[-2]
+    ndim = x.shape[-1]
+    ncells_1d = x.shape[0]
     # Prepare FFTW containers
     x_in = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64"
+        (ncells_1d, ncells_1d, ncells_1d // 2 + 1, ndim), dtype="complex64"
     )
     x_out = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="float32"
+        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="float32"
     )
     # plan FFTW over three axes
     fftw_plan = pyfftw.FFTW(
         x_in,
         x_out,
-        axes=(1, 2, 3),
+        axes=(0, 1, 2),
         flags=("FFTW_ESTIMATE",),
         direction="FFTW_BACKWARD",
         threads=threads,
@@ -1022,29 +1327,37 @@ def ifft_3D_grad(
     Parameters
     ----------
     x : npt.NDArray[np.complex64]
-        Fourier-space grid
+        Fourier-space grid [N, N, N, 3]
     threads : int
         Number of threads
 
     Returns
     -------
     npt.NDArray[np.complex64]
-        Configuration-space grid
+        Configuration-space grid [N, N, N, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import ifft_3D_grad
+    >>> complex_grid_3d = np.array([[[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]]], dtype=np.complex64)
+    >>> num_threads = 4
+    >>> ifft_3D_grad(complex_grid_3d, num_threads)
     """
-    ndim = len(x)
-    ncells_1d = x.shape[-1]
+    ndim = x.shape[-1]
+    ncells_1d = x.shape[0]
     # Prepare FFTW containers
     x_in = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
+        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="complex64"
     )
     x_out = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
+        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="complex64"
     )
     # plan FFTW over three axes
     fftw_plan = pyfftw.FFTW(
         x_in,
         x_out,
-        axes=(1, 2, 3),
+        axes=(0, 1, 2),
         flags=("FFTW_ESTIMATE",),
         direction="FFTW_BACKWARD",
         threads=threads,
@@ -1070,6 +1383,13 @@ def divide_by_minus_k2_fourier(x: npt.NDArray[np.complex64]) -> None:
     ----------
     x : npt.NDArray[np.complex64]
         Fourier-space field [N, N, N//2 + 1]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import divide_by_minus_k2_fourier
+    >>> complex_grid = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> divide_by_minus_k2_fourier(complex_grid)
     """
     minus_fourpi2 = np.float32(-4.0 * np.pi**2)
     ncells_1d = len(x)
@@ -1117,6 +1437,14 @@ def divide_by_minus_k2_fourier_compensated(
         Fourier-space field [N, N, N//2 + 1]
     p : int
         Compensation order (NGP = 1, CIC = 2, TSC = 3)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import divide_by_minus_k2_fourier_compensated
+    >>> complex_grid = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> p_val = 2
+    >>> divide_by_minus_k2_fourier_compensated(complex_grid, p_val)
     """
     minus_fourpi2 = np.float32(-4.0 * np.pi**2)
     ncells_1d = len(x)
@@ -1174,13 +1502,20 @@ def compute_gradient_laplacian_fourier(
     Returns
     -------
     npt.NDArray[np.complex64]
-        Gradient of Laplacian [3, N, N, N//2 + 1]
+        Gradient of Laplacian [N, N, N//2 + 1, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import compute_gradient_laplacian_fourier
+    >>> complex_field = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> compute_gradient_laplacian_fourier(complex_field)
     """
     ii = np.complex64(1j)
     invtwopi = np.float32(0.5 / np.pi)
     ncells_1d = len(x)
     middle = ncells_1d // 2
-    result = np.empty((3, ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
+    result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     for i in prange(ncells_1d):
         if i == 0:
             i_iszero = True
@@ -1203,14 +1538,14 @@ def compute_gradient_laplacian_fourier(
             kx2_ky2 = kx2 + ky**2
             for k in prange(middle + 1):
                 if i_iszero and j_iszero and k == 0:
-                    result[0, 0, 0, 0] = result[1, 0, 0, 0] = result[2, 0, 0, 0] = 0
+                    result[0, 0, 0, 0] = result[0, 0, 0, 1] = result[0, 0, 0, 2] = 0
                     continue
                 kz = np.float32(k)
                 k2 = kx2_ky2 + kz**2
                 x_k2_tmp = ii * invtwopi * x[i, j, k] / k2
-                result[0, i, j, k] = x_k2_tmp * kx
-                result[1, i, j, k] = x_k2_tmp * ky
-                result[2, i, j, k] = x_k2_tmp * kz
+                result[i, j, k, 0] = x_k2_tmp * kx
+                result[i, j, k, 1] = x_k2_tmp * ky
+                result[i, j, k, 2] = x_k2_tmp * kz
     return result
 
 
@@ -1235,7 +1570,15 @@ def compute_gradient_laplacian_fourier_compensated(
     Returns
     -------
     npt.NDArray[np.complex64]
-        Gradient of Laplacian [3, N, N, N//2 + 1]
+        Gradient of Laplacian [N, N, N//2 + 1, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import compute_gradient_laplacian_fourier_compensated
+    >>> complex_field = np.array([[[1.0+2.0j, 2.0+3.0j], [3.0+4.0j, 4.0+5.0j]]], dtype=np.complex64)
+    >>> p_val = 2
+    >>> compute_gradient_laplacian_fourier_compensated(complex_field, p_val)
     """
     ii = np.complex64(1j)
     invtwopi = np.float32(0.5 / np.pi)
@@ -1243,7 +1586,7 @@ def compute_gradient_laplacian_fourier_compensated(
     prefactor = np.float32(1.0 / ncells_1d)
     twop = 2 * p
     middle = ncells_1d // 2
-    result = np.empty((3, ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
+    result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     for i in prange(ncells_1d):
         if i == 0:
             i_iszero = True
@@ -1268,13 +1611,13 @@ def compute_gradient_laplacian_fourier_compensated(
             w_xy = w_x * np.sinc(ky * prefactor)
             for k in prange(middle + 1):
                 if i_iszero and j_iszero and k == 0:
-                    result[0, 0, 0, 0] = result[1, 0, 0, 0] = result[2, 0, 0, 0] = 0
+                    result[0, 0, 0, 0] = result[0, 0, 0, 1] = result[0, 0, 0, 2] = 0
                     continue
                 kz = np.float32(k)
                 w_xyz = w_xy * np.sinc(kz * prefactor)
                 k2 = w_xyz**twop * (kx2_ky2 + kz**2)
                 x_k2_tmp = ii * invtwopi * x[i, j, k] / k2
-                result[0, i, j, k] = x_k2_tmp * kx
-                result[1, i, j, k] = x_k2_tmp * ky
-                result[2, i, j, k] = x_k2_tmp * kz
+                result[i, j, k, 0] = x_k2_tmp * kx
+                result[i, j, k, 1] = x_k2_tmp * ky
+                result[i, j, k, 2] = x_k2_tmp * kz
     return result

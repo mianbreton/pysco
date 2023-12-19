@@ -1,3 +1,8 @@
+"""
+This module implements numerical solutions for a quartic operator in the context of f(R) gravity,
+based on the work by Ruan et al. (2021). The numerical methods include a Gauss-Seidel solver,
+solution of the depressed quartic equation, and additional utility functions.
+"""
 import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange
@@ -36,20 +41,32 @@ def operator(
     -------
     npt.NDArray[np.float32]
         Quartic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.quartic import operator
+    >>> x = np.random.rand(10, 10, 10).astype(np.float32)
+    >>> b = np.random.rand(10, 10, 10).astype(np.float32)
+    >>> h = np.float32(0.1)
+    >>> q = np.float32(0.01)
+    >>> result = operator(x, b, h, q)
+    >>> print(result)
     """
     h2 = np.float32(h**2)
+    ncells_1d = x.shape[0]
     qh2 = q * h2
     invsix = np.float32(1.0 / 6)
     # Initialise mesh
-    result = np.empty((x.shape[0], x.shape[1], x.shape[2]), dtype=np.float32)
+    result = np.empty_like(x)
     # Computation
-    for i in prange(-1, x.shape[0] - 1):
+    for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, x.shape[1] - 1):
+        for j in prange(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, x.shape[2] - 1):
+            for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 # Put in array
@@ -88,6 +105,15 @@ def solution_quartic_equation(
     -------
     np.float32
         Solution of the quartic equation
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.quartic import solution_quartic_equation
+    >>> p = np.float32(0.1)
+    >>> q = np.float32(0.01)
+    >>> result = solution_quartic_equation(p, q)
+    >>> print(result)
     """  # TODO: Try if not better to use double precision but less checking conditions
     zero = np.float32(0)
     if p == zero:
@@ -144,6 +170,16 @@ def initialise_potential(
     -------
     npt.NDArray[np.float32]
         Reduced scalaron field initialised
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.quartic import initialise_potential
+    >>> b = np.random.rand(10, 10, 10).astype(np.float32)
+    >>> h = np.float32(0.1)
+    >>> q = np.float32(0.01)
+    >>> result = initialise_potential(b, h, q)
+    >>> print(result)
     """
     h2 = np.float32(h**2)
     four = np.float32(4)
@@ -152,10 +188,10 @@ def initialise_potential(
     twentyseven = np.float32(27)
     d0 = np.float32(12 * h**2 * q)
     u_scalaron = np.empty_like(b)
-    size = b.shape[0]
-    for i in prange(size):
-        for j in prange(size):
-            for k in prange(size):
+    ncells_1d = b.shape[0]
+    for i in prange(ncells_1d):
+        for j in prange(ncells_1d):
+            for k in prange(ncells_1d):
                 p = h2 * b[i, j, k]
                 d1 = twentyseven * p**2
                 Q = (half * (d1 + math.sqrt(d1**2 - four * d0**3))) ** inv3
@@ -194,6 +230,15 @@ def gauss_seidel(
     q : np.float32
         Constant value in the quartic equation
     
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.quartic import gauss_seidel
+    >>> x = np.zeros((4, 4, 4), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 0.5
+    >>> gauss_seidel(x, b, h, q)
     """
     invsix = np.float32(1.0 / 6)
     h2 = np.float32(h**2)
@@ -356,6 +401,16 @@ def gauss_seidel_with_rhs(
     rhs : npt.NDArray[np.float32]
         Right-hand side of the quartic equation [N_cells_1d, N_cells_1d, N_cells_1d]
     
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.quartic import gauss_seidel_with_rhs
+    >>> x = np.zeros((4, 4, 4), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 0.01
+    >>> rhs = np.ones((4, 4, 4), dtype=np.float32)
+    >>> gauss_seidel_with_rhs(x, b, h, q, rhs)
     """
     invsix = np.float32(1.0 / 6)
     h2 = np.float32(h**2)
@@ -523,6 +578,16 @@ def residual_half(
     -------
     npt.NDArray[np.float32]
         Residual
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.quartic import residual_half
+    >>> x = np.ones((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 0.01
+    >>> residual = residual_half(x, b, h, q)
     """
     invsix = np.float32(1.0 / 6)
     ncells_1d = x.shape[0] >> 1
@@ -624,22 +689,33 @@ def residual_error_half(
     -------
     np.float32
         Residual error
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.quartic import residual_error_half
+    >>> x = np.ones((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 0.01
+    >>> error = residual_error_half(x, b, h, q)
     """
     invsix = np.float32(1.0 / 6)
+    ncells_1d = x.shape[0] >> 1
     h2 = np.float32(h**2)
     qh2 = q * h2
     result = np.float32(0)
-    for i in prange(-1, (x.shape[0] >> 1) - 1):
+    for i in prange(-1, ncells_1d - 1):
         ii = 2 * i
         iim1 = ii - 1
         iim2 = iim1 - 1
         iip1 = ii + 1
-        for j in prange(-1, (x.shape[1] >> 1) - 1):
+        for j in prange(-1, ncells_1d - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjm2 = jjm1 - 1
             jjp1 = jj + 1
-            for k in prange(-1, (x.shape[2] >> 1) - 1):
+            for k in prange(-1, ncells_1d - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
@@ -728,6 +804,16 @@ def restrict_residual_half(
     -------
     npt.NDArray[np.float32]
         Restricted half residual
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.quartic import restrict_residual_half
+    >>> x = np.ones((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 0.01
+    >>> restricted_residual = restrict_residual_half(x, b, h, q)
     """
     invsix = np.float32(1.0 / 6)
     inveight = np.float32(0.125)
@@ -833,6 +919,16 @@ def truncation_error(
     -------
     np.float32
         Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.quartic import truncation_error
+    >>> x = np.ones((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 0.01
+    >>> error = truncation_error(x, b, h, q)
     """
     ncells_1d = x.shape[0] >> 1
     RLx = mesh.restriction(operator(x, b, h, q))
@@ -867,6 +963,17 @@ def smoothing(
         Constant value in the quartic equation
     n_smoothing : int
         Number of smoothing iterations
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.quartic import smoothing
+    >>> x = np.ones((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 0.01
+    >>> n_smoothing = 5
+    >>> smoothing(x, b, h, q, n_smoothing)
     """
     for _ in range(n_smoothing):
         gauss_seidel(x, b, h, q)
@@ -897,6 +1004,18 @@ def smoothing_with_rhs(
         Number of smoothing iterations
     rhs : npt.NDArray[np.float32]
         Right-hand side of the quartic equation [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.quartic import smoothing_with_rhs
+    >>> x = np.ones((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> q = 0.01
+    >>> n_smoothing = 5
+    >>> rhs = np.ones((32, 32, 32), dtype=np.float32)
+    >>> smoothing_with_rhs(x, b, h, q, n_smoothing, rhs)
     """
     for _ in range(n_smoothing):
         gauss_seidel_with_rhs(x, b, h, q, rhs)

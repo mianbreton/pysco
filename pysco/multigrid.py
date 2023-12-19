@@ -1,13 +1,20 @@
-from typing import List, Tuple, Callable
-import matplotlib.pyplot as plt
+import numpy as np
+
+"""
+Multigrid Solver for Poisson Equation
+
+This module provides a multigrid solver for the Poisson equation. 
+It includes functions for linear multigrid, full approximation scheme (FAS), 
+truncation error estimation, residual error computation, and various multigrid cycles (V-cycle, F-cycle, W-cycle).
+"""
+import numpy.typing as npt
+import pandas as pd
 import laplacian
 import cubic
 import quartic
-import numpy as np
-import numpy.typing as npt
-import pandas as pd
 import mesh
 import utils
+import logging
 
 
 # @utils.profile_me
@@ -35,6 +42,21 @@ def linear(
     -------
     npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import linear
+
+    >>> # Define input arrays and parameters
+    >>> x_initial = np.zeros((64, 64, 64), dtype=np.float32)
+    >>> rhs = np.ones((64, 64, 64), dtype=np.float32)
+    >>> grid_size = 1./64
+    >>> parameters = pd.Series({"compute_additional_field": False, "epsrel": 1e-5, "nsteps": 0})
+
+    >>> # Call the linear multigrid solver
+    >>> result = linear(x_initial, rhs, grid_size, parameters)
     """
     # TODO:  - Check w_relax
     #        - Inplace instead of returning array from function
@@ -50,17 +72,17 @@ def linear(
         tolerance = 1e-20  # For additional field do not use any tolerance threshold but rather a convergence of residual
     else:
         if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
-            print("Compute Truncation error")
+            logging.info("Compute Truncation error")
             param["tolerance"] = param["epsrel"] * truncation_error(x, h, param, rhs)
         tolerance = param["tolerance"]
 
     # Main procedure: Multigrid
-    print("Start linear Multigrid")
+    logging.info("Start linear Multigrid")
     residual_error = 1e30
     while residual_error > tolerance:
         V_cycle(x, rhs, param)
         residual_error_tmp = residual_error_half(x, rhs, h, param)
-        print(f"{residual_error_tmp=} {tolerance=}")
+        logging.info(f"{residual_error_tmp=} {tolerance=}")
         if residual_error_tmp < tolerance or residual_error / residual_error_tmp < 2:
             break
         residual_error = residual_error_tmp
@@ -92,11 +114,26 @@ def FAS(
     -------
     npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import FAS
+
+    >>> # Define input arrays and parameters
+    >>> x_initial = np.zeros((64, 64, 64), dtype=np.float32)
+    >>> rhs = np.ones((64, 64, 64), dtype=np.float32)
+    >>> grid_size = 1./64
+    >>> parameters = pd.Series({"compute_additional_field": False, "epsrel": 1e-5, "nsteps": 0})
+
+    >>> # Call the FAS multigrid solver
+    >>> result = FAS(x_initial, rhs, grid_size, parameters)
     """
     # If tolerance not yet assigned or every 3 time steps, compute truncation error
     if param["compute_additional_field"]:
         # if (not "tolerance_additional_field" in param) or (param["nsteps"] % 3) == 0:
-        # print("Compute Truncation error for additional field")
+        # logging.info("Compute Truncation error for additional field")
         # param["tolerance_additional_field"] = param["epsrel"] * truncation_error(
         #    x, h, param, b
         # )
@@ -104,18 +141,18 @@ def FAS(
         tolerance = 1e-20  # For additional field do not use any tolerance threshold but rather a convergence of residual
     else:
         if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
-            print("Compute Truncation error")
+            logging.info("Compute Truncation error")
             param["tolerance"] = param["epsrel"] * truncation_error(x, h, param, b)
         tolerance = param["tolerance"]
 
     # Main procedure: Multigrid
     # residual_error = 1e30
     # while residual_error > tolerance:
-    print("Start Full-Approximation Storage Multigrid")
+    logging.info("Start Full-Approximation Storage Multigrid")
     F_cycle_FAS(x, b, param)
     # F_cycle_FAS(x, b, param)
     residual_error_tmp = residual_error_half(x, b, h, param)
-    print(f"{residual_error_tmp=} {tolerance=}")
+    logging.info(f"{residual_error_tmp=} {tolerance=}")
     #    if residual_error_tmp < tolerance or residual_error / residual_error_tmp < 2:
     #        break
     #    residual_error = residual_error_tmp
@@ -148,6 +185,20 @@ def truncation_error(
     -------
     np.float32
         Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import truncation_error
+
+    >>> # Define input arrays and parameters
+    >>> potential = np.ones((64, 64, 64), dtype=np.float32)
+    >>> grid_size = 1./64
+    >>> parameters = pd.Series({"compute_additional_field": False, "epsrel": 1e-5, "nsteps": 0})
+
+    >>> # Call the truncation error estimator
+    >>> error_estimate = truncation_error(potential, grid_size, parameters)
     """
     if param["compute_additional_field"]:
         q = np.float32(param["fR_q"])
@@ -189,6 +240,21 @@ def residual_error_half(
     -------
     npt.NDArray[np.float32]
         Error on residual: sqrt[Sum(residual^2)]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import residual_error_half
+
+    >>> # Define input arrays and parameters
+    >>> potential = np.ones((64, 64, 64), dtype=np.float32)
+    >>> density = np.ones((64, 64, 64), dtype=np.float32)
+    >>> grid_size = 1./64
+    >>> parameters = pd.Series({"compute_additional_field": False, "fR_n": 1, "fR_q": 0.1})
+
+    >>> # Call the function
+    >>> error = residual_error_half(potential, density, grid_size, parameters)
     """
     if param["compute_additional_field"]:
         q = np.float32(param["fR_q"])
@@ -228,6 +294,21 @@ def restrict_residual(
     -------
     npt.NDArray[np.float32]
         Residual field restricted
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import restrict_residual
+
+    >>> # Define input arrays and parameters
+    >>> potential = np.ones((64, 64, 64), dtype=np.float32)
+    >>> density = np.ones((64, 64, 64), dtype=np.float32)
+    >>> grid_size = 1./64
+    >>> parameters = pd.Series({"compute_additional_field": False, "fR_n": 1, "fR_q": 0.1})
+
+    >>> # Call the function
+    >>> restricted_residual = restrict_residual(potential, density, grid_size, parameters)
     """
     if param["compute_additional_field"]:
         q = np.float32(param["fR_q"])
@@ -269,6 +350,22 @@ def smoothing(
         Parameter container
     rhs : npt.NDArray[np.float32], optional
         Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import smoothing
+
+    >>> # Define input arrays and parameters
+    >>> potential = np.ones((64, 64, 64), dtype=np.float32)
+    >>> density = np.ones((64, 64, 64), dtype=np.float32)
+    >>> grid_size = 1./64
+    >>> smoothing_iterations = 10
+    >>> parameters = pd.Series({"compute_additional_field": False, "fR_n": 1, "fR_q": 0.1})
+
+    >>> # Call the function
+    >>> smoothing(potential, density, grid_size, smoothing_iterations, parameters)
     """
     if param["compute_additional_field"]:
         q = np.float32(param["fR_q"])
@@ -315,6 +412,32 @@ def operator(
     -------
     npt.NDArray[np.float32]
         Operator
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import operator
+
+    Example 1: Compute operator for f(R) with n = 1
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> param = pd.Series({"compute_additional_field": True, "fR_n": 1, "fR_q": 0.1})
+    >>> operator_result = operator(x, b, h, param)
+
+    Example 2: Compute operator for f(R) with n = 2 and custom density term
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> param = pd.Series({"compute_additional_field": True, "fR_n": 2, "fR_q": 0.2})
+    >>> operator_result = operator(x, h, param, b)
+
+    Example 3: Compute Laplacian operator for the main field
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> h = np.float32(1./32)
+    >>> param = pd.Series({"compute_additional_field": False})
+    >>> operator_result = operator(x, h, param)
     """
     if param["compute_additional_field"]:
         q = np.float32(param["fR_q"])
@@ -349,6 +472,20 @@ def V_cycle(
         Parameter container
     nlevel : int, optional
         Grid level (positive, equal to zero at coarse level), by default 0
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import V_cycle
+
+    >>> # Define input arrays and parameters
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> param = pd.Series({"compute_additional_field": False, "ncoarse": 4, "Npre": 2, "Npost": 2})
+
+    >>> # Call the V_cycle_FAS function
+    >>> V_cycle(x, b, param)
     """
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
@@ -390,6 +527,20 @@ def V_cycle_FAS(
         Grid level (positive, equal to zero at coarse level), by default 0
     rhs : npt.NDArray[np.float32], optional
         Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d], by default np.empty(0, dtype=np.float32)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import V_cycle_FAS
+
+    >>> # Define input arrays and parameters
+    >>> x = np.zeros((64, 64, 64), dtype=np.float32)
+    >>> b = np.random.rand(64, 64, 64).astype(np.float32)
+    >>> param = pd.Series({"compute_additional_field": False, "ncoarse": 5, "Npre": 2, "Npost": 2})
+
+    >>> # Call the V_cycle_FAS function
+    >>> V_cycle_FAS(x, b, param)
     """
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
@@ -436,6 +587,20 @@ def F_cycle(
         Parameter container
     nlevel : int, optional
         Grid level (positive, equal to zero at coarse level), by default 0
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import F_cycle
+
+    >>> # Define input arrays and parameters
+    >>> x = np.zeros((64, 64, 64), dtype=np.float32)
+    >>> b = np.random.rand(64, 64, 64).astype(np.float32)
+    >>> param = pd.Series({"compute_additional_field": False, "ncoarse": 5, "Npre": 2, "Npost": 2})
+
+    >>> # Call the F_cycle function
+    >>> F_cycle(x, b, param)
     """
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
@@ -492,6 +657,20 @@ def F_cycle_FAS(
         Grid level (positive, equal to zero at coarse level), by default 0
     rhs : npt.NDArray[np.float32], optional
         Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d], by default np.empty(0, dtype=np.float32)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import F_cycle_FAS
+
+    >>> # Define input arrays and parameters
+    >>> x = np.zeros((64, 64, 64), dtype=np.float32)
+    >>> b = np.random.rand(64, 64, 64).astype(np.float32)
+    >>> param = pd.Series({"compute_additional_field": False, "ncoarse": 5, "Npre": 2, "Npost": 2})
+
+    >>> # Call the F_cycle_FAS function
+    >>> F_cycle_FAS(x, b, param)
     """
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
@@ -557,6 +736,20 @@ def W_cycle(
         Parameter container
     nlevel : int, optional
         Grid level (positive, equal to zero at coarse level), by default 0
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import W_cycle
+
+    >>> # Define input arrays and parameters
+    >>> x = np.zeros((64, 64, 64), dtype=np.float32)
+    >>> b = np.random.rand(64, 64, 64).astype(np.float32)
+    >>> param = pd.Series({"compute_additional_field": False, "ncoarse": 5, "Npre": 2, "Npost": 2})
+
+    >>> # Call the W_cycle function
+    >>> W_cycle(x, b, param)
     """
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))  # nlevel = 0 is coarse level
     two = np.float32(2)
@@ -616,6 +809,20 @@ def W_cycle_FAS(
         Grid level (positive, equal to zero at coarse level), by default 0
     rhs : npt.NDArray[np.float32], optional
         Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d], by default np.empty(0, dtype=np.float32)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.multigrid import W_cycle_FAS
+
+    >>> # Define input arrays and parameters
+    >>> x = np.zeros((64, 64, 64), dtype=np.float32)
+    >>> b = np.random.rand(64, 64, 64).astype(np.float32)
+    >>> param = pd.Series({"compute_additional_field": False, "ncoarse": 5, "Npre": 2, "Npost": 2})
+
+    >>> # Call the W_cycle_FAS function
+    >>> W_cycle_FAS(x, b, param)
     """
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))  # nlevel = 0 is coarse level
     two = np.float32(2)
