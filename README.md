@@ -130,10 +130,10 @@ If you prefer to install each of them by hand, then you will need the following 
 
 ### Installation
 
-The first method is to pip install pysco using (not yet available)
+The first method is to pip install pysco using
 
 ```sh
-python -m pip install ??
+python -m pip install pysco-nbody
 ```
 
 Otherwise, it is possible to install directly from source
@@ -142,6 +142,12 @@ Otherwise, it is possible to install directly from source
 git clone https://github.com/mianbreton/pysco.git
 cd pysco
 python -m pip install -e .
+```
+
+It is then possible to access other branches. If one wants to use the `AwesomeNewFeature` branch but without having to download the source directory, it is possible to pip install directly from github
+
+```sh
+python -m pip install git+https://github.com/mianbreton/pysco.git@AwesomeNewFeature
 ```
 
 _For mac users the pyfftw installation might fail. In this case the installation can be done manually with conda_
@@ -158,7 +164,7 @@ conda install -c conda-forge pyfftw
 
 There are two ways to use Pysco, either as command line with parameter file, or as an external package.
 
-> Numba uses _Just-in-Time_ and/or _Ahead-of-Time_ compilation, meaning that for the former the function is compiled when it is reached for the first time, while the latter is compiled before running the code (happens when the input/output types are specified in the function decorator). This means that when the code is run for the first time, it will spend some time compiling the functions. These are then cached and subsequent runs will not have to compile the functions again.
+> Numba uses _Just-in-Time_ and/or _Ahead-of-Time_ compilation, meaning that for the former the function is compiled when it is reached for the first time, while the latter is compiled before running the code (happens when the input/output types are specified in the function decorator). This means that when the code is run (or imported) for the first time, it will spend some time compiling the functions. These are then cached and subsequent runs will not have to compile the functions again.
 
 #### As command line
 
@@ -393,7 +399,7 @@ MAS = 0 # Mass assignment scheme. # None = 0, NGP = 1, CIC = 2, TSC = 3
 k, pk, modes = fourier_grid_to_Pk(density_k, MAS)
 ```
 
-**Please check the full API at linktoreadthedocs to see all the available functions**
+_Please check the full API at linktoreadthedocs to see all the available functions_ (in progress)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
