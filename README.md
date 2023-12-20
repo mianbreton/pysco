@@ -144,10 +144,10 @@ cd pysco
 python -m pip install -e .
 ```
 
-It is then possible to access other branches. If one wants to use the `AwesomeNewFeature` branch but without having to download the source directory, it is possible to pip install directly from github
+It is then possible to access other branches. If one wants to use the `feature/AwesomeNewFeature` branch but without having to download the source directory, it is possible to pip install directly from github
 
 ```sh
-python -m pip install git+https://github.com/mianbreton/pysco.git@AwesomeNewFeature
+python -m pip install git+https://github.com/mianbreton/pysco.git@feature/AwesomeNewFeature
 ```
 
 _For mac users the pyfftw installation might fail. In this case the installation can be done manually with conda_
