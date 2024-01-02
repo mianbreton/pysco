@@ -57,9 +57,7 @@ def operator(
     ncells_1d = x.shape[0]
     qh2 = q * h2
     invsix = np.float32(1.0 / 6)
-    # Initialise mesh
     result = np.empty_like(x)
-    # Computation
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -69,7 +67,6 @@ def operator(
             for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
-                # Put in array
                 p = h2 * b[i, j, k] - invsix * (
                     x[im1, j, k] ** 3
                     + x[i, jm1, k] ** 3
@@ -265,7 +262,7 @@ def gauss_seidel(
                 x3_010 = x[iim1, jj, kkm1] ** 3
                 x3_100 = x[ii, jjm1, kkm1] ** 3
                 x3_111 = x[ii, jj, kk] ** 3
-                # Put in array
+
                 p = h2 * b[iim1, jjm1, kkm1] - invsix * (
                     +x3_001
                     + x3_010
@@ -275,7 +272,6 @@ def gauss_seidel(
                     + x[iim1, jjm1, kkm2] ** 3
                 )
                 x[iim1, jjm1, kkm1] = solution_quartic_equation(p, qh2)
-                # Put in array
                 p = h2 * b[iim1, jj, kk] - invsix * (
                     +x3_001
                     + x3_010
@@ -285,7 +281,6 @@ def gauss_seidel(
                     + x[iim1, jjp1, kk] ** 3
                 )
                 x[iim1, jj, kk] = solution_quartic_equation(p, qh2)
-                # Put in array
                 p = h2 * b[ii, jjm1, kk] - invsix * (
                     x3_001
                     + x3_100
@@ -295,7 +290,6 @@ def gauss_seidel(
                     + x[iip1, jjm1, kk] ** 3
                 )
                 x[ii, jjm1, kk] = solution_quartic_equation(p, qh2)
-                # Put in array
                 p = h2 * b[ii, jj, kkm1] - invsix * (
                     x3_010
                     + x3_100
@@ -305,6 +299,7 @@ def gauss_seidel(
                     + x[iip1, jj, kkm1] ** 3
                 )
                 x[ii, jj, kkm1] = solution_quartic_equation(p, qh2)
+
     # Computation Black
     for i in prange(half_ncells_1d):
         ii = 2 * i
@@ -321,12 +316,11 @@ def gauss_seidel(
                 kkm2 = kk - 2
                 kkm1 = kk - 1
                 kkp1 = kk + 1
-                #
+
                 x3_000 = x[iim1, jjm1, kkm1] ** 3
                 x3_011 = x[iim1, jj, kk] ** 3
                 x3_101 = x[ii, jjm1, kk] ** 3
                 x3_110 = x[ii, jj, kkm1] ** 3
-                # Put in array
                 p = h2 * b[iim1, jjm1, kk] - invsix * (
                     +x3_000
                     + x3_011
@@ -336,7 +330,6 @@ def gauss_seidel(
                     + x[iim1, jjm1, kkp1] ** 3
                 )
                 x[iim1, jjm1, kk] = solution_quartic_equation(p, qh2)
-                # Put in array
                 p = h2 * b[iim1, jj, kkm1] - invsix * (
                     +x3_000
                     + x3_011
@@ -346,7 +339,6 @@ def gauss_seidel(
                     + x[iim1, jjp1, kkm1] ** 3
                 )
                 x[iim1, jj, kkm1] = solution_quartic_equation(p, qh2)
-                # Put in array
                 p = h2 * b[ii, jjm1, kkm1] - invsix * (
                     x3_000
                     + x3_101
@@ -356,7 +348,6 @@ def gauss_seidel(
                     + x[iip1, jjm1, kkm1] ** 3
                 )
                 x[ii, jjm1, kkm1] = solution_quartic_equation(p, qh2)
-                # Put in array
                 p = h2 * b[ii, jj, kk] - invsix * (
                     x3_011
                     + x3_101
@@ -432,12 +423,11 @@ def gauss_seidel_with_rhs(
                 kkm2 = kk - 2
                 kkm1 = kk - 1
                 kkp1 = kk + 1
-                #
+
                 x3_001 = x[iim1, jjm1, kk] ** 3
                 x3_010 = x[iim1, jj, kkm1] ** 3
                 x3_100 = x[ii, jjm1, kkm1] ** 3
                 x3_111 = x[ii, jj, kk] ** 3
-                # Put in array
                 p = h2 * b[iim1, jjm1, kkm1] - invsix * (
                     +x3_010
                     + x3_001
@@ -448,7 +438,6 @@ def gauss_seidel_with_rhs(
                 )
                 qq = qh2 - rhs[iim1, jjm1, kkm1]
                 x[iim1, jjm1, kkm1] = solution_quartic_equation(p, qq)
-                # Put in array
                 p = h2 * b[iim1, jj, kk] - invsix * (
                     +x3_001
                     + x3_010
@@ -459,7 +448,6 @@ def gauss_seidel_with_rhs(
                 )
                 qq = qh2 - rhs[iim1, jj, kk]
                 x[iim1, jj, kk] = solution_quartic_equation(p, qq)
-                # Put in array
                 p = h2 * b[ii, jjm1, kk] - invsix * (
                     x3_001
                     + x3_111
@@ -470,7 +458,6 @@ def gauss_seidel_with_rhs(
                 )
                 qq = qh2 - rhs[ii, jjm1, kk]
                 x[ii, jjm1, kk] = solution_quartic_equation(p, qq)
-                # Put in array
                 p = h2 * b[ii, jj, kkm1] - invsix * (
                     x3_010
                     + x3_100
@@ -498,12 +485,11 @@ def gauss_seidel_with_rhs(
                 kkm2 = kk - 2
                 kkm1 = kk - 1
                 kkp1 = kk + 1
-                #
+
                 x3_000 = x[iim1, jjm1, kkm1] ** 3
                 x3_011 = x[iim1, jj, kk] ** 3
                 x3_101 = x[ii, jjm1, kk] ** 3
                 x3_110 = x[ii, jj, kkm1] ** 3
-                # Put in array
                 p = h2 * b[iim1, jjm1, kk] - invsix * (
                     +x3_011
                     + x3_000
@@ -514,7 +500,6 @@ def gauss_seidel_with_rhs(
                 )
                 qq = qh2 - rhs[iim1, jjm1, kk]
                 x[iim1, jjm1, kk] = solution_quartic_equation(p, qq)
-                # Put in array
                 p = h2 * b[iim1, jj, kkm1] - invsix * (
                     +x3_000
                     + x3_011
@@ -525,7 +510,6 @@ def gauss_seidel_with_rhs(
                 )
                 qq = qh2 - rhs[iim1, jj, kkm1]
                 x[iim1, jj, kkm1] = solution_quartic_equation(p, qq)
-                # Put in array
                 p = h2 * b[ii, jjm1, kkm1] - invsix * (
                     x3_000
                     + x3_101
@@ -536,7 +520,6 @@ def gauss_seidel_with_rhs(
                 )
                 qq = qh2 - rhs[ii, jjm1, kkm1]
                 x[ii, jjm1, kkm1] = solution_quartic_equation(p, qq)
-                # Put in array
                 p = h2 * b[ii, jj, kk] - invsix * (
                     x3_011
                     + x3_101
@@ -609,12 +592,11 @@ def residual_half(
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
                 kkp1 = kk + 1
-                #
+
                 x3_001 = x[iim1, jjm1, kk] ** 3
                 x3_010 = x[iim1, jj, kkm1] ** 3
                 x3_100 = x[ii, jjm1, kkm1] ** 3
                 x3_111 = x[ii, jj, kk] ** 3
-                # Put in array
                 p = h2 * b[iim1, jjm1, kkm1] - invsix * (
                     +x3_001
                     + x3_010
@@ -625,7 +607,6 @@ def residual_half(
                 )
                 x_tmp = x[iim1, jjm1, kkm1]
                 result[iim1, jjm1, kkm1] = -((x_tmp) ** 4) - p * x_tmp - qh2
-                # Put in array
                 p = h2 * b[iim1, jj, kk] - invsix * (
                     +x3_001
                     + x3_010
@@ -636,7 +617,6 @@ def residual_half(
                 )
                 x_tmp = x[iim1, jj, kk]
                 result[iim1, jj, kk] = -((x_tmp) ** 4) - p * x_tmp - qh2
-                # Put in array
                 p = h2 * b[ii, jjm1, kk] - invsix * (
                     x3_001
                     + x3_100
@@ -647,7 +627,6 @@ def residual_half(
                 )
                 x_tmp = x[ii, jjm1, kk]
                 result[ii, jjm1, kk] = -((x_tmp) ** 4) - p * x_tmp - qh2
-                # Put in array
                 p = h2 * b[ii, jj, kkm1] - invsix * (
                     x3_010
                     + x3_100
@@ -720,12 +699,11 @@ def residual_error_half(
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
                 kkp1 = kk + 1
-                #
+
                 x3_001 = x[iim1, jjm1, kk] ** 3
                 x3_010 = x[iim1, jj, kkm1] ** 3
                 x3_100 = x[ii, jjm1, kkm1] ** 3
                 x3_111 = x[ii, jj, kk] ** 3
-                # Put in array
                 p = h2 * b[iim1, jjm1, kkm1] - invsix * (
                     +x3_001
                     + x3_010
@@ -736,7 +714,6 @@ def residual_error_half(
                 )
                 x_tmp = x[iim1, jjm1, kkm1]
                 x1 = x_tmp**4 + p * x_tmp + qh2
-                # Put in array
                 p = h2 * b[iim1, jj, kk] - invsix * (
                     +x3_001
                     + x3_010
@@ -747,7 +724,6 @@ def residual_error_half(
                 )
                 x_tmp = x[iim1, jj, kk]
                 x2 = x_tmp**4 + p * x_tmp + qh2
-                # Put in array
                 p = h2 * b[ii, jjm1, kk] - invsix * (
                     x3_001
                     + x3_100
@@ -758,7 +734,6 @@ def residual_error_half(
                 )
                 x_tmp = x[ii, jjm1, kk]
                 x3 = x_tmp**4 + p * x_tmp + qh2
-                # Put in array
                 p = h2 * b[ii, jj, kkm1] - invsix * (
                     x3_010
                     + x3_100
@@ -836,12 +811,12 @@ def restrict_residual_half(
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
                 kkp1 = kk + 1
-                #
+
                 x3_001 = x[iim1, jjm1, kk] ** 3
                 x3_010 = x[iim1, jj, kkm1] ** 3
                 x3_100 = x[ii, jjm1, kkm1] ** 3
                 x3_111 = x[ii, jj, kk] ** 3
-                # Put in array
+
                 p = h2 * b[iim1, jjm1, kkm1] - invsix * (
                     +x3_001
                     + x3_010
@@ -852,7 +827,6 @@ def restrict_residual_half(
                 )
                 x_tmp = x[iim1, jjm1, kkm1]
                 x1 = -((x_tmp) ** 4) - p * x_tmp - qh2
-                # Put in array
                 p = h2 * b[ii, jj, kkm1] - invsix * (
                     x3_010
                     + x3_100
@@ -863,7 +837,6 @@ def restrict_residual_half(
                 )
                 x_tmp = x[ii, jj, kkm1]
                 x2 = -((x_tmp) ** 4) - p * x_tmp - qh2
-                # Put in array
                 p = h2 * b[ii, jjm1, kk] - invsix * (
                     x3_001
                     + x3_100
@@ -874,7 +847,6 @@ def restrict_residual_half(
                 )
                 x_tmp = x[ii, jjm1, kk]
                 x3 = -((x_tmp) ** 4) - p * x_tmp - qh2
-                # Put in array
                 p = h2 * b[iim1, jj, kk] - invsix * (
                     +x3_001
                     + x3_010
@@ -885,7 +857,7 @@ def restrict_residual_half(
                 )
                 x_tmp = x[iim1, jj, kk]
                 x4 = -((x_tmp) ** 4) - p * x_tmp - qh2
-                # Put in array
+
                 result[i, j, k] = inveight * (x1 + x2 + x3 + x4)
     return result
 

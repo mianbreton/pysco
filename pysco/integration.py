@@ -79,7 +79,7 @@ def integrate(
     dt2 = dt_CFL_maxvel(velocity, param)
     dt3 = dt_weak_variation(tables[1], param)
     dt = np.min([dt1, dt2, dt3])
-    # Stop at z = zsnap exactly to output snapshots
+
     if (param["t"] + dt) > t_snap_next:
         dt = t_snap_next - param["t"]
         param["write_snapshot"] = True
@@ -89,7 +89,6 @@ def integrate(
     logging.warning(
         f"Conditions: velocity {dt1=}, acceleration {dt2=}, scale factor {dt3=}"
     )
-    # Integrate
     if param.integrator == "leapfrog":
         return leapfrog(
             position,
@@ -173,17 +172,13 @@ def euler(
     >>> param = pd.Series({"Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
     >>> euler(position, velocity, acceleration, potential, additional_field, dt, tables, param)
     """
-    # Drift
     utils.add_vector_scalar_inplace(position, velocity, dt)
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
     param["aexp"] = tables[0](param["t"])
     utils.set_units(param)
-    # Periodic boundary conditions
     utils.periodic_wrap(position)
-    # Kick
     utils.add_vector_scalar_inplace(velocity, acceleration, dt)
-    # Solver
     acceleration, potential, additional_field = solver.pm(
         position, param, potential, additional_field, tables
     )
@@ -248,22 +243,17 @@ def leapfrog(
     >>> leapfrog(position, velocity, acceleration, potential, additional_field, dt, tables, param)
     """
     half_dt = np.float32(0.5 * dt)
-    # Kick
     utils.add_vector_scalar_inplace(velocity, acceleration, half_dt)
-    # Drift
     utils.add_vector_scalar_inplace(position, velocity, dt)
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
     param["aexp"] = tables[0](param["t"])
     logging.info(f"{param['t']=} {param['aexp']=}")
     utils.set_units(param)
-    # Periodic boundary conditions
     utils.periodic_wrap(position)
-    # Solver
     acceleration, potential, additional_field = solver.pm(
         position, param, potential, additional_field, tables
     )
-    # Kick
     utils.add_vector_scalar_inplace(velocity, acceleration, half_dt)
 
     return position, velocity, acceleration, potential, additional_field

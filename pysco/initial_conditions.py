@@ -66,10 +66,9 @@ def generate(
         Hz *= param["unit_t"] / mpc_to_km  # km/s/Mpc to BU
         Dplus = np.float32(tables[2](a_start))
         # density_initial = generate_density(param, Dplus)
-        force = generate_force(param, Dplus)
         # force = mesh.derivative(solver.fft(density_initial, param))
+        force = generate_force(param, Dplus)
         # 1LPT
-
         fH_1 = np.float32(Omz**0.55 * Hz)
         position, velocity = initialise_1LPT(force, fH_1)
         if param["initial_conditions"].casefold() == "1LPT".casefold():
@@ -177,10 +176,9 @@ def finalise_initial_conditions(
      })
     >>> finalise_initial_conditions(position, velocity, param)
     """
-    # Wrap and reorder particles
     utils.periodic_wrap(position)
     utils.reorder_particles(position, velocity)
-    # Write initial distribution
+
     snap_name = f"{param['base']}/output_00000/particles.parquet"
     logging.warning(f"Write initial snapshot...{snap_name=} {param['aexp']=}")
     utils.write_snapshot_particles_parquet(f"{snap_name}", position, velocity)
@@ -214,14 +212,12 @@ def read_hdf5(
     """
     import h5py
 
-    # Open file
     logging.warning(f"Read {param['initial_conditions']}")
     f = h5py.File(param["initial_conditions"], "r")
-    # Get scale factor
     param["aexp"] = f["metadata/ramses_info"].attrs["aexp"][0]
     logging.warning(f"Initial redshift snapshot at z = {1./param['aexp'] - 1}")
     utils.set_units(param)
-    # Get positions
+
     npart = int(f["metadata/npart_file"][:])
     if npart != param["npart"]:
         raise ValueError(f"{npart=} and {param['npart']} should be equal.")
@@ -277,23 +273,21 @@ def read_gadget(
     import readgadget  # From Pylians
 
     logging.warning(f"Read {param['initial_conditions']}")
-    # Open file
     filename = param["initial_conditions"]
     ptype = 1  # DM particles
     header = readgadget.header(filename)
-    BoxSize = header.boxsize  # Gpc/h
+    BoxSize = header.boxsize  # in Gpc/h
     Nall = header.nall  # Total number of particles
-    Omega_m = header.omega_m  # value of Omega_m
-    Omega_l = header.omega_l  # value of Omega_l
-    h = header.hubble  # value of h
+    Omega_m = header.omega_m
+    Omega_l = header.omega_l
+    h = header.hubble
     redshift = header.redshift  # redshift of the snapshot
     aexp = 1.0 / (1 + redshift)
-    # Get scale factor
     param["aexp"] = aexp
     param["z_start"] = 1.0 / aexp - 1
     logging.warning(f"Initial redshift snapshot at z = {1./param['aexp'] - 1}")
     utils.set_units(param)
-    # Check that Npart and cosmology are correct
+
     npart = int(Nall[ptype])
     if npart != param["npart"]:
         raise ValueError(f"{npart=} and {param['npart']} should be equal.")
@@ -303,10 +297,10 @@ def read_gadget(
         raise ValueError(
             f"Cosmology mismatch: {Omega_m=} {param['Om_m']=} {Omega_l=} {param['Om_lambda']=} {(100*h)=} {param['H0']=}"
         )
-    # Read position and velocity
+
     position = readgadget.read_block(filename, "POS ", [ptype])
     velocity = readgadget.read_block(filename, "VEL ", [ptype])
-    # Pysco Units
+
     vel_factor = param["unit_t"] / param["unit_l"]
     utils.prod_vector_scalar_inplace(position, np.float32(1.0 / BoxSize))
     utils.prod_vector_scalar_inplace(velocity, np.float32(vel_factor))
@@ -343,16 +337,15 @@ def generate_density(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.floa
     >>> Dplus = 1.5
     >>> generate_density(param, Dplus)
     """
-    # Get Transfert function
     transfer_grid = get_transfer_grid(param, Dplus)
-    # Get white noise
+
     ncells_1d = int(math.cbrt(param["npart"]))
     rng = np.random.default_rng(param["seed"])
     if param["fixed_ICS"]:
         density_k = white_noise_fourier_fixed(ncells_1d, rng, param["paired_ICS"])
     else:
         density_k = white_noise_fourier(ncells_1d, rng)
-    # Convolution (Fourier-space multiply)
+
     utils.prod_vector_vector_inplace(density_k, transfer_grid)
     transfer_grid = 0
     # .real method makes the data not C contiguous
@@ -389,16 +382,15 @@ def generate_force(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.float3
     >>> Dplus = 1.5
     >>> generate_force(param, Dplus)
     """
-    # Get Transfert function
     transfer_grid = get_transfer_grid(param, Dplus)
-    # Get white noise
+
     ncells_1d = int(math.cbrt(param["npart"]))
     rng = np.random.default_rng(param["seed"])
     if param["fixed_ICS"]:
         force = white_noise_fourier_fixed_force(ncells_1d, rng, param["paired_ICS"])
     else:
         force = white_noise_fourier_force(ncells_1d, rng)
-    # Convolution (Fourier-space multiply)
+
     utils.prod_gradient_vector_inplace(force, transfer_grid)
     transfer_grid = 0
     force = utils.ifft_3D_grad(force, param["nthreads"])
@@ -435,15 +427,14 @@ def get_transfer_grid(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.flo
     >>> Dplus = 1.5
     >>> get_transfer_grid(param, Dplus)
     """
-    # Get Transfert function
     k, Pk = np.loadtxt(param["power_spectrum_file"]).T
     Pk *= Dplus**2
-    # Compute Transfert function grid
+
     ncells_1d = int(math.cbrt(param["npart"]))
     if param["npart"] != ncells_1d**3:
         raise ValueError(f"{math.cbrt(param['npart'])=}, should be integer")
     kf = 2 * np.pi / param["boxlen"]
-    k_nodim = k / kf  # Dimensionless
+    k_dimensionless = k / kf
     sqrtPk = (np.sqrt(Pk / param["boxlen"] ** 3) * ncells_1d**3).astype(np.float32)
     k_1d = np.fft.fftfreq(ncells_1d, 1 / ncells_1d)
     k_grid = np.sqrt(
@@ -452,7 +443,7 @@ def get_transfer_grid(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.flo
         + k_1d[np.newaxis, :, np.newaxis] ** 2
     )
     k_1d = 0
-    transfer_grid = np.interp(k_grid, k_nodim, sqrtPk)
+    transfer_grid = np.interp(k_grid, k_dimensionless, sqrtPk)
     return transfer_grid
 
 
@@ -510,7 +501,6 @@ def white_noise_fourier(
                 imaginary = amplitude * math.sin(phase)
                 result_lower = real - ii * imaginary
                 result_upper = real + ii * imaginary
-                # Assign density
                 density[im, jm, km] = result_lower
                 density[i, j, k] = result_upper
     rng_phases = 0
@@ -580,7 +570,6 @@ def white_noise_fourier_fixed(
                 imaginary = math.sin(phase)
                 result_lower = real - ii * imaginary
                 result_upper = real + ii * imaginary
-                # Assign density
                 density[im, jm, km] = result_lower
                 density[i, j, k] = result_upper
     rng_phases = 0
@@ -673,7 +662,6 @@ def white_noise_fourier_force(
                 imaginary = amplitude * math.sin(phase)
                 result_lower = real - ii * imaginary
                 result_upper = real + ii * imaginary
-                # Assign force fields
                 force[im, jm, km, 0] = -ii * invtwopi * result_lower * kx / k2
                 force[i, j, k, 0] = ii * invtwopi * result_upper * kx / k2
                 force[im, jm, km, 1] = -ii * invtwopi * result_lower * ky / k2
@@ -792,7 +780,6 @@ def white_noise_fourier_fixed_force(
                 imaginary = math.sin(phase)
                 result_lower = real - ii * imaginary
                 result_upper = real + ii * imaginary
-                # Assign force fields
                 force[im, jm, km, 0] = -ii * invtwopi * result_lower * kx / k2
                 force[i, j, k, 0] = ii * invtwopi * result_upper * kx / k2
                 force[im, jm, km, 1] = -ii * invtwopi * result_lower * ky / k2
@@ -868,9 +855,7 @@ def compute_rhs_2ndorder(
     ncells_1d = force.shape[0]
     eight = np.float32(8)
     inv12h = np.float32(ncells_1d / 12.0)
-    # Initialise mesh
     result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
-    # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
@@ -969,13 +954,11 @@ def compute_rhs_3rdorder(
     two = np.float32(2)
     half = np.float32(0.5)
     inv12h = np.float32(ncells_1d / 12.0)
-    # Initialise mesh
     result_3a = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     result_3b = np.empty_like(result_3a)
     result_Ax_3c = np.empty_like(result_3a)
     result_Ay_3c = np.empty_like(result_3a)
     result_Az_3c = np.empty_like(result_3a)
-    # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
@@ -1129,10 +1112,8 @@ def initialise_1LPT(
     ncells_1d = force.shape[0]
     h = np.float32(1.0 / ncells_1d)
     half_h = np.float32(0.5 / ncells_1d)
-    # Initialise arrays
     position = np.empty_like(force)
     velocity = np.empty_like(force)
-    # Compute
     for i in prange(ncells_1d):
         x = half_h + i * h
         for j in prange(ncells_1d):
@@ -1187,7 +1168,6 @@ def add_2LPT(
     ncells_1d = force_2ndorder.shape[0]
     pos_factor_2ndorder = np.float32(3.0 / 7)
     vel_factor_2ndorder = np.float32(3.0 / 7 * fH_2)
-    # Compute
     for i in prange(ncells_1d):
         for j in prange(ncells_1d):
             for k in prange(ncells_1d):
@@ -1259,7 +1239,6 @@ def add_3LPT(
     vel_factor_3a = np.float32(-1.0 / 3 * fH_3)
     pos_factor_3c = np.float32(-1.0 / 7)
     vel_factor_3c = np.float32(-1.0 / 7 * fH_3)
-    # Compute
     for i in prange(ncells_1d):
         for j in prange(ncells_1d):
             for k in prange(ncells_1d):

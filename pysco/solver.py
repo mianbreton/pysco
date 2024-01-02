@@ -60,26 +60,25 @@ def pm(
     ncells_1d = 2 ** (param["ncoarse"])
     h = np.float32(1.0 / ncells_1d)
     MAS_index = 3  # None = 0, NGP = 1, CIC = 2, TSC = 3
-    # Check if need to compute P(k)
+
     save_pk = False
     if param["save_power_spectrum"].casefold() == "all".casefold() or (
         param["save_power_spectrum"].casefold() == "z_out".casefold()
         and param["write_snapshot"]
     ):
         save_pk = True
-    # Compute density mesh from particles and put in BU units
+
     if param["nthreads"] < 5:
         density = mesh.TSC_seq(position, ncells_1d)
     else:
         density = mesh.TSC(position, ncells_1d)
-    # Normalise density to RU
     if ncells_1d**3 != param["npart"]:
         conversion = np.float32(ncells_1d**3 / param["npart"])
         utils.prod_vector_scalar_inplace(density, conversion)
-    # Get additional field (for MG)
+
     param["compute_additional_field"] = True
     additional_field = get_additional_field(additional_field, density, h, param, tables)
-    # Write P(k)
+
     if save_pk and "multigrid".casefold() == param["linear_newton_solver"].casefold():
         output_pk = (
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
@@ -98,39 +97,37 @@ def pm(
             np.c_[k, Pk, Nmodes],
             header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
         )
-        """ param.to_csv(
-            f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
-            sep="=",
-            header=False,
-        ) """
-    # Compute RHS of the final Poisson equation
+
     rhs_poisson(density, additional_field, param)
     rhs = density
     del density
-    # Initialise Potential if there is no previous step. Else, rescale the potential using growth and scale factors
     # TODO: Try to keep Phidot and initialise Phi_i = Phi_(i-1) + Phidot*dt
     param["compute_additional_field"] = False
     potential = initialise_potential(potential, rhs, h, param, tables)
-    # Main procedure: Poisson solver
+
     if param["linear_newton_solver"].casefold() == "multigrid".casefold():
         potential = multigrid.linear(potential, rhs, h, param)
         rhs = 0
     elif param["linear_newton_solver"].casefold() == "fft".casefold():
         potential = fft(rhs, param, MAS_index, save_pk)
         rhs = 0
-    elif param["linear_newton_solver"].casefold() == "full_fft".casefold():
+    elif (
+        param["linear_newton_solver"].casefold() == "full_fft".casefold()
+        or param["linear_newton_solver"].casefold() == "fdk_fft".casefold()
+        or param["linear_newton_solver"].casefold() == "ham_fft".casefold()
+    ):
         pass
     else:
         raise ValueError(
-            f"{param['linear_newton_solver']=}, should be multigrid, fft or full_fft"
+            f"{param['linear_newton_solver']=}, should be multigrid, fft, fdk_fft, ham_fft or full_fft"
         )
 
-    """ plt.imshow(potential[0])
-    plt.colorbar()
-    plt.show() """
-    # Compute Force
     if param["theory"].casefold() == "newton".casefold():
-        if param["linear_newton_solver"].casefold() == "full_fft".casefold():
+        if (
+            param["linear_newton_solver"].casefold() == "full_fft".casefold()
+            or param["linear_newton_solver"].casefold() == "fdk_fft".casefold()
+            or param["linear_newton_solver"].casefold() == "ham_fft".casefold()
+        ):
             force = fft_force(rhs, param, MAS_index, save_pk)
             rhs = 0
         else:
@@ -150,7 +147,11 @@ def pm(
             ** 2
         )  # m -> km -> BU
         if param["fR_n"] == 1:
-            if param["linear_newton_solver"].casefold() == "full_fft".casefold():
+            if (
+                param["linear_newton_solver"].casefold() == "full_fft".casefold()
+                or param["linear_newton_solver"].casefold() == "fdk_fft".casefold()
+                or param["linear_newton_solver"].casefold() == "ham_fft".casefold()
+            ):
                 force = fft_force(rhs, param, MAS_index, save_pk)
                 rhs = 0
                 mesh.add_derivative5_fR_n1(force, additional_field, half_c2)
@@ -159,7 +160,11 @@ def pm(
                     potential, additional_field, half_c2
                 )
         elif param["fR_n"] == 2:
-            if param["linear_newton_solver"].casefold() == "full_fft".casefold():
+            if (
+                param["linear_newton_solver"].casefold() == "full_fft".casefold()
+                or param["linear_newton_solver"].casefold() == "fdk_fft".casefold()
+                or param["linear_newton_solver"].casefold() == "ham_fft".casefold()
+            ):
                 force = fft_force(rhs, param, MAS_index, save_pk)
                 rhs = 0
                 mesh.add_derivative5_fR_n2(force, additional_field, half_c2)
@@ -171,11 +176,12 @@ def pm(
             raise NotImplemented(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
             )
-    # Interpolate to particle position
+
     acceleration = mesh.invTSC_vec(force, position)
     return (acceleration, potential, additional_field)
 
 
+# TODO: Check convergence with ncoarse > 2 ncoarse_part
 def initialise_potential(
     potential: npt.NDArray[np.float32],
     rhs: npt.NDArray[np.float32],
@@ -217,7 +223,6 @@ def initialise_potential(
     >>> tables = [interp1d([0, 1], [1, 2]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [1, 2])]
     >>> potential = initialise_potential(potential, rhs, h, param, tables)
     """
-    # Initialise
     if len(potential) == 0:
         logging.warning("Assign potential from density field")
         if param["compute_additional_field"]:
@@ -232,7 +237,7 @@ def initialise_potential(
                 )
         else:
             potential = utils.prod_vector_scalar(rhs, (-1.0 / 6 * h**2))
-    else:  # Rescale
+    else:
         logging.warning("Rescale potential from previous step")
         if param["compute_additional_field"]:
             scaling = (
@@ -293,8 +298,6 @@ def get_additional_field(
     if param["theory"].casefold() == "newton".casefold():
         return np.empty(0, dtype=np.float32)
     else:  # f(R) gravity
-        # Compute the 3 terms needed to solve the cubic or quartic equation: (density-xi-q)
-        # Compute density term + constant
         Rbar = 3 * param["Om_m"] * param["aexp"] ** (-3) + 12 * param["Om_lambda"]
         Rbar0 = 3 * param["Om_m"] + 12 * param["Om_lambda"]
         fR_a = (
@@ -302,7 +305,6 @@ def get_additional_field(
             * ((Rbar0 / Rbar) ** (param["fR_n"] + 1))
             * 10 ** (-param["fR_logfR0"])
         )
-        ubar_scalaron = (-fR_a) ** (1.0 / (param["fR_n"] + 1))
         c2 = (
             c.value * 1e-3 * param["unit_t"] / (param["unit_l"] * param["aexp"])
         ) ** 2  # m -> km -> BU
@@ -311,19 +313,15 @@ def get_additional_field(
             np.float32(Rbar / 3 * param["aexp"] ** 4 - param["Om_m"] * param["aexp"])
             / (6 * c2)
             / (-fR_a)
-            # / ubar_scalaron
         )
         dens_term = utils.linear_operator(density, f1, f2)
 
-        # Compute q
         q = np.float32(-param["aexp"] ** 4 * Rbar / (18 * c2)) / (-fR_a)
-        # Compute the scalaron field
         param["fR_q"] = q
         logging.warning(f"initialise")
         u_scalaron = initialise_potential(additional_field, dens_term, h, param, tables)
         u_scalaron = multigrid.FAS(u_scalaron, dens_term, h, param)
-        # logging.warning(f"{1./ubar_scalaron=}")
-        if (param["nsteps"]) % 10 == 0:  # Check
+        if (param["nsteps"]) % 10 == 0:
             logging.info(
                 f"{np.mean(u_scalaron)=}, should be close to 1 (actually <1/u_sclaron> should be conserved)"
             )
@@ -360,7 +358,7 @@ def rhs_poisson(
     """
     f1 = np.float32(1.5 * param["aexp"] * param["Om_m"])
     f2 = -f1
-    utils.linear_operator_inplace(density, f1, f2)  # Newtonian Poisson RHS
+    utils.linear_operator_inplace(density, f1, f2)
 
 
 @utils.time_me
@@ -413,11 +411,6 @@ def fft(
             np.c_[k, Pk, Nmodes],
             header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
         )
-        """ param.to_csv(
-            f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
-            sep="=",
-            header=False,
-        ) """
     if MAS_index == 0:
         utils.divide_by_minus_k2_fourier(rhs_fourier)
     else:
@@ -460,11 +453,15 @@ def fft_force(
     >>> force = fft_force(rhs, param)
     """
     rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
-    if MAS_index == 0:
-        force = utils.compute_gradient_laplacian_fourier(rhs_fourier)
+    if "fdk_fft".casefold() == param["linear_newton_solver"].casefold():
+        force = utils.gradient_laplacian_fourier_fdk(rhs_fourier)
+    elif "full_fft".casefold() == param["linear_newton_solver"].casefold():
+        force = utils.gradient_laplacian_fourier_compensated(rhs_fourier, MAS_index)
+    elif "ham_fft".casefold() == param["linear_newton_solver"].casefold():
+        force = utils.gradient_laplacian_fourier_hammings(rhs_fourier, MAS_index)
     else:
-        force = utils.compute_gradient_laplacian_fourier_compensated(
-            rhs_fourier, MAS_index
+        raise ValueError(
+            f"{param['linear_newton_solver']=}, must be fdk_fft, ham_fft or full_fft"
         )
     if save_pk:
         k, Pk, Nmodes = utils.fourier_grid_to_Pk(rhs_fourier, MAS_index)
@@ -482,10 +479,5 @@ def fft_force(
             np.c_[k, Pk, Nmodes],
             header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
         )
-        """ param.to_csv(
-            f"{param['base']}/power/param_{param['extra']}_{param['nsteps']:05d}.txt",
-            sep="=",
-            header=False,
-        ) """
     rhs_fourier = 0
     return utils.ifft_3D_real_grad(force, param["nthreads"])

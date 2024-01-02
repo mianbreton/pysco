@@ -59,9 +59,9 @@ The goal is to develop a Python-based N-body code that is user-friendly and effi
 
 ### Prerequisites
 
-<u>In principle, all dependencies are installed when using _pip install_. </u>
+In principle, you can directly jump to the [Installation](#installation) section as all the dependencies will be automatically installed.
 
-If you prefer to install each of them by hand, then you will need the following dependencies (the _conda_ installation is shown, but the same result can be achieved with _pip_).
+If you prefer to install each of them by hand, then you will need the following libraries (the _conda_ installation is shown, but the same result can be achieved with _pip_).
 
 - Numba
 
@@ -102,7 +102,7 @@ If you prefer to install each of them by hand, then you will need the following 
 - PyFFTW
 
   ```sh
-  # For Unix users
+  # For Linux users
   python -m pip install pyfftw
   # For Mac users
   conda install -c conda-forge pyfftw
@@ -289,13 +289,13 @@ Pysco produces power spectra, snapshots, and extra information.
 
 #### Power spectra
 
-Power spectra are written as ascii files in the directory _base_/power/
+Power spectra are written as ascii files in the directory `base/power/`
 where _base_ in given by the user.
 
-The name formatting is pk\__theory_\_ncoarse*N*\__XXXXX_.dat
+The name formatting is `pk_theory_ncoarseN_XXXXX_.dat`
 where _theory_ and _N_ are user inputs.
 
-The ascii file contains three columns: $k$ [$h$/Mpc], $P(k)$ [Mpc/$h$]$^3$, N_modes
+The ascii file contains three columns: `k [h/Mpc], P(k) [Mpc/h]^3, N_modes`
 
 Additionally, the file header contains the scale factor, the box length and number of particles.
 
@@ -330,11 +330,11 @@ with h5py.File('snapshot.h5', 'r') as h5r:
 
 ##### Parquet format
 
-Particle snapshots are written as _parquet_ files in the directory `base/output_XXXXX`
+Particle snapshots can also be written as _parquet_ files in the directory `base/output_XXXXX`
 
 The name formatting is `particles_theory_ncoarseN_XXXXX.parquet`
 
-The parquet file contains six columns: x, y, z, vx, vy, vz. These files can be read as
+The parquet file contains six columns: `x, y, z, vx, vy, vz`. These files can be read as
 
 ```python
 import pandas as pd
@@ -343,7 +343,7 @@ x = df['x']
 vx = df['vx']
 ```
 
-Alongside every snapshot file there is an associated ascii information file.
+Alongside every parquet file there is an associated ascii information file.
 
 The name formatting is `param_theory_ncoarseN_XXXXX.txt`
 

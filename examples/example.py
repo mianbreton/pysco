@@ -32,7 +32,7 @@ param = {
     "save_power_spectrum": "all",
     "integrator": "leapfrog",
     "n_reorder": 25,
-    "Courant_factor": 0.5,
+    "Courant_factor": 1.0,
     "linear_newton_solver": "multigrid",
     "Npre": 2,
     "Npost": 1,

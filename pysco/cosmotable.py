@@ -54,14 +54,13 @@ def generate(param: pd.Series) -> List[interp1d]:
     # Get cosmo
     if param["evolution_table"] == "no":
         logging.warning(f"No evolution table read: computes all quantities")
-        cosmo = w0waCDM(  # type: ignore
+        cosmo = w0waCDM(
             H0=param["H0"],
             Om0=param["Om_m"],
             Ode0=param["Om_lambda"],
             w0=param["w0"],
             wa=param["wa"],
-        )  # Can get something else like Planck18
-        # Do stuff
+        )
         zmax = 150
         a = np.linspace(1.15, 1.0 / (1 + zmax), 100_000)
         t_lookback = (
@@ -79,8 +78,7 @@ def generate(param: pd.Series) -> List[interp1d]:
             f"{param['base']}/evotable_lcdmw7v2_pysco.txt",
             np.c_[a, Dplus_array, t_supercomoving],
         )
-    # Use RAMSES tables
-    else:
+    else:  # Use RAMSES tables
         logging.warning(f"Read RAMSES evolution: {param['evolution_table']}")
         logging.warning(f"Read MPGRAFIC table: {param['mpgrafic_table']}")
         evo = np.loadtxt(param["evolution_table"]).T

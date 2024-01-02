@@ -41,9 +41,7 @@ _YZ_MASK = _Y_MASK | _Z_MASK
 @njit(fastmath=True, cache=True)
 def interleaving_64bits(
     x: np.int64,
-) -> (
-    np.int64
-):  # Return 64-bits integer, x is 21-bits integer (even if int32 or int64...)
+) -> np.int64:
     """Interleaves 21-bits integer into 64-bits
     Takes an integer which represents the position in 21 bits. \\
     For example: let x, a float between 0 and 1. The 21-bits integer equivalent will be x_i = x* 2^21 \\
@@ -105,9 +103,8 @@ def key(x: np.float32, y: np.float32, z: np.float32) -> np.int64:
     >>> xyz_bits = key(0.25, 0.5, 0.75)
     >>> np.binary_repr(xyz_bits)
     """
-    xx = interleaving_64bits(
-        math.floor(x * 2**21)
-    )  # Rewrite as 21-bits integer (positions are automatically rescaled in the [0,1] range)
+    # Rewrite as 21-bits integer (positions are automatically rescaled in the [0,1] range)
+    xx = interleaving_64bits(math.floor(x * 2**21))
     yy = interleaving_64bits(math.floor(y * 2**21))
     zz = interleaving_64bits(math.floor(z * 2**21))
     return xx << 2 | yy << 1 | zz  # 64 bits integer

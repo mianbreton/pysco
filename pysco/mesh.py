@@ -34,16 +34,15 @@ def restriction(
     >>> result = restriction(x)
     """
     inveighth = np.float32(0.125)
-    result = np.empty(
-        (x.shape[0] >> 1, x.shape[1] >> 1, x.shape[2] >> 1), dtype=np.float32
-    )
-    for i in prange(result.shape[0]):
+    ncells_1d = x.shape[0] >> 1
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(ncells_1d):
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(result.shape[1]):
+        for j in prange(ncells_1d):
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(result.shape[2]):
+            for k in prange(ncells_1d):
                 kk = 2 * k
                 kkp1 = kk + 1
                 result[i, j, k] = inveighth * (
@@ -84,16 +83,15 @@ def restriction_half(
     >>> result = restriction_half(x)
     """
     inveighth = np.float32(0.125)
-    result = np.empty(
-        (x.shape[0] >> 1, x.shape[1] >> 1, x.shape[2] >> 1), dtype=np.float32
-    )
-    for i in prange(result.shape[0]):
+    ncells_1d = x.shape[0] >> 1
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(ncells_1d):
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(result.shape[1]):
+        for j in prange(ncells_1d):
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(result.shape[2]):
+            for k in prange(ncells_1d):
                 kk = 2 * k
                 kkp1 = kk + 1
                 result[i, j, k] = inveighth * (
@@ -129,16 +127,17 @@ def prolongation0(
     >>> x = np.random.rand(32, 32, 32).astype(np.float32)
     >>> result = prolongation0(x)
     """
+    ncells_1d = x.shape[0]
     x_fine = np.empty(
-        (x.shape[0] << 1, x.shape[1] << 1, x.shape[2] << 1), dtype=np.float32
+        (ncells_1d << 1, ncells_1d << 1, ncells_1d << 1), dtype=np.float32
     )
-    for i in prange(x.shape[0]):
+    for i in prange(ncells_1d):
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(x.shape[1]):
+        for j in prange(ncells_1d):
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(x.shape[2]):
+            for k in prange(ncells_1d):
                 kk = 2 * k
                 kkp1 = kk + 1
                 x_fine[ii, jj, kk] = x_fine[ii, jj, kkp1] = x_fine[
@@ -179,29 +178,29 @@ def prolongation(
     >>> coarse_field = np.random.rand(32, 32, 32).astype(np.float32)
     >>> fine_field = prolongation(coarse_field)
     """
+    ncells_1d = x.shape[0]
     f0 = np.float32(27.0 / 64)
     f1 = np.float32(9.0 / 64)
     f2 = np.float32(3.0 / 64)
     f3 = np.float32(1.0 / 64)
     x_fine = np.empty(
-        (x.shape[0] << 1, x.shape[1] << 1, x.shape[2] << 1), dtype=np.float32
+        (ncells_1d << 1, ncells_1d << 1, ncells_1d << 1), dtype=np.float32
     )
-    for i in prange(-1, x.shape[0] - 1):
+    for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(-1, x.shape[1] - 1):
+        for j in prange(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(-1, x.shape[2] - 1):
+            for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 kk = 2 * k
                 kkp1 = kk + 1
-                # Get result
                 tmp000 = x[im1, jm1, km1]
                 tmp001 = x[im1, jm1, k]
                 tmp002 = x[im1, jm1, kp1]
@@ -229,9 +228,8 @@ def prolongation(
                 tmp220 = x[ip1, jp1, km1]
                 tmp221 = x[ip1, jp1, k]
                 tmp222 = x[ip1, jp1, kp1]
-                # Central
                 tmp0 = f0 * tmp111
-                # Put in fine grid
+
                 x_fine[ii, jj, kk] = (
                     tmp0
                     + f1 * (tmp011 + tmp101 + tmp110)
@@ -312,23 +310,24 @@ def add_prolongation_half(
     f1 = np.float32(9.0 / 64)
     f2 = np.float32(3.0 / 64)
     f3 = np.float32(1.0 / 64)
+    ncells_1d = corr_c.shape[0]
 
-    for i in prange(-1, corr_c.shape[0] - 1):
+    for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(-1, corr_c.shape[1] - 1):
+        for j in prange(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(-1, corr_c.shape[2] - 1):
+            for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 kk = 2 * k
                 kkp1 = kk + 1
-                # Get result
+
                 tmp000 = corr_c[im1, jm1, km1]
                 tmp001 = corr_c[im1, jm1, k]
                 tmp010 = corr_c[im1, j, km1]
@@ -352,9 +351,8 @@ def add_prolongation_half(
                 tmp212 = corr_c[ip1, j, kp1]
                 tmp220 = corr_c[ip1, jp1, km1]
                 tmp221 = corr_c[ip1, jp1, k]
-                # Central
                 tmp0 = f0 * tmp111
-                # Put in fine grid
+
                 x[ii, jj, kk] += (
                     tmp0
                     + f1 * (tmp011 + tmp101 + tmp110)
@@ -410,9 +408,7 @@ def derivative3(
     """
     ncells_1d = a.shape[0]
     halfinvh = np.float32(0.5 * ncells_1d)
-    # Initialise mesh
     result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
-    # Compute
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
         im1 = i - 1
@@ -457,9 +453,7 @@ def derivative5(
     eight = np.float32(8)
     ncells_1d = a.shape[0]
     inv12h = np.float32(ncells_1d / 12.0)
-    # Initialise mesh
     result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
-    # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
@@ -517,9 +511,7 @@ def derivative7(
     fortyfive = np.float32(45.0)
     ncells_1d = a.shape[0]
     inv60h = np.float32(ncells_1d / 60.0)
-    # Initialise mesh
     result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
-    # Compute
     for i in prange(-3, ncells_1d - 3):
         ip1 = i + 1
         im1 = i - 1
@@ -604,9 +596,7 @@ def derivative5_with_fR_n1(
     eight = np.float32(8)
     ncells_1d = a.shape[0]
     inv12h = np.float32(ncells_1d / 12.0)
-    # Initialise mesh
     result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
-    # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
@@ -696,7 +686,6 @@ def add_derivative5_fR_n1(
     eightf = np.float32(8 * f)
     ncells_1d = b.shape[0]
     inv12h = np.float32(ncells_1d / 12.0)
-    # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
@@ -768,9 +757,7 @@ def derivative5_with_fR_n2(
     eight = np.float32(8)
     ncells_1d = a.shape[0]
     inv12h = np.float32(ncells_1d / 12.0)
-    # Initialise mesh
     result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
-    # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
@@ -860,7 +847,6 @@ def add_derivative5_fR_n2(
     eightf = np.float32(8 * f)
     ncells_1d = b.shape[0]
     inv12h = np.float32(ncells_1d / 12.0)
-    # Compute
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
@@ -922,10 +908,8 @@ def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     ncells_1d_f = np.float32(ncells_1d)
     ncells2 = ncells_1d**2
     one = np.float32(1)
-    # Initialise mesh
     result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     result_ravel = result.ravel()
-    # Loop over particles
     for n in prange(position.shape[0]):
         i = np.int16(position[n, 0] * ncells_1d_f)
         j = np.int16(position[n, 1] * ncells_1d_f)
@@ -967,19 +951,16 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     ncells_1d_f = np.float32(ncells_1d)
     one = np.float32(1)
     half = np.float32(0.5)
-    # Initialise mesh
     result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
-    # Loop over particles
     for n in prange(position.shape[0]):
-        # Get particle position
         x_part = position[n, 0] * ncells_1d_f
         y_part = position[n, 1] * ncells_1d_f
         z_part = position[n, 2] * ncells_1d_f
-        # Get closest cell indices
+
         i = np.int16(x_part)
         j = np.int16(y_part)
         k = np.int16(z_part)
-        # Distance to closest cell center
+
         dx = x_part - half - np.float32(i)
         dy = y_part - half - np.float32(j)
         dz = z_part - half - np.float32(k)
@@ -989,15 +970,15 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
         dx = abs(dx)
         dy = abs(dy)
         dz = abs(dz)
-        # Weights
+
         wx = one - dx
         wy = one - dy
         wz = one - dz
-        # Get other indices
+
         i2 = (i + signx) % ncells_1d
         j2 = (j + signy) % ncells_1d
         k2 = (k + signz) % ncells_1d
-        # 8 neighbours
+
         weight = wx * wy * wz
         atomic_add(result, (i, j, k), weight)
         weight = wx * wy * dz
@@ -1050,23 +1031,20 @@ def TSC_seq(
     ncells_1d_f = np.float32(ncells_1d)
     half = np.float32(0.5)
     threequarters = np.float32(0.75)
-    # Initialise mesh
     result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
-    # Loop over particles
     for n in range(position.shape[0]):
-        # Get particle position
         x_part = position[n, 0] * ncells_1d_f
         y_part = position[n, 1] * ncells_1d_f
         z_part = position[n, 2] * ncells_1d_f
-        # Get closest cell indices
+
         i = np.int16(x_part)
         j = np.int16(y_part)
         k = np.int16(z_part)
-        # Distance to closest cell center
+
         dx = x_part - half - np.float32(i)
         dy = y_part - half - np.float32(j)
         dz = z_part - half - np.float32(k)
-        # Weights
+
         wx = threequarters - dx**2
         wy = threequarters - dy**2
         wz = threequarters - dz**2
@@ -1085,14 +1063,14 @@ def TSC_seq(
         wx_p1_y_m1 = wx_p1 * wy_m1
         wx_p1_y = wx_p1 * wy
         wx_p1_y_p1 = wx_p1 * wy_p1
-        # Get other indices
+
         i_m1 = i - one
         j_m1 = j - one
         k_m1 = k - one
         i_p1 = i - ncells_1d_m1
         j_p1 = j - ncells_1d_m1
         k_p1 = k - ncells_1d_m1
-        # 27 neighbours
+
         result[i_m1, j_m1, k_m1] += wx_m1_y_m1 * wz_m1
         result[i_m1, j_m1, k] += wx_m1_y_m1 * wz
         result[i_m1, j_m1, k_p1] += wx_m1_y_m1 * wz_p1
@@ -1157,23 +1135,20 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     ncells_1d_f = np.float32(ncells_1d)
     half = np.float32(0.5)
     threequarters = np.float32(0.75)
-    # Initialise mesh
     result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
-    # Loop over particles
     for n in prange(position.shape[0]):
-        # Get particle position
         x_part = position[n, 0] * ncells_1d_f
         y_part = position[n, 1] * ncells_1d_f
         z_part = position[n, 2] * ncells_1d_f
-        # Get closest cell indices
+
         i = np.int16(x_part)
         j = np.int16(y_part)
         k = np.int16(z_part)
-        # Distance to closest cell center
+
         dx = x_part - half - np.float32(i)
         dy = y_part - half - np.float32(j)
         dz = z_part - half - np.float32(k)
-        # Weights
+
         wx = threequarters - dx**2
         wy = threequarters - dy**2
         wz = threequarters - dz**2
@@ -1192,14 +1167,14 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
         wx_p1_y_m1 = wx_p1 * wy_m1
         wx_p1_y = wx_p1 * wy
         wx_p1_y_p1 = wx_p1 * wy_p1
-        # Get other indices
+
         i_m1 = i - one
         j_m1 = j - one
         k_m1 = k - one
         i_p1 = i - ncells_1d_m1
         j_p1 = j - ncells_1d_m1
         k_p1 = k - ncells_1d_m1
-        # 27 neighbours
+
         weight = wx_m1_y_m1 * wz_m1
         atomic_add(result, (i_m1, j_m1, k_m1), weight)
         weight = wx_m1_y_m1 * wz
@@ -1288,9 +1263,7 @@ def invNGP(
     """
     ncells_1d = grid.shape[0]
     ncells_1d_f = np.float32(ncells_1d)
-    # Initialise mesh
     result = np.empty(position.shape[0], dtype=np.float32)
-    # Scalar grid
     for n in prange(position.shape[0]):
         i = np.int16(position[n, 0] * ncells_1d_f)
         j = np.int16(position[n, 1] * ncells_1d_f)
@@ -1327,10 +1300,9 @@ def invNGP_vec(
     >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
     >>> interpolated_velocity = invNGP_vec(grid_velocity, particle_positions)
     """
-    ncells_1d = grid.shape[0]  # The first 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[0]
     ncells_1d_f = np.float32(ncells_1d)
     result = np.empty_like(position)
-    # Vector grid
     for n in prange(position.shape[0]):
         i = np.int16(position[n, 0] * ncells_1d_f)
         j = np.int16(position[n, 1] * ncells_1d_f)
@@ -1372,19 +1344,16 @@ def invCIC(
     ncells_1d_f = np.float32(ncells_1d)
     one = np.float32(1)
     half = np.float32(0.5)
-    # Initialise mesh
     result = np.empty(position.shape[0], dtype=np.float32)
-    # Loop over particles
     for n in prange(position.shape[0]):
-        # Get particle position
         x_part = position[n, 0] * ncells_1d_f
         y_part = position[n, 1] * ncells_1d_f
         z_part = position[n, 2] * ncells_1d_f
-        # Get closest cell indices
+
         i = np.int16(x_part)
         j = np.int16(y_part)
         k = np.int16(z_part)
-        # Distance to closest cell center
+
         dx = x_part - half - np.float32(i)
         dy = y_part - half - np.float32(j)
         dz = z_part - half - np.float32(k)
@@ -1394,15 +1363,15 @@ def invCIC(
         dx = abs(dx)
         dy = abs(dy)
         dz = abs(dz)
-        # Weights
+
         wx = one - dx
         wy = one - dy
         wz = one - dz
-        # Get other indices
+
         i2 = (i + signx) % ncells_1d
         j2 = (j + signy) % ncells_1d
         k2 = (k + signz) % ncells_1d
-        # 8 neighbours
+
         result[n] = (
             wx * wy * wz * grid[i, j, k]
             + wx * wy * dz * grid[i, j, k2]
@@ -1444,23 +1413,22 @@ def invCIC_vec(
     >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
     >>> interpolated_velocity = invCIC_vec(grid_velocity, particle_positions)
     """
-    ncells_1d = grid.shape[0]  # The first 3 dimensions should be the cubic grid sizes
+    ncells_1d = grid.shape[0]
     ncells_1d_f = np.float32(ncells_1d)
     one = np.float32(1)
     half = np.float32(0.5)
-    # Initialise mesh
+
     result = np.empty_like(position)
-    # Loop over particles
+
     for n in prange(position.shape[0]):
-        # Get particle position
         x_part = position[n, 0] * ncells_1d_f
         y_part = position[n, 1] * ncells_1d_f
         z_part = position[n, 2] * ncells_1d_f
-        # Get closest cell indices
+
         i = np.int16(x_part)
         j = np.int16(y_part)
         k = np.int16(z_part)
-        # Distance to closest cell center
+
         dx = x_part - half - np.float32(i)
         dy = y_part - half - np.float32(j)
         dz = z_part - half - np.float32(k)
@@ -1470,16 +1438,15 @@ def invCIC_vec(
         dx = abs(dx)
         dy = abs(dy)
         dz = abs(dz)
-        # Weights
+
         wx = one - dx
         wy = one - dy
         wz = one - dz
-        # Get other indices
+
         i2 = (i + signx) % ncells_1d
         j2 = (j + signy) % ncells_1d
         k2 = (k + signz) % ncells_1d
         for m in prange(3):
-            # 8 neighbours
             result[n, m] = (
                 wx * wy * wz * grid[i, j, k, m]
                 + wx * wy * dz * grid[i, j, k2, m]
@@ -1527,23 +1494,20 @@ def invTSC(
     ncells_1d_f = np.float32(ncells_1d)
     half = np.float32(0.5)
     threequarters = np.float32(0.75)
-    # Initialise mesh
     result = np.empty(position.shape[0], dtype=np.float32)
-    # Loop over particles
     for n in prange(position.shape[0]):
-        # Get particle position
         x_part = position[n, 0] * ncells_1d_f
         y_part = position[n, 1] * ncells_1d_f
         z_part = position[n, 2] * ncells_1d_f
-        # Get closest cell indices
+
         i = np.int16(x_part)
         j = np.int16(y_part)
         k = np.int16(z_part)
-        # Distance to closest cell center
+
         dx = x_part - half - np.float32(i)
         dy = y_part - half - np.float32(j)
         dz = z_part - half - np.float32(k)
-        # Weights
+
         wx = threequarters - dx**2
         wy = threequarters - dy**2
         wz = threequarters - dz**2
@@ -1589,15 +1553,14 @@ def invTSC(
         wx_p1_y_p1_z_m1 = wx_p1_y_p1 * wz_m1
         wx_p1_y_p1_z = wx_p1_y_p1 * wz
         wx_p1_y_p1_z_p1 = wx_p1_y_p1 * wz_p1
-        # Get other indices
+
         i_m1 = i - one
         j_m1 = j - one
         k_m1 = k - one
         i_p1 = i - ncells_1d_m1
         j_p1 = j - ncells_1d_m1
         k_p1 = k - ncells_1d_m1
-        # Weights
-        # 27 neighbours
+
         result[n] = (
             wx_m1_y_m1_z_m1 * grid[i_m1, j_m1, k_m1]
             + wx_m1_y_m1_z * grid[i_m1, j_m1, k]
@@ -1658,29 +1621,26 @@ def invTSC_vec(
     >>> particle_positions = np.random.rand(32**3, 3).astype(np.float32)
     >>> interpolated_velocity = invTSC_vec(grid_velocity, particle_positions)
     """
-    ncells_1d = grid.shape[0]  # The first 3 dimensions should be the cubic grid size
+    ncells_1d = grid.shape[0]
     ncells_1d_m1 = np.int16(ncells_1d - 1)
     one = np.int16(1)
     ncells_1d_f = np.float32(ncells_1d)
     half = np.float32(0.5)
     threequarters = np.float32(0.75)
-    # Initialise mesh
     result = np.empty_like(position)
-    # Loop over particles
     for n in prange(position.shape[0]):
-        # Get particle position
         x_part = position[n, 0] * ncells_1d_f
         y_part = position[n, 1] * ncells_1d_f
         z_part = position[n, 2] * ncells_1d_f
-        # Get closest cell indices
+
         i = np.int16(x_part)
         j = np.int16(y_part)
         k = np.int16(z_part)
-        # Distance to closest cell center
+
         dx = x_part - half - np.float32(i)
         dy = y_part - half - np.float32(j)
         dz = z_part - half - np.float32(k)
-        # Weights
+
         wx = threequarters - dx**2
         wy = threequarters - dy**2
         wz = threequarters - dz**2
@@ -1726,7 +1686,7 @@ def invTSC_vec(
         wx_p1_y_p1_z_m1 = wx_p1_y_p1 * wz_m1
         wx_p1_y_p1_z = wx_p1_y_p1 * wz
         wx_p1_y_p1_z_p1 = wx_p1_y_p1 * wz_p1
-        # Get other indices
+
         i_m1 = i - one
         j_m1 = j - one
         k_m1 = k - one
@@ -1734,7 +1694,6 @@ def invTSC_vec(
         j_p1 = j - ncells_1d_m1
         k_p1 = k - ncells_1d_m1
         for m in prange(3):
-            # 27 neighbours
             result[n, m] = (
                 wx_m1_y_m1_z_m1 * grid[i_m1, j_m1, k_m1, m]
                 + wx_m1_y_m1_z * grid[i_m1, j_m1, k, m]

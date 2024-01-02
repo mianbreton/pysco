@@ -6,7 +6,7 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -33,7 +33,6 @@ def run(param) -> None:
     param : dict or pd.Series
         Parameter container
     """
-    # Set logging/verbose level
     # Ideally it would have been error/info/debug, but the latter triggers extensive numba verbose
     if param["verbose"] == 0:
         logging_level = logging.ERROR
@@ -49,6 +48,7 @@ def run(param) -> None:
         datefmt="%d/%m/%Y %I:%M:%S %p",
         handlers=[
             RichHandler(
+                show_time=False,
                 show_level=False,
                 show_path=False,
                 enable_link_path=False,
@@ -57,45 +57,41 @@ def run(param) -> None:
         ],
         force=True,
     )
-    # Check param type
+
     if isinstance(param, Dict):
         param = pd.Series(param)
     elif isinstance(param, pd.Series):
         pass
     else:
         raise ValueError(f"{type(param)=}, should be a dictionnary or a Pandas Series")
-    # Threading
+
     if param["nthreads"] > 0:
         numba.set_num_threads(param["nthreads"])
     else:
         param["nthreads"] = numba.get_num_threads()
     logging.warning(f"{param['nthreads']=}")
-    # Extra string
+
     extra = param["theory"].casefold()
     if extra.casefold() == "fr".casefold():
         extra += f"{param['fR_logfR0']}_n{param['fR_n']}"
     extra += f"_{param['linear_newton_solver']}_ncoarse{param['ncoarse']}"
     param["extra"] = extra
     z_out = ast.literal_eval(param["z_out"])
-    # Create directories
-    # Power dir
+
     power_directory = f"{param['base']}/power"
     os.makedirs(power_directory, exist_ok=True)
     for i in range(len(z_out) + 1):
         output_directory = f"{param['base']}/output_{i:05d}"
         os.makedirs(output_directory, exist_ok=True)
-    ###################################################
-    # Get cosmological table
+
     tables = cosmotable.generate(param)
     # aexp and t are overwritten if we read a snapshot
     param["aexp"] = 1.0 / (1 + param["z_start"])
     utils.set_units(param)
-    # Initial conditions
     logging.warning(f"\n[bold blue]----- Initial conditions -----[/bold blue]\n")
     position, velocity = initial_conditions.generate(param, tables)
     param["t"] = tables[1](param["aexp"])
     logging.warning(f"{param['aexp']=} {param['t']=}")
-    # Run code
     logging.warning(f"\n[bold blue]----- Run N-body -----[/bold blue]\n")
     param["nsteps"] = 0
     acceleration, potential, additional_field = solver.pm(position, param)
@@ -105,7 +101,6 @@ def run(param) -> None:
     logging.info(f"{aexp_out=}")
     logging.info(f"{t_out}")
     i_snap = 1
-    # Get output redshifts
     while param["aexp"] < 1.0:
         param["nsteps"] += 1
         param["i_snap"] = i_snap
@@ -140,12 +135,12 @@ def run(param) -> None:
 def main():
     import argparse
 
-    logging.warning("Read configuration file")
+    print("Read configuration file")
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config_file", help="Configuration file", required=True)
     args = parser.parse_args()
     param = utils.read_param_file(args.config_file)
-    logging.warning(param)
+    print(param)
     run(param)
 
 
