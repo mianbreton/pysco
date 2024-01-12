@@ -29,7 +29,7 @@ def operator(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float3
     >>> from pysco.laplacian import operator
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> operator(x, h)
+    >>> result = operator(x, h)
     """
     invh2 = np.float32(h ** (-2))
     six = np.float32(6)
@@ -89,7 +89,7 @@ def residual(
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> residual(x, b, h)
+    >>> result = residual(x, b, h)
     """
     invh2 = np.float32(h ** (-2))
     six = np.float32(6)
@@ -156,7 +156,7 @@ def restrict_residual_half(
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> restrict_residual_half(x, b, h)
+    >>> result = restrict_residual_half(x, b, h)
     """
     inveight = np.float32(0.125)
     three = np.float32(3.0)
@@ -249,7 +249,7 @@ def residual_error_half(
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> residual_error_half(x, b, h)
+    >>> result = residual_error_half(x, b, h)
     """
     six = np.float32(6.0)
     invh2 = np.float32(h ** (-2))
@@ -362,7 +362,7 @@ def truncation_error(x: npt.NDArray[np.float32], h: np.float32) -> np.float32:
     >>> from pysco.laplacian import truncation_error
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> truncation_error(x, h)
+    >>> result = truncation_error(x, h)
     """
     ncells_1d = x.shape[0] >> 1
     RLx = mesh.restriction(operator(x, h))
@@ -401,7 +401,7 @@ def truncation_knebe2(
     >>> from pysco.laplacian import truncation_knebe2
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> truncation_knebe2(x, h)
+    >>> result = truncation_knebe2(x, h)
     """
     return mesh.prolongation(operator(mesh.restriction(x), 2 * h)) - operator(x, h)
 
@@ -430,7 +430,7 @@ def truncation_knebe(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     >>> import numpy as np
     >>> from pysco.laplacian import truncation_knebe
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> truncation_knebe(b)
+    >>> result = truncation_knebe(b)
     """
     return mesh.prolongation(mesh.restriction(b)) - b
 
@@ -462,7 +462,7 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
     >>> import numpy as np
     >>> from pysco.laplacian import truncation_error_knebe
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> truncation_error_knebe(b)
+    >>> result = truncation_error_knebe(b)
     """
     truncation = np.float32(0)
     ncells_1d = b.shape[0]

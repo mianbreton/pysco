@@ -175,7 +175,7 @@ def initialise_potential(
     >>> from pysco.cubic import initialise_potential
     >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> h = 1./32
-    >>> q = 0.01
+    >>> q = -0.01
     >>> potential = initialise_potential(b, h, q)
     """
     threeh2 = 3 * h**2

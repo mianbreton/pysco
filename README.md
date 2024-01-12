@@ -17,6 +17,7 @@
       <ul>
         <li><a href="#prerequisites">Prerequisites</a></li>
         <li><a href="#installation">Installation</a></li>
+        <li><a href="#testing-the-installation">Testing the installation</a></li>
       </ul>
     </li>
     <li>
@@ -155,6 +156,19 @@ _For mac users the pyfftw installation might fail. In this case the installation
 ```sh
 conda install -c conda-forge pyfftw
 ```
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+### Testing the installation
+
+This step can only be done if you cloned the source directory. First move to the source subdirectory: `cd pysco/`
+Then use the command
+
+```bash
+pytest --doctest-modules
+```
+
+This will run the examples in the docstrings for each function for which we do not compute the timigs (use of the decorator `@time_me`)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 

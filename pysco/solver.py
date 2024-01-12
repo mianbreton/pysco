@@ -455,14 +455,10 @@ def fft_force(
     rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
     if "fdk_fft".casefold() == param["linear_newton_solver"].casefold():
         force = utils.gradient_laplacian_fourier_fdk(rhs_fourier)
-    elif "full_fft".casefold() == param["linear_newton_solver"].casefold():
-        force = utils.gradient_laplacian_fourier_compensated(rhs_fourier, MAS_index)
     elif "ham_fft".casefold() == param["linear_newton_solver"].casefold():
         force = utils.gradient_laplacian_fourier_hammings(rhs_fourier, MAS_index)
     else:
-        raise ValueError(
-            f"{param['linear_newton_solver']=}, must be fdk_fft, ham_fft or full_fft"
-        )
+        force = utils.gradient_laplacian_fourier_compensated(rhs_fourier, MAS_index)
     if save_pk:
         k, Pk, Nmodes = utils.fourier_grid_to_Pk(rhs_fourier, MAS_index)
         rhs_fourier = 0

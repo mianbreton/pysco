@@ -51,7 +51,6 @@ def operator(
     >>> h = np.float32(0.1)
     >>> q = np.float32(0.01)
     >>> result = operator(x, b, h, q)
-    >>> print(result)
     """
     h2 = np.float32(h**2)
     ncells_1d = x.shape[0]
@@ -110,7 +109,6 @@ def solution_quartic_equation(
     >>> p = np.float32(0.1)
     >>> q = np.float32(0.01)
     >>> result = solution_quartic_equation(p, q)
-    >>> print(result)
     """  # TODO: Try if not better to use double precision but less checking conditions
     zero = np.float32(0)
     if p == zero:
@@ -174,9 +172,8 @@ def initialise_potential(
     >>> from pysco.quartic import initialise_potential
     >>> b = np.random.rand(10, 10, 10).astype(np.float32)
     >>> h = np.float32(0.1)
-    >>> q = np.float32(0.01)
+    >>> q = np.float32(-0.01)
     >>> result = initialise_potential(b, h, q)
-    >>> print(result)
     """
     h2 = np.float32(h**2)
     four = np.float32(4)

@@ -42,16 +42,25 @@ def generate(
     >>> import numpy as np
     >>> import pandas as pd
     >>> from pysco.initial_conditions import generate
+    >>> import os
+    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> param = pd.Series({
-         'initial_conditions': '2LPT',
-         'z_start': 49.0,
-         'Om_m': 0.27,
-         'Om_lambda': 0.73,
-         'unit_t': 1.0,
-         'npart': 64,
-     })
+    ...     'initial_conditions': '2LPT',
+    ...     'z_start': 49.0,
+    ...     'Om_m': 0.27,
+    ...     'Om_lambda': 0.73,
+    ...     'unit_t': 1.0,
+    ...     'npart': 64,
+    ...     'power_spectrum_file': f"{this_dir}/../examples/pk_lcdmw7v2.dat",
+    ...     'boxlen': 500,
+    ...     'seed': 42,
+    ...     'fixed_ICS': 0,
+    ...     'paired_ICS': 0,
+    ...     'nthreads': 1,
+    ...     'linear_newton_solver': "fft",
+    ...  })
     >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.rand(100)) for _ in range(4)]
-    >>> generate(param, tables)
+    >>> position, velocity = generate(param, tables)
     """
     if param["initial_conditions"][1:4].casefold() == "LPT".casefold():
         a_start = 1.0 / (1 + param["z_start"])
@@ -171,18 +180,17 @@ def finalise_initial_conditions(
     >>> position = np.random.rand(64, 3).astype(np.float32)
     >>> velocity = np.random.rand(64, 3).astype(np.float32)
     >>> param = pd.Series({
-         'base': '/path/to/base_directory',
-         'aexp': 0.8,
-     })
+    ...     'aexp': 0.8,
+    ...  })
     >>> finalise_initial_conditions(position, velocity, param)
     """
     utils.periodic_wrap(position)
     utils.reorder_particles(position, velocity)
-
-    snap_name = f"{param['base']}/output_00000/particles.parquet"
-    logging.warning(f"Write initial snapshot...{snap_name=} {param['aexp']=}")
-    utils.write_snapshot_particles_parquet(f"{snap_name}", position, velocity)
-    param.to_csv(f"{param['base']}/output_00000/param.txt", sep="=", header=False)
+    if "base" in param:
+        snap_name = f"{param['base']}/output_00000/particles.parquet"
+        logging.warning(f"Write initial snapshot...{snap_name=} {param['aexp']=}")
+        utils.write_snapshot_particles_parquet(f"{snap_name}", position, velocity)
+        param.to_csv(f"{param['base']}/output_00000/param.txt", sep="=", header=False)
 
 
 def read_hdf5(
@@ -199,16 +207,6 @@ def read_hdf5(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [3, Npart]
-
-    Example
-    -------
-    >>> import pandas as pd
-    >>> from pysco.initial_conditions import read_hdf5
-    >>> param = pd.Series({
-         'initial_conditions': '/path/to/snapshot.h5',
-         'npart': 64,
-     })
-    >>> position, velocity = read_hdf5(param)
     """
     import h5py
 
@@ -259,16 +257,6 @@ def read_gadget(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [3, Npart]
-
-    Example
-    -------
-    >>> import pandas as pd
-    >>> from pysco.initial_conditions import read_gadget
-    >>> param = pd.Series({
-         'initial_conditions': '/path/to/snapshot.gadget',
-         'npart': 64,
-     })
-    >>> position, velocity = read_gadget(param)
     """
     import readgadget  # From Pylians
 

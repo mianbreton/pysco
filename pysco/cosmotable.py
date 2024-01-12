@@ -30,24 +30,26 @@ def generate(param: pd.Series) -> List[interp1d]:
     --------
     >>> import pandas as pd
     >>> from pysco.cosmotable import generate
+    >>> import os
+    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> params_cosmo = pd.Series({
-         "evolution_table": "no",
-         "H0": 70.0,
-         "Om_m": 0.3,
-         "Om_lambda": 0.7,
-         "w0": -1.0,
-         "wa": 0.0,
-         "base": "path/to/base/directory"
-     })
+    ...     "evolution_table": "no",
+    ...     "H0": 70.0,
+    ...     "Om_m": 0.3,
+    ...     "Om_lambda": 0.7,
+    ...     "w0": -1.0,
+    ...     "wa": 0.0,
+    ...     "base": f"{this_dir}/../examples/"
+    ...     })
     >>> interpolators_cosmo = generate(params_cosmo)
     >>> a_interp, t_interp, Dplus_interp, H_interp = interpolators_cosmo
 
     >>> params_ramses = pd.Series({
-         "evolution_table": "path/to/evolution_table.txt",
-         "mpgrafic_table": "path/to/mpgrafic_table.txt",
-         "H0": 70.0,
-         "base": "path/to/base/directory"
-     })
+    ...     "evolution_table": f"{this_dir}/../examples/ramses_input_lcdmw7v2.dat",
+    ...     "mpgrafic_table": f"{this_dir}/../examples/mpgrafic2ndorder_input_lcdmw7v2.dat",
+    ...     "H0": 70.0,
+    ...     "base": f"{this_dir}/../examples/"
+    ...     })
     >>> interpolators_ramses = generate(params_ramses)
     >>> a_interp_ramses, t_interp_ramses, Dplus_interp_ramses, H_interp_ramses = interpolators_ramses
     """

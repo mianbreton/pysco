@@ -395,21 +395,21 @@ def operator(
     >>> import pandas as pd
     >>> from pysco.multigrid import operator
 
-    Example 1: Compute operator for f(R) with n = 1
+    >>> # Example 1: Compute operator for f(R) with n = 1
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> param = pd.Series({"compute_additional_field": True, "fR_n": 1, "fR_q": 0.1})
-    >>> operator_result = operator(x, b, h, param)
-
-    Example 2: Compute operator for f(R) with n = 2 and custom density term
-    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
-    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> param = pd.Series({"compute_additional_field": True, "fR_n": 2, "fR_q": 0.2})
+    >>> param = pd.Series({"compute_additional_field": True, "fR_n": 1, "fR_q": -0.1})
     >>> operator_result = operator(x, h, param, b)
 
-    Example 3: Compute Laplacian operator for the main field
+    >>> # Example 2: Compute operator for f(R) with n = 2 and custom density term
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> param = pd.Series({"compute_additional_field": True, "fR_n": 2, "fR_q": -0.2})
+    >>> operator_result = operator(x, h, param, b)
+
+    >>> # Example 3: Compute Laplacian operator for the main field
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> h = np.float32(1./32)
     >>> param = pd.Series({"compute_additional_field": False})
