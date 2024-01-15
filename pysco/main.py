@@ -6,7 +6,7 @@ Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
 __copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.3.1"
+__version__ = "0.3.3"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 

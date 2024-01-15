@@ -1342,10 +1342,7 @@ def ifft_3D_grad(
 
 # @time_me
 @njit(
-    ["void(c8[:,:,::1])"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
+    ["void(c8[:,:,::1])"], fastmath=True, cache=True, parallel=True, error_model="numpy"
 )
 def divide_by_minus_k2_fourier(x: npt.NDArray[np.complex64]) -> None:
     """Inplace divide complex Fourier-space field by -k^2
@@ -1362,27 +1359,23 @@ def divide_by_minus_k2_fourier(x: npt.NDArray[np.complex64]) -> None:
     >>> complex_grid = np.random.rand(16, 16, 9).astype(np.complex64)
     >>> divide_by_minus_k2_fourier(complex_grid)
     """
-    minus_fourpi2 = np.float32(-4.0 * np.pi**2)
+    minus_inv_fourpi2 = np.float32(-0.25 / np.pi**2)
     ncells_1d = len(x)
     middle = ncells_1d // 2
     for i in prange(ncells_1d):
-        i_iszero = ~np.bool_(i)
         if i > middle:
             kx2 = np.float32(ncells_1d - i) ** 2
         else:
             kx2 = np.float32(i) ** 2
         for j in prange(ncells_1d):
-            j_iszero = ~np.bool_(j)
             if j > middle:
                 kx2_ky2 = kx2 + np.float32(ncells_1d - j) ** 2
             else:
                 kx2_ky2 = kx2 + np.float32(j) ** 2
             for k in prange(middle + 1):
-                if i_iszero and j_iszero and k == 0:
-                    x[0, 0, 0] = 0
-                    continue
-                k2 = minus_fourpi2 * (kx2_ky2 + np.float32(k) ** 2)
-                x[i, j, k] /= k2
+                invk2 = minus_inv_fourpi2 / (kx2_ky2 + np.float32(k) ** 2)
+                x[i, j, k] *= invk2
+    x[0, 0, 0] = 0
 
 
 @njit(
@@ -1390,6 +1383,7 @@ def divide_by_minus_k2_fourier(x: npt.NDArray[np.complex64]) -> None:
     fastmath=True,
     cache=True,
     parallel=True,
+    error_model="numpy",
 )
 def divide_by_minus_k2_fourier_compensated(
     x: npt.NDArray[np.complex64], p: int
@@ -1411,13 +1405,12 @@ def divide_by_minus_k2_fourier_compensated(
     >>> p_val = 2
     >>> divide_by_minus_k2_fourier_compensated(complex_grid, p_val)
     """
-    minus_fourpi2 = np.float32(-4.0 * np.pi**2)
+    minus_inv_fourpi2 = np.float32(-0.25 / np.pi**2)
     ncells_1d = len(x)
     prefactor = np.float32(1.0 / ncells_1d)
-    twop = 2 * p
+    minus_twop = -2 * p
     middle = ncells_1d // 2
     for i in prange(ncells_1d):
-        i_iszero = ~np.bool_(i)
         if i > middle:
             kx = -np.float32(ncells_1d - i)
         else:
@@ -1425,7 +1418,6 @@ def divide_by_minus_k2_fourier_compensated(
         kx2 = kx**2
         w_x = np.sinc(kx * prefactor)
         for j in prange(ncells_1d):
-            j_iszero = ~np.bool_(j)
             if j > middle:
                 ky = -np.float32(ncells_1d - j)
             else:
@@ -1433,13 +1425,11 @@ def divide_by_minus_k2_fourier_compensated(
             w_xy = w_x * np.sinc(ky * prefactor)
             kx2_ky2 = kx2 + ky**2
             for k in prange(middle + 1):
-                if i_iszero and j_iszero and k == 0:
-                    x[0, 0, 0] = 0
-                    continue
                 kz = np.float32(k)
                 w_xyz = w_xy * np.sinc(kz * prefactor)
-                k2 = w_xyz**twop * minus_fourpi2 * (kx2_ky2 + kz**2)
-                x[i, j, k] /= k2
+                invk2 = minus_inv_fourpi2 / (kx2_ky2 + kz**2)
+                x[i, j, k] *= w_xyz**minus_twop * invk2
+    x[0, 0, 0] = 0
 
 
 @njit(
@@ -1447,6 +1437,7 @@ def divide_by_minus_k2_fourier_compensated(
     fastmath=True,
     cache=True,
     parallel=True,
+    error_model="numpy",
 )
 def gradient_laplacian_fourier_exact(
     x: npt.NDArray[np.complex64],
@@ -1476,29 +1467,25 @@ def gradient_laplacian_fourier_exact(
     middle = ncells_1d // 2
     result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     for i in prange(ncells_1d):
-        i_iszero = ~np.bool_(i)
         if i > middle:
             kx = -np.float32(ncells_1d - i)
         else:
             kx = np.float32(i)
         kx2 = kx**2
         for j in prange(ncells_1d):
-            j_iszero = ~np.bool_(j)
             if j > middle:
                 ky = -np.float32(ncells_1d - j)
             else:
                 ky = np.float32(j)
             kx2_ky2 = kx2 + ky**2
             for k in prange(middle + 1):
-                if i_iszero and j_iszero and k == 0:
-                    result[0, 0, 0, 0] = result[0, 0, 0, 1] = result[0, 0, 0, 2] = 0
-                    continue
                 kz = np.float32(k)
-                k2 = kx2_ky2 + kz**2
-                x_k2_tmp = ii * invtwopi * x[i, j, k] / k2
+                invk2 = invtwopi / (kx2_ky2 + kz**2)
+                x_k2_tmp = ii * invk2 * x[i, j, k]
                 result[i, j, k, 0] = x_k2_tmp * kx
                 result[i, j, k, 1] = x_k2_tmp * ky
                 result[i, j, k, 2] = x_k2_tmp * kz
+    result[0, 0, 0, :] = 0
     return result
 
 
@@ -1507,6 +1494,7 @@ def gradient_laplacian_fourier_exact(
     fastmath=True,
     cache=True,
     parallel=True,
+    error_model="numpy",
 )
 def gradient_laplacian_fourier_compensated(
     x: npt.NDArray[np.complex64], p: int
@@ -1537,11 +1525,10 @@ def gradient_laplacian_fourier_compensated(
     invtwopi = np.float32(0.5 / np.pi)
     ncells_1d = len(x)
     prefactor = np.float32(1.0 / ncells_1d)
-    twop = 2 * p
+    minus_twop = -2 * p
     middle = ncells_1d // 2
     result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     for i in prange(ncells_1d):
-        i_iszero = ~np.bool_(i)
         if i > middle:
             kx = -np.float32(ncells_1d - i)
         else:
@@ -1549,7 +1536,6 @@ def gradient_laplacian_fourier_compensated(
         kx2 = kx**2
         w_x = np.sinc(kx * prefactor)
         for j in prange(ncells_1d):
-            j_iszero = ~np.bool_(j)
             if j > middle:
                 ky = -np.float32(ncells_1d - j)
             else:
@@ -1557,16 +1543,14 @@ def gradient_laplacian_fourier_compensated(
             kx2_ky2 = kx2 + ky**2
             w_xy = w_x * np.sinc(ky * prefactor)
             for k in prange(middle + 1):
-                if i_iszero and j_iszero and k == 0:
-                    result[0, 0, 0, 0] = result[0, 0, 0, 1] = result[0, 0, 0, 2] = 0
-                    continue
                 kz = np.float32(k)
                 w_xyz = w_xy * np.sinc(kz * prefactor)
-                k2 = w_xyz**twop * (kx2_ky2 + kz**2)
-                x_k2_tmp = ii * invtwopi * x[i, j, k] / k2
+                invk2 = invtwopi / (kx2_ky2 + kz**2)
+                x_k2_tmp = ii * w_xyz**minus_twop * invk2 * x[i, j, k]
                 result[i, j, k, 0] = x_k2_tmp * kx
                 result[i, j, k, 1] = x_k2_tmp * ky
                 result[i, j, k, 2] = x_k2_tmp * kz
+    result[0, 0, 0, :] = 0
     return result
 
 
@@ -1575,6 +1559,7 @@ def gradient_laplacian_fourier_compensated(
     fastmath=True,
     cache=True,
     parallel=True,
+    error_model="numpy",
 )
 def gradient_laplacian_fourier_fdk(
     x: npt.NDArray[np.complex64],
@@ -1608,7 +1593,6 @@ def gradient_laplacian_fourier_fdk(
     middle = ncells_1d // 2
     result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     for i in prange(ncells_1d):
-        i_iszero = ~np.bool_(i)
         if i > middle:
             kx = -np.float32(ncells_1d - i)
         else:
@@ -1619,7 +1603,6 @@ def gradient_laplacian_fourier_fdk(
         d1_w_x = invsix * (eight * sin_w_x - sin_2w_x)
         f_x = (w_x * np.sinc(invpi * w_x)) ** 2
         for j in prange(ncells_1d):
-            j_iszero = ~np.bool_(j)
             if j > middle:
                 ky = -np.float32(ncells_1d - j)
             else:
@@ -1631,9 +1614,6 @@ def gradient_laplacian_fourier_fdk(
             f_y = (w_y * np.sinc(invpi * w_y)) ** 2
             f_xy = f_x + f_y
             for k in prange(middle + 1):
-                if i_iszero and j_iszero and k == 0:
-                    result[0, 0, 0, 0] = result[0, 0, 0, 1] = result[0, 0, 0, 2] = 0
-                    continue
                 kz = np.float32(k)
                 w_z = twopi * kz * h
                 sin_w_z = np.sin(w_z)
@@ -1645,6 +1625,7 @@ def gradient_laplacian_fourier_fdk(
                 result[i, j, k, 0] = x_k2_tmp * d1_w_x
                 result[i, j, k, 1] = x_k2_tmp * d1_w_y
                 result[i, j, k, 2] = x_k2_tmp * d1_w_z
+    result[0, 0, 0, :] = 0
     return result
 
 
@@ -1653,6 +1634,7 @@ def gradient_laplacian_fourier_fdk(
     fastmath=True,
     cache=True,
     parallel=True,
+    error_model="numpy",
 )
 def gradient_laplacian_fourier_hammings(
     x: npt.NDArray[np.complex64], p: int
@@ -1691,7 +1673,6 @@ def gradient_laplacian_fourier_hammings(
     middle = ncells_1d // 2
     result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     for i in prange(ncells_1d):
-        i_iszero = ~np.bool_(i)
         if i > middle:
             kx = -np.float32(ncells_1d - i)
         else:
@@ -1703,7 +1684,6 @@ def gradient_laplacian_fourier_hammings(
         sin_2w_x = np.sin(two * w_x)
         d1_w_x = invsix * (eight * sin_w_x - sin_2w_x)
         for j in prange(ncells_1d):
-            j_iszero = ~np.bool_(j)
             if j > middle:
                 ky = -np.float32(ncells_1d - j)
             else:
@@ -1715,9 +1695,6 @@ def gradient_laplacian_fourier_hammings(
             sin_2w_y = np.sin(two * w_y)
             d1_w_y = invsix * (eight * sin_w_y - sin_2w_y)
             for k in prange(middle + 1):
-                if i_iszero and j_iszero and k == 0:
-                    result[0, 0, 0, 0] = result[0, 0, 0, 1] = result[0, 0, 0, 2] = 0
-                    continue
                 kz = np.float32(k)
                 w_z = twopi * kz * h
                 weight_xyz = weight_xy * np.sinc(kz * h)
@@ -1725,8 +1702,10 @@ def gradient_laplacian_fourier_hammings(
                 sin_2w_z = np.sin(two * w_z)
                 d1_w_z = invsix * (eight * sin_w_z - sin_2w_z)
                 k2 = h * weight_xyz**twop * (kx2_ky2 + kz**2)
-                x_k2_tmp = ii * invfourpi2 * x[i, j, k] / k2
+                invk2 = invfourpi2 / k2
+                x_k2_tmp = ii * invk2 * x[i, j, k]
                 result[i, j, k, 0] = x_k2_tmp * d1_w_x
                 result[i, j, k, 1] = x_k2_tmp * d1_w_y
                 result[i, j, k, 2] = x_k2_tmp * d1_w_z
+    result[0, 0, 0, :] = 0
     return result
