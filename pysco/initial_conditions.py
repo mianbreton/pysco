@@ -577,6 +577,7 @@ def white_noise_fourier_fixed(
     fastmath=True,
     cache=True,
     parallel=True,
+    error_model="numpy",
 )
 def white_noise_fourier_force(
     ncells_1d: int, rng: np.random.Generator
@@ -614,18 +615,10 @@ def white_noise_fourier_force(
     rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
     for i in prange(middle + 1):
         im = -np.int32(i)  # By default i is uint64
-        if i == 0:
-            i_is_zero = True
-        else:
-            i_is_zero = False
         kx = np.float32(i)
         kx2 = kx**2
         for j in prange(ncells_1d):
             jm = -j
-            if j == 0:
-                j_is_zero = True
-            else:
-                j_is_zero = False
             if j > middle:
                 ky = -np.float32(ncells_1d - j)
             else:
@@ -633,13 +626,11 @@ def white_noise_fourier_force(
             kx2_ky2 = kx2 + ky**2
             for k in prange(ncells_1d):
                 km = -k
-                if i_is_zero and j_is_zero and k == 0:
-                    continue
                 if k > middle:
                     kz = -np.float32(ncells_1d - k)
                 else:
                     kz = np.float32(k)
-                k2 = kx2_ky2 + kz**2
+                invk2 = one / (kx2_ky2 + kz**2)
                 phase = twopi * rng_phases[i, j, k]
                 amplitude = math.sqrt(
                     -math.log(
@@ -650,12 +641,12 @@ def white_noise_fourier_force(
                 imaginary = amplitude * math.sin(phase)
                 result_lower = real - ii * imaginary
                 result_upper = real + ii * imaginary
-                force[im, jm, km, 0] = -ii * invtwopi * result_lower * kx / k2
-                force[i, j, k, 0] = ii * invtwopi * result_upper * kx / k2
-                force[im, jm, km, 1] = -ii * invtwopi * result_lower * ky / k2
-                force[i, j, k, 1] = ii * invtwopi * result_upper * ky / k2
-                force[im, jm, km, 2] = -ii * invtwopi * result_lower * kz / k2
-                force[i, j, k, 2] = ii * invtwopi * result_upper * kz / k2
+                force[im, jm, km, 0] = -ii * invtwopi * result_lower * kx * invk2
+                force[i, j, k, 0] = ii * invtwopi * result_upper * kx * invk2
+                force[im, jm, km, 1] = -ii * invtwopi * result_lower * ky * invk2
+                force[i, j, k, 1] = ii * invtwopi * result_upper * ky * invk2
+                force[im, jm, km, 2] = -ii * invtwopi * result_lower * kz * invk2
+                force[i, j, k, 2] = ii * invtwopi * result_upper * kz * invk2
     rng_phases = 0
     rng_amplitudes = 0
     # Fix edges
@@ -696,6 +687,7 @@ def white_noise_fourier_force(
     fastmath=True,
     cache=True,
     parallel=True,
+    error_model="numpy",
 )
 def white_noise_fourier_fixed_force(
     ncells_1d: int, rng: np.random.Generator, is_paired: int
@@ -726,6 +718,7 @@ def white_noise_fourier_fixed_force(
     >>> white_noise_fourier_fixed_force(ncells_1d, rng, is_paired)
     """
     invtwopi = np.float32(0.5 / np.pi)
+    one = np.float32(1)
     twopi = np.float32(2 * np.pi)
     ii = np.complex64(1j)
     middle = ncells_1d // 2
@@ -737,18 +730,10 @@ def white_noise_fourier_fixed_force(
     rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
     for i in prange(middle + 1):
         im = -np.int32(i)  # By default i is uint64
-        if i == 0:
-            i_is_zero = True
-        else:
-            i_is_zero = False
         kx = np.float32(i)
         kx2 = kx**2
         for j in prange(ncells_1d):
             jm = -j
-            if j == 0:
-                j_is_zero = True
-            else:
-                j_is_zero = False
             if j > middle:
                 ky = -np.float32(ncells_1d - j)
             else:
@@ -756,24 +741,22 @@ def white_noise_fourier_fixed_force(
             kx2_ky2 = kx2 + ky**2
             for k in prange(ncells_1d):
                 km = -k
-                if i_is_zero and j_is_zero and k == 0:
-                    continue
                 if k > middle:
                     kz = -np.float32(ncells_1d - k)
                 else:
                     kz = np.float32(k)
-                k2 = kx2_ky2 + kz**2
+                invk2 = one / (kx2_ky2 + kz**2)
                 phase = twopi * rng_phases[i, j, k] + shift
                 real = math.cos(phase)
                 imaginary = math.sin(phase)
                 result_lower = real - ii * imaginary
                 result_upper = real + ii * imaginary
-                force[im, jm, km, 0] = -ii * invtwopi * result_lower * kx / k2
-                force[i, j, k, 0] = ii * invtwopi * result_upper * kx / k2
-                force[im, jm, km, 1] = -ii * invtwopi * result_lower * ky / k2
-                force[i, j, k, 1] = ii * invtwopi * result_upper * ky / k2
-                force[im, jm, km, 2] = -ii * invtwopi * result_lower * kz / k2
-                force[i, j, k, 2] = ii * invtwopi * result_upper * kz / k2
+                force[im, jm, km, 0] = -ii * invtwopi * result_lower * kx * invk2
+                force[i, j, k, 0] = ii * invtwopi * result_upper * kx * invk2
+                force[im, jm, km, 1] = -ii * invtwopi * result_lower * ky * invk2
+                force[i, j, k, 1] = ii * invtwopi * result_upper * ky * invk2
+                force[im, jm, km, 2] = -ii * invtwopi * result_lower * kz * invk2
+                force[i, j, k, 2] = ii * invtwopi * result_upper * kz * invk2
     rng_phases = 0
     # Fix edges
     inv2 = np.float32(0.5)
