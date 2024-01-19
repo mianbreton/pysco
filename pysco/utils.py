@@ -10,11 +10,15 @@ import numpy.typing as npt
 import pandas as pd
 from astropy.constants import G, pc
 from numba import njit, prange
-import pyfftw
-
+import sys
 from numpy_atomic import atomic_add
 import morton
 import logging
+
+try:  # Pyfftw currently cannot be installed on Mac ARM
+    import pyfftw
+except Exception:
+    pass
 
 
 def time_me(func: Callable) -> Callable:
@@ -1053,6 +1057,9 @@ def fft_3D_real(x: npt.NDArray[np.float32], threads: int) -> npt.NDArray[np.comp
     >>> num_threads = 4
     >>> fourier_grid = fft_3D_real(real_grid, num_threads)
     """
+    if "pyfftw" not in sys.modules:
+        return np.fft.rfftn(x).astype(np.complex64)
+
     ncells_1d = len(x)
     x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="float32")
     x_out = pyfftw.empty_aligned(
@@ -1096,6 +1103,9 @@ def fft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.complex
     >>> num_threads = 4
     >>> fourier_grid = fft_3D(complex_grid, num_threads)
     """
+    if "pyfftw" not in sys.modules:
+        return np.fft.fftn(x).astype(np.complex64)
+
     ncells_1d = len(x)
     x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="complex64")
     x_out = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="complex64")
@@ -1135,10 +1145,13 @@ def fft_3D_grad(
     --------
     >>> import numpy as np
     >>> from pysco.utils import fft_3D_grad
-    >>> complex_grid_3d = np.random.rand(16, 16, 16).astype(np.complex64)
+    >>> complex_grid_3d = np.random.rand(16, 16, 16, 3).astype(np.complex64)
     >>> num_threads = 4
     >>> fourier_grid = fft_3D_grad(complex_grid_3d, num_threads)
     """
+    if "pyfftw" not in sys.modules:
+        return np.fft.fftn(x, axes=(0, 1, 2)).astype(np.complex64)
+
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
     x_in = pyfftw.empty_aligned(
@@ -1185,6 +1198,9 @@ def ifft_3D_real(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.f
     >>> num_threads = 4
     >>> result = ifft_3D_real(complex_grid, num_threads)
     """
+    if "pyfftw" not in sys.modules:
+        return np.fft.irfftn(x).astype(np.complex64)
+
     ncells_1d = len(x)
     x_in = pyfftw.empty_aligned(
         (ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64"
@@ -1228,6 +1244,9 @@ def ifft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.comple
     >>> num_threads = 4
     >>> result = ifft_3D(complex_grid, num_threads)
     """
+    if "pyfftw" not in sys.modules:
+        return np.fft.ifftn(x).astype(np.complex64)
+
     ncells_1d = len(x)
     x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="complex64")
     x_out = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="complex64")
@@ -1271,6 +1290,9 @@ def ifft_3D_real_grad(
     >>> num_threads = 4
     >>> result = ifft_3D_real_grad(complex_grid_3d, num_threads)
     """
+    if "pyfftw" not in sys.modules:
+        return np.fft.irfftn(x, axes=(0, 1, 2)).astype(np.float32)
+
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
     x_in = pyfftw.empty_aligned(
@@ -1319,6 +1341,9 @@ def ifft_3D_grad(
     >>> num_threads = 4
     >>> result = ifft_3D_grad(complex_grid_3d, num_threads)
     """
+    if "pyfftw" not in sys.modules:
+        return np.fft.ifftn(x, axes=(0, 1, 2)).astype(np.complex64)
+
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
     x_in = pyfftw.empty_aligned(

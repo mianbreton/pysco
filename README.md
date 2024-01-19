@@ -60,9 +60,9 @@ The goal is to develop a Python-based N-body code that is user-friendly and effi
 
 ### Prerequisites
 
-In principle, you can directly jump to the [Installation](#installation) section as all the dependencies will be automatically installed.
+In principle, all dependencies will be automatically installed when using pip install (see [Installation](#installation)) so you can skip this section.
 
-If you prefer to install each of them by hand, then you will need the following libraries (the _conda_ installation is shown, but the same result can be achieved with _pip_).
+However, if you prefer to install each of them by hand, then you will need the following libraries (the _conda_ installation is shown, but the same result can be achieved with _pip_).
 
 - Numba
 
@@ -151,11 +151,13 @@ It is then possible to access other branches. If one wants to use the `feature/A
 python -m pip install git+https://github.com/mianbreton/pysco.git@feature/AwesomeNewFeature
 ```
 
-_For mac users the pyfftw installation might fail. In this case the installation can be done manually with conda_
+_For mac users the PyFFTW installation might fail. In this case the installation can be done manually with conda_
 
 ```sh
 conda install -c conda-forge pyfftw
 ```
+
+_If PyFFTW cannot be installed, PySCo will fall back to NumPy FFT_
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -190,10 +192,10 @@ Move to the Pysco sub-directory
 cd pysco/
 ```
 
-Write a parameter file. **All strings (except paths and filenames) are case insensitive**. Here is an example
+A example parameter file is available in `examples/param.ini`. **All strings (except paths and filenames) are case insensitive**.
 
 ```sh
-# param.ini
+# examples/param.ini
 nthreads = 1  # Number of threads to use in the simulation. For nthreads <= 0 use all threads
 # Theoretical model
 theory= newton # Cosmological theory to use, either "Newton" or  "fR"
@@ -216,7 +218,7 @@ z_start = 49 # Starting redshift of the simulation
 seed = 42 # Seed for random number generation (completely random if negative)
 fixed_ICS = 0 # Use fixed initial conditions. Gaussian Random Field, 1: Fixes the amplitude to match exactly the input P(k)
 paired_ICS = 0 # Use paired initial conditions. If enabled, add π to the random phases (works only with fixed_ICS = 1)
-power_spectrum_file = /home/user/power_spectra.dat # File path to the power spectrum data
+power_spectrum_file = /home/user/pysco/examples/pk_lcdmw7v2.dat # File path to the power spectrum data
 initial_conditions = 3LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or .h5 file. Else, assumes Gadget format
 # Outputs
 base=/home/user/boxlen500_n256_lcdm/ # Base directory for storing simulation data
