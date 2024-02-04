@@ -17,6 +17,7 @@
       <ul>
         <li><a href="#prerequisites">Prerequisites</a></li>
         <li><a href="#installation">Installation</a></li>
+        <li><a href="#testing-the-installation">Testing the installation</a></li>
       </ul>
     </li>
     <li>
@@ -59,9 +60,9 @@ The goal is to develop a Python-based N-body code that is user-friendly and effi
 
 ### Prerequisites
 
-<u>In principle, all dependencies are installed when using _pip install_. </u>
+In principle, all dependencies will be automatically installed when using pip install (see [Installation](#installation)) so you can skip this section.
 
-If you prefer to install each of them by hand, then you will need the following dependencies (the _conda_ installation is shown, but the same result can be achieved with _pip_).
+However, if you prefer to install each of them by hand, then you will need the following libraries (the _conda_ installation is shown, but the same result can be achieved with _pip_).
 
 - Numba
 
@@ -102,7 +103,7 @@ If you prefer to install each of them by hand, then you will need the following 
 - PyFFTW
 
   ```sh
-  # For Unix users
+  # For Linux users
   python -m pip install pyfftw
   # For Mac users
   conda install -c conda-forge pyfftw
@@ -150,11 +151,26 @@ It is then possible to access other branches. If one wants to use the `feature/A
 python -m pip install git+https://github.com/mianbreton/pysco.git@feature/AwesomeNewFeature
 ```
 
-_For mac users the pyfftw installation might fail. In this case the installation can be done manually with conda_
+_For mac users the PyFFTW installation might fail. In this case the installation can be done manually with conda_
 
 ```sh
 conda install -c conda-forge pyfftw
 ```
+
+_If PyFFTW cannot be installed, PySCo will fall back to NumPy FFT_
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+### Testing the installation
+
+This step can only be done if you cloned the source directory. First move to the source subdirectory: `cd pysco/`
+Then use the command
+
+```bash
+pytest --doctest-modules
+```
+
+This will run the examples in the docstrings for each function for which we do not compute the timigs (use of the decorator `@time_me`)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -176,10 +192,10 @@ Move to the Pysco sub-directory
 cd pysco/
 ```
 
-Write a parameter file. **All strings (except paths and filenames) are case insensitive**. Here is an example
+A example parameter file is available in `examples/param.ini`. **All strings (except paths and filenames) are case insensitive**.
 
 ```sh
-# param.ini
+# examples/param.ini
 nthreads = 1  # Number of threads to use in the simulation. For nthreads <= 0 use all threads
 # Theoretical model
 theory= newton # Cosmological theory to use, either "Newton" or  "fR"
@@ -195,20 +211,20 @@ evolution_table = no # Table specifying the evolution of cosmological parameters
 mpgrafic_table = no  # Table for initial conditions (default: "no")
 # Simulation dimension
 boxlen = 500  # Simulation box length (in Mpc/h)
-ncoarse = 8 # Coarse level. Total number of cells = 2**(3*ncoarse)
-npart = 256**3 # Number of particles in the simulation
+ncoarse = 7 # Coarse level. Total number of cells = 2**(3*ncoarse)
+npart = 128**3 # Number of particles in the simulation
 # Initial conditions
 z_start = 49 # Starting redshift of the simulation
 seed = 42 # Seed for random number generation (completely random if negative)
 fixed_ICS = 0 # Use fixed initial conditions. Gaussian Random Field, 1: Fixes the amplitude to match exactly the input P(k)
 paired_ICS = 0 # Use paired initial conditions. If enabled, add π to the random phases (works only with fixed_ICS = 1)
-power_spectrum_file = /home/user/power_spectra.dat # File path to the power spectrum data
-initial_conditions = 3LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or .h5 file. Else, assumes Gadget format
+power_spectrum_file = /home/user/pysco/examples/pk_lcdmw7v2.dat # File path to the power spectrum data
+initial_conditions = 3LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or .h5 RayGal file, or snapshot number (for restart). Else, assumes Gadget format
 # Outputs
-base=/home/user/boxlen500_n256_lcdm/ # Base directory for storing simulation data
+base=/home/user/boxlen500_n128_lcdm/ # Base directory for storing simulation data
 z_out = [10, 5, 2, 1, 0.5, 0] # List of redshifts for output snapshots
 output_snapshot_format = HDF5 # Particle snapshot format. "parquet" or "HDF5"
-save_power_spectrum = all # Save power spectra. Either 'no', 'z_out' for specific redshifts given by z_out or 'all' to compute at every time step
+save_power_spectrum = all # Save power spectra. Either 'no', 'z_out' for specific redshifts given by z_out or 'yes' to compute at every time step
 # Particles
 integrator = leapfrog # Integration scheme for time-stepping "Leapfrog" or "Euler"
 n_reorder = 25  # Re-order particles every n_reorder steps
@@ -289,13 +305,13 @@ Pysco produces power spectra, snapshots, and extra information.
 
 #### Power spectra
 
-Power spectra are written as ascii files in the directory _base_/power/
+Power spectra are written as ascii files in the directory `base/power/`
 where _base_ in given by the user.
 
-The name formatting is pk\__theory_\_ncoarse*N*\__XXXXX_.dat
+The name formatting is `pk_theory_ncoarseN_XXXXX_.dat`
 where _theory_ and _N_ are user inputs.
 
-The ascii file contains three columns: $k$ [$h$/Mpc], $P(k)$ [Mpc/$h$]$^3$, N_modes
+The ascii file contains three columns: `k [h/Mpc], P(k) [Mpc/h]^3, N_modes`
 
 Additionally, the file header contains the scale factor, the box length and number of particles.
 
@@ -330,11 +346,11 @@ with h5py.File('snapshot.h5', 'r') as h5r:
 
 ##### Parquet format
 
-Particle snapshots are written as _parquet_ files in the directory `base/output_XXXXX`
+Particle snapshots can also be written as _parquet_ files in the directory `base/output_XXXXX`
 
 The name formatting is `particles_theory_ncoarseN_XXXXX.parquet`
 
-The parquet file contains six columns: x, y, z, vx, vy, vz. These files can be read as
+The parquet file contains six columns: `x, y, z, vx, vy, vz`. These files can be read as
 
 ```python
 import pandas as pd
@@ -343,7 +359,7 @@ x = df['x']
 vx = df['vx']
 ```
 
-Alongside every snapshot file there is an associated ascii information file.
+Alongside every parquet file there is an associated ascii information file.
 
 The name formatting is `param_theory_ncoarseN_XXXXX.txt`
 
@@ -357,7 +373,7 @@ It contains parameter file informations as well as useful quantities such as the
 
 As a side-product , PySCo can also be used as a library which contains utilities for particle and mesh computations.
 
-Since PySCo uses functionnal programming, it is straightforward to use functions on NumPy arrays for various purposes. **We give a few examples below**.
+Since PySCo does not use classes (not supported by Numba), we made it straightforward to use its functions on NumPy arrays for various purposes. **We give a few examples below**.
 
 - Computing a density grid based on particle positions with a Triangular-Shaped Cloud scheme
 

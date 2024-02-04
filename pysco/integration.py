@@ -2,6 +2,7 @@
 This module provides integrators for simulating cosmological structures. It includes
 Euler and Leapfrog integrators for computing one integration step.
 """
+
 from typing import List, Tuple
 import numpy as np
 import numpy.typing as npt
@@ -71,15 +72,15 @@ def integrate(
     >>> acceleration = np.random.random((32, 32, 32)).astype(np.float32)
     >>> potential = np.random.random((32, 32, 32)).astype(np.float32)
     >>> additional_field = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100)), ...]
-    >>> param = pd.Series({"Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
-    >>> integrate(position, velocity, acceleration, potential, additional_field, tables, param)
+    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100))]*4
+    >>> param = pd.Series({"H0": 100, "boxlen": 500, "Om_m": 0.3, "npart": 64, "save_power_spectrum": "no", "nthreads": 1, "theory": "newton", "linear_newton_solver": "fft", "epsrel": 1e-2, "Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
+    >>> pos, vel, acc, potential, additional_field = integrate(position, velocity, acceleration, potential, additional_field, tables, param)
     """
     dt1 = dt_CFL_maxacc(acceleration, param)
     dt2 = dt_CFL_maxvel(velocity, param)
     dt3 = dt_weak_variation(tables[1], param)
     dt = np.min([dt1, dt2, dt3])
-    # Stop at z = zsnap exactly to output snapshots
+
     if (param["t"] + dt) > t_snap_next:
         dt = t_snap_next - param["t"]
         param["write_snapshot"] = True
@@ -89,7 +90,6 @@ def integrate(
     logging.warning(
         f"Conditions: velocity {dt1=}, acceleration {dt2=}, scale factor {dt3=}"
     )
-    # Integrate
     if param.integrator == "leapfrog":
         return leapfrog(
             position,
@@ -169,21 +169,18 @@ def euler(
     >>> acceleration = np.random.random((32, 32, 32)).astype(np.float32)
     >>> potential = np.random.random((32, 32, 32)).astype(np.float32)
     >>> additional_field = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100)), ...]
-    >>> param = pd.Series({"Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
-    >>> euler(position, velocity, acceleration, potential, additional_field, dt, tables, param)
+    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100))]*4
+    >>> dt = 0.1
+    >>> param = pd.Series({"H0": 100, "boxlen": 500, "Om_m": 0.3, "npart": 64, "save_power_spectrum": "no", "nthreads": 1, "theory": "newton", "linear_newton_solver": "fft", "epsrel": 1e-2, "Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
+    >>> pos, vel, acc, potential, additional_field = euler(position, velocity, acceleration, potential, additional_field, dt, tables, param)
     """
-    # Drift
     utils.add_vector_scalar_inplace(position, velocity, dt)
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
     param["aexp"] = tables[0](param["t"])
     utils.set_units(param)
-    # Periodic boundary conditions
     utils.periodic_wrap(position)
-    # Kick
     utils.add_vector_scalar_inplace(velocity, acceleration, dt)
-    # Solver
     acceleration, potential, additional_field = solver.pm(
         position, param, potential, additional_field, tables
     )
@@ -243,27 +240,23 @@ def leapfrog(
     >>> acceleration = np.random.random((32, 32, 32)).astype(np.float32)
     >>> potential = np.random.random((32, 32, 32)).astype(np.float32)
     >>> additional_field = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100)), ...]
-    >>> param = pd.Series({"Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
-    >>> leapfrog(position, velocity, acceleration, potential, additional_field, dt, tables, param)
+    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100))]*4
+    >>> dt = 0.1
+    >>> param = pd.Series({"H0": 100, "boxlen": 500, "Om_m": 0.3, "npart": 64, "save_power_spectrum": "no", "nthreads": 1, "theory": "newton", "linear_newton_solver": "fft", "epsrel": 1e-2, "Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
+    >>> pos, vel, acc, potential, additional_field = leapfrog(position, velocity, acceleration, potential, additional_field, dt, tables, param)
     """
     half_dt = np.float32(0.5 * dt)
-    # Kick
     utils.add_vector_scalar_inplace(velocity, acceleration, half_dt)
-    # Drift
     utils.add_vector_scalar_inplace(position, velocity, dt)
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
     param["aexp"] = tables[0](param["t"])
     logging.info(f"{param['t']=} {param['aexp']=}")
     utils.set_units(param)
-    # Periodic boundary conditions
     utils.periodic_wrap(position)
-    # Solver
     acceleration, potential, additional_field = solver.pm(
         position, param, potential, additional_field, tables
     )
-    # Kick
     utils.add_vector_scalar_inplace(velocity, acceleration, half_dt)
 
     return position, velocity, acceleration, potential, additional_field
@@ -293,7 +286,7 @@ def dt_CFL_maxacc(
     >>> from pysco.integration import dt_CFL_maxacc
     >>> acceleration = np.random.random((64, 3)).astype(np.float32)
     >>> param = pd.Series({"ncoarse": 4, "Courant_factor": 1.0})
-    >>> dt_CFL_maxacc(acceleration, param)
+    >>> dt = dt_CFL_maxacc(acceleration, param)
     """
     dx = np.float32(0.5 ** param["ncoarse"])
     max_acc = utils.max_abs(acceleration)
@@ -324,7 +317,7 @@ def dt_CFL_maxvel(
     >>> from pysco.integration import dt_CFL_maxvel
     >>> velocity = np.random.random((64, 3)).astype(np.float32)
     >>> param = pd.Series({"ncoarse": 4, "Courant_factor": 1.0})
-    >>> dt_CFL_maxvel(velocity, param)
+    >>> dt = dt_CFL_maxvel(velocity, param)
     """
     dx = np.float32(0.5 ** param["ncoarse"])
     max_vel = utils.max_abs(velocity)
@@ -353,8 +346,8 @@ def dt_weak_variation(
     -------
     >>> from scipy.interpolate import interp1d
     >>> from pysco.integration import dt_weak_variation
-    >>> func_t_a = interp1d(np.linspace(0, 1, 100), np.random.random(100))
-    >>> param = pd.Series({"aexp": 1.0})
-    >>> dt_weak_variation(func_t_a, param)
+    >>> func_t_a = interp1d(np.linspace(0.2, 1, 100), np.linspace(-1, 0, 100))
+    >>> param = pd.Series({"aexp": 0.5})
+    >>> dt = dt_weak_variation(func_t_a, param)
     """
     return np.float32(func_t_a(1.1 * param["aexp"]) - func_t_a(param["aexp"]))

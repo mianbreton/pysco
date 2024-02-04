@@ -29,14 +29,12 @@ def operator(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float3
     >>> from pysco.laplacian import operator
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> operator(x, h)
+    >>> result = operator(x, h)
     """
     invh2 = np.float32(h ** (-2))
     six = np.float32(6)
     ncells_1d = x.shape[0]
-    # Initialise mesh
     result = np.empty_like(x)
-    # Computation
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -46,7 +44,6 @@ def operator(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float3
             for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
-                # Put in array
                 result[i, j, k] = (
                     x[im1, j, k]
                     + x[i, jm1, k]
@@ -92,14 +89,12 @@ def residual(
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> residual(x, b, h)
+    >>> result = residual(x, b, h)
     """
     invh2 = np.float32(h ** (-2))
     six = np.float32(6)
     ncells_1d = x.shape[0]
-    # Initialise mesh
     result = np.empty_like(x)
-    # Computation
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -109,7 +104,6 @@ def residual(
             for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
-                # Put in array
                 result[i, j, k] = (
                     -(
                         x[im1, j, k]
@@ -162,7 +156,7 @@ def restrict_residual_half(
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> restrict_residual_half(x, b, h)
+    >>> result = restrict_residual_half(x, b, h)
     """
     inveight = np.float32(0.125)
     three = np.float32(3.0)
@@ -185,7 +179,6 @@ def restrict_residual_half(
                 kkm1 = kk - 1
                 kkp1 = kk + 1
                 kkp2 = kkp1 + 1
-                # Put in array
                 result[i, j, k] = inveight * (
                     -(
                         x[iim1, jj, kkp1]
@@ -256,7 +249,7 @@ def residual_error_half(
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> residual_error_half(x, b, h)
+    >>> result = residual_error_half(x, b, h)
     """
     six = np.float32(6.0)
     invh2 = np.float32(h ** (-2))
@@ -277,12 +270,11 @@ def residual_error_half(
                 kkm1 = kk - 1
                 kkp1 = kk + 1
                 kkp2 = kkp1 + 1
-                #
+
                 x000 = x[ii, jj, kk]
                 x011 = x[ii, jjp1, kkp1]
                 x101 = x[iip1, jj, kkp1]
                 x110 = x[iip1, jjp1, kk]
-                # Put in array
                 x1 = (
                     -(
                         +x000
@@ -370,7 +362,7 @@ def truncation_error(x: npt.NDArray[np.float32], h: np.float32) -> np.float32:
     >>> from pysco.laplacian import truncation_error
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> truncation_error(x, h)
+    >>> result = truncation_error(x, h)
     """
     ncells_1d = x.shape[0] >> 1
     RLx = mesh.restriction(operator(x, h))
@@ -409,7 +401,7 @@ def truncation_knebe2(
     >>> from pysco.laplacian import truncation_knebe2
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> truncation_knebe2(x, h)
+    >>> result = truncation_knebe2(x, h)
     """
     return mesh.prolongation(operator(mesh.restriction(x), 2 * h)) - operator(x, h)
 
@@ -438,7 +430,7 @@ def truncation_knebe(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     >>> import numpy as np
     >>> from pysco.laplacian import truncation_knebe
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> truncation_knebe(b)
+    >>> result = truncation_knebe(b)
     """
     return mesh.prolongation(mesh.restriction(b)) - b
 
@@ -470,7 +462,7 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
     >>> import numpy as np
     >>> from pysco.laplacian import truncation_error_knebe
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> truncation_error_knebe(b)
+    >>> result = truncation_error_knebe(b)
     """
     truncation = np.float32(0)
     ncells_1d = b.shape[0]
@@ -478,9 +470,9 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
     f1 = np.float32(9.0 / 64)
     f2 = np.float32(3.0 / 64)
     f3 = np.float32(1.0 / 64)
-    # Restriction
+
     result = mesh.restriction(b)
-    # Prolongation and subtraction
+
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -496,7 +488,6 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
                 kp1 = k + 1
                 kk = 2 * k
                 kkp1 = kk + 1
-                # Get result
                 tmp000 = result[im1, jm1, km1]
                 tmp001 = result[im1, jm1, k]
                 tmp002 = result[im1, jm1, kp1]
@@ -524,9 +515,8 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
                 tmp220 = result[ip1, jp1, km1]
                 tmp221 = result[ip1, jp1, k]
                 tmp222 = result[ip1, jp1, kp1]
-                # Central
                 tmp0 = f0 * tmp111
-                # Put in fine grid
+
                 truncation += (
                     (
                         (
@@ -641,7 +631,6 @@ def jacobi(
     h2 = np.float32(h**2)
     ncells_1d = x.shape[0]
     invsix = np.float32(1.0 / 6)
-    # Computation
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -651,7 +640,6 @@ def jacobi(
             for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
-                # Put in array
                 x[i, j, k] = (
                     x[im1, j, k]
                     + x[i, jm1, k]
@@ -718,12 +706,11 @@ def gauss_seidel(
                 kkm2 = kk - 2
                 kkm1 = kk - 1
                 kkp1 = kk + 1
-                #
+
                 x001 = x[iim1, jjm1, kk]
                 x010 = x[iim1, jj, kkm1]
                 x100 = x[ii, jjm1, kkm1]
                 x111 = x[ii, jj, kk]
-                # Put in array
                 x[iim1, jjm1, kkm1] += (
                     f_relax
                     * (
@@ -740,7 +727,6 @@ def gauss_seidel(
                     )
                     - f_relax * x[iim1, jjm1, kkm1]
                 )
-                # Put in array
                 x[iim1, jj, kk] += (
                     f_relax
                     * (
@@ -757,7 +743,6 @@ def gauss_seidel(
                     )
                     - f_relax * x[iim1, jj, kk]
                 )
-                # Put in array
                 x[ii, jjm1, kk] += (
                     f_relax
                     * (
@@ -773,7 +758,7 @@ def gauss_seidel(
                         * invsix
                     )
                     - f_relax * x[ii, jjm1, kk]
-                )  # Put in array
+                )
                 x[ii, jj, kkm1] += (
                     f_relax
                     * (
@@ -807,12 +792,11 @@ def gauss_seidel(
                 kkm2 = kk - 2
                 kkm1 = kk - 1
                 kkp1 = kk + 1
-                #
+
                 x000 = x[iim1, jjm1, kkm1]
                 x011 = x[iim1, jj, kk]
                 x101 = x[ii, jjm1, kk]
                 x110 = x[ii, jj, kkm1]
-                # Put in array
                 x[iim1, jjm1, kk] += (
                     f_relax
                     * (
@@ -829,7 +813,6 @@ def gauss_seidel(
                     )
                     - f_relax * x[iim1, jjm1, kk]
                 )
-                # Put in array
                 x[iim1, jj, kkm1] += (
                     f_relax
                     * (
@@ -846,7 +829,6 @@ def gauss_seidel(
                     )
                     - f_relax * x[iim1, jj, kkm1]
                 )
-                # Put in array
                 x[ii, jjm1, kkm1] += (
                     f_relax
                     * (
@@ -863,7 +845,6 @@ def gauss_seidel(
                     )
                     - f_relax * x[ii, jjm1, kkm1]
                 )
-                # Put in array
                 x[ii, jj, kk] += (
                     f_relax
                     * (
@@ -932,12 +913,11 @@ def gauss_seidel_no_overrelaxation(
                 kkm2 = kk - 2
                 kkm1 = kk - 1
                 kkp1 = kk + 1
-                #
+
                 x001 = x[iim1, jjm1, kk]
                 x010 = x[iim1, jj, kkm1]
                 x100 = x[ii, jjm1, kkm1]
                 x111 = x[ii, jj, kk]
-                # Put in array
                 x[iim1, jjm1, kkm1] = (
                     +x001
                     + x010
@@ -947,7 +927,6 @@ def gauss_seidel_no_overrelaxation(
                     + x[iim1, jjm1, kkm2]
                     - h2 * b[iim1, jjm1, kkm1]
                 ) * invsix
-                # Put in array
                 x[iim1, jj, kk] = (
                     x[iim2, jj, kk]
                     + x001
@@ -957,7 +936,6 @@ def gauss_seidel_no_overrelaxation(
                     + x[iim1, jj, kkp1]
                     + x[iim1, jjp1, kk]
                 ) * invsix
-                # Put in array
                 x[ii, jjm1, kk] = (
                     x001
                     + x100
@@ -967,7 +945,6 @@ def gauss_seidel_no_overrelaxation(
                     + x[ii, jjm1, kkp1]
                     + x[iip1, jjm1, kk]
                 ) * invsix
-                # Put in array
                 x[ii, jj, kkm1] = (
                     x010
                     + x100
@@ -993,12 +970,11 @@ def gauss_seidel_no_overrelaxation(
                 kkm2 = kk - 2
                 kkm1 = kk - 1
                 kkp1 = kk + 1
-                #
+
                 x000 = x[iim1, jjm1, kkm1]
                 x011 = x[iim1, jj, kk]
                 x101 = x[ii, jjm1, kk]
                 x110 = x[ii, jj, kkm1]
-                # Put in array
                 x[iim1, jjm1, kk] = (
                     +x000
                     + x011
@@ -1008,7 +984,6 @@ def gauss_seidel_no_overrelaxation(
                     - h2 * b[iim1, jjm1, kk]
                     + x[iim1, jjm1, kkp1]
                 ) * invsix
-                # Put in array
                 x[iim1, jj, kkm1] = (
                     +x000
                     + x011
@@ -1018,7 +993,6 @@ def gauss_seidel_no_overrelaxation(
                     - h2 * b[iim1, jj, kkm1]
                     + x[iim1, jjp1, kkm1]
                 ) * invsix
-                # Put in array
                 x[ii, jjm1, kkm1] = (
                     x000
                     + x101
@@ -1028,7 +1002,6 @@ def gauss_seidel_no_overrelaxation(
                     - h2 * b[ii, jjm1, kkm1]
                     + x[iip1, jjm1, kkm1]
                 ) * invsix
-                # Put in array
                 x[ii, jj, kk] = (
                     x011
                     + x101

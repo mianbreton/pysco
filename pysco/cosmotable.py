@@ -30,38 +30,39 @@ def generate(param: pd.Series) -> List[interp1d]:
     --------
     >>> import pandas as pd
     >>> from pysco.cosmotable import generate
+    >>> import os
+    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> params_cosmo = pd.Series({
-         "evolution_table": "no",
-         "H0": 70.0,
-         "Om_m": 0.3,
-         "Om_lambda": 0.7,
-         "w0": -1.0,
-         "wa": 0.0,
-         "base": "path/to/base/directory"
-     })
+    ...     "evolution_table": "no",
+    ...     "H0": 70.0,
+    ...     "Om_m": 0.3,
+    ...     "Om_lambda": 0.7,
+    ...     "w0": -1.0,
+    ...     "wa": 0.0,
+    ...     "base": f"{this_dir}/../examples/"
+    ...     })
     >>> interpolators_cosmo = generate(params_cosmo)
     >>> a_interp, t_interp, Dplus_interp, H_interp = interpolators_cosmo
 
     >>> params_ramses = pd.Series({
-         "evolution_table": "path/to/evolution_table.txt",
-         "mpgrafic_table": "path/to/mpgrafic_table.txt",
-         "H0": 70.0,
-         "base": "path/to/base/directory"
-     })
+    ...     "evolution_table": f"{this_dir}/../examples/ramses_input_lcdmw7v2.dat",
+    ...     "mpgrafic_table": f"{this_dir}/../examples/mpgrafic2ndorder_input_lcdmw7v2.dat",
+    ...     "H0": 70.0,
+    ...     "base": f"{this_dir}/../examples/"
+    ...     })
     >>> interpolators_ramses = generate(params_ramses)
     >>> a_interp_ramses, t_interp_ramses, Dplus_interp_ramses, H_interp_ramses = interpolators_ramses
     """
     # Get cosmo
     if param["evolution_table"] == "no":
         logging.warning(f"No evolution table read: computes all quantities")
-        cosmo = w0waCDM(  # type: ignore
+        cosmo = w0waCDM(
             H0=param["H0"],
             Om0=param["Om_m"],
             Ode0=param["Om_lambda"],
             w0=param["w0"],
             wa=param["wa"],
-        )  # Can get something else like Planck18
-        # Do stuff
+        )
         zmax = 150
         a = np.linspace(1.15, 1.0 / (1 + zmax), 100_000)
         t_lookback = (
@@ -79,8 +80,7 @@ def generate(param: pd.Series) -> List[interp1d]:
             f"{param['base']}/evotable_lcdmw7v2_pysco.txt",
             np.c_[a, Dplus_array, t_supercomoving],
         )
-    # Use RAMSES tables
-    else:
+    else:  # Use RAMSES tables
         logging.warning(f"Read RAMSES evolution: {param['evolution_table']}")
         logging.warning(f"Read MPGRAFIC table: {param['mpgrafic_table']}")
         evo = np.loadtxt(param["evolution_table"]).T

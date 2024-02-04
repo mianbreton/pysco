@@ -58,17 +58,7 @@ def linear(
     >>> # Call the linear multigrid solver
     >>> result = linear(x_initial, rhs, grid_size, parameters)
     """
-    # TODO:  - Check w_relax
-    #        - Inplace instead of returning array from function
-    #        - Parallelize (test PyOMP)
-    # If tolerance not yet assigned or every 3 time steps, compute truncation error
     if param["compute_additional_field"]:
-        # if (not "tolerance_additional_field" in param) or (param["nsteps"] % 3) == 0:
-        #    print("Compute Truncation error for additional field")
-        #    param["tolerance_additional_field"] = param["epsrel"] * truncation_error(
-        #        x, h, param, rhs
-        #    )
-        # tolerance = param["tolerance_additional_field"]
         tolerance = 1e-20  # For additional field do not use any tolerance threshold but rather a convergence of residual
     else:
         if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
@@ -76,7 +66,6 @@ def linear(
             param["tolerance"] = param["epsrel"] * truncation_error(x, h, param, rhs)
         tolerance = param["tolerance"]
 
-    # Main procedure: Multigrid
     logging.info("Start linear Multigrid")
     residual_error = 1e30
     while residual_error > tolerance:
@@ -130,14 +119,7 @@ def FAS(
     >>> # Call the FAS multigrid solver
     >>> result = FAS(x_initial, rhs, grid_size, parameters)
     """
-    # If tolerance not yet assigned or every 3 time steps, compute truncation error
     if param["compute_additional_field"]:
-        # if (not "tolerance_additional_field" in param) or (param["nsteps"] % 3) == 0:
-        # logging.info("Compute Truncation error for additional field")
-        # param["tolerance_additional_field"] = param["epsrel"] * truncation_error(
-        #    x, h, param, b
-        # )
-        # tolerance = param["tolerance_additional_field"]
         tolerance = 1e-20  # For additional field do not use any tolerance threshold but rather a convergence of residual
     else:
         if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
@@ -146,16 +128,10 @@ def FAS(
         tolerance = param["tolerance"]
 
     # Main procedure: Multigrid
-    # residual_error = 1e30
-    # while residual_error > tolerance:
     logging.info("Start Full-Approximation Storage Multigrid")
     F_cycle_FAS(x, b, param)
-    # F_cycle_FAS(x, b, param)
     residual_error_tmp = residual_error_half(x, b, h, param)
     logging.info(f"{residual_error_tmp=} {tolerance=}")
-    #    if residual_error_tmp < tolerance or residual_error / residual_error_tmp < 2:
-    #        break
-    #    residual_error = residual_error_tmp
     return x
 
 
@@ -419,21 +395,21 @@ def operator(
     >>> import pandas as pd
     >>> from pysco.multigrid import operator
 
-    Example 1: Compute operator for f(R) with n = 1
+    >>> # Example 1: Compute operator for f(R) with n = 1
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> param = pd.Series({"compute_additional_field": True, "fR_n": 1, "fR_q": 0.1})
-    >>> operator_result = operator(x, b, h, param)
-
-    Example 2: Compute operator for f(R) with n = 2 and custom density term
-    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
-    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> param = pd.Series({"compute_additional_field": True, "fR_n": 2, "fR_q": 0.2})
+    >>> param = pd.Series({"compute_additional_field": True, "fR_n": 1, "fR_q": -0.1})
     >>> operator_result = operator(x, h, param, b)
 
-    Example 3: Compute Laplacian operator for the main field
+    >>> # Example 2: Compute operator for f(R) with n = 2 and custom density term
+    >>> x = np.zeros((32, 32, 32), dtype=np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> param = pd.Series({"compute_additional_field": True, "fR_n": 2, "fR_q": -0.2})
+    >>> operator_result = operator(x, h, param, b)
+
+    >>> # Example 3: Compute Laplacian operator for the main field
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> h = np.float32(1./32)
     >>> param = pd.Series({"compute_additional_field": False})
@@ -492,9 +468,8 @@ def V_cycle(
     f1 = np.float32(-4.0 / 6 * h**2)
     smoothing(x, b, h, param["Npre"], param)
     res_c = restrict_residual(x, b, h, param)
-    # Initialise array to x_ijk = -b_ijk*h^2/6 (one Jacobi sweep)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
-    # Stop if we are at coarse enough level
+
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
@@ -546,15 +521,13 @@ def V_cycle_FAS(
     two = np.float32(2)
     smoothing(x, b, h, param["Npre"], param, rhs)
     res_c = restrict_residual(x, b, h, param)
-    # Compute correction to solution at coarser level
-    # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
     b_c = mesh.restriction(b)
     L_c = operator(x_c, two * h, param, b_c)
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
-    # Stop if we are at coarse enough level
+
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
@@ -607,10 +580,8 @@ def F_cycle(
     f1 = np.float32(-4.0 / 6 * h**2)
     smoothing(x, b, h, param["Npre"], param)
     res_c = restrict_residual(x, b, h, param)
-    # Compute correction to solution at coarser level
-    # Initialise array to x_ijk = -b_ijk*h^2/6 (one Jacobi sweep)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
-    # Stop if we are at coarse enough level
+
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
@@ -619,16 +590,13 @@ def F_cycle(
     mesh.add_prolongation_half(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npre"], param)
-    ### Now compute again corrections (almost exactly same as the first part) ###
+
     res_c = restrict_residual(x, b, h, param)
-    # Compute correction to solution at coarser level
-    # Initialise array to x_ijk = -b_ijk*h^2/6 (one Jacobi sweep)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
-    # Stop if we are at coarse enough level
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
-        V_cycle(x_corr_c, res_c, param, nlevel + 1)  # Careful, V_cycle here
+        V_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
     mesh.add_prolongation_half(x, x_corr_c)
     x_corr_c = 0
@@ -676,15 +644,12 @@ def F_cycle_FAS(
     two = np.float32(2)
     smoothing(x, b, h, param["Npre"], param, rhs)
     res_c = restrict_residual(x, b, h, param)
-    # Compute correction to solution at coarser level
-    # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
     b_c = mesh.restriction(b)
     L_c = operator(x_c, two * h, param, b_c)
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
-    # Stop if we are at coarse enough level
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
@@ -694,21 +659,18 @@ def F_cycle_FAS(
     mesh.add_prolongation_half(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npre"], param, rhs)
-    ### Now compute again corrections (almost exactly same as the first part) ###
+
     res_c = restrict_residual(x, b, h, param)
-    # Compute correction to solution at coarser level
-    # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
     L_c = operator(x_c, two * h, param, b_c)
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
 
-    # Stop if we are at coarse enough level
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
-        V_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)  # Careful, V_cycle here
+        V_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
     res_c = 0
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     x_c = 0
@@ -751,16 +713,12 @@ def W_cycle(
     >>> # Call the W_cycle function
     >>> W_cycle(x, b, param)
     """
-    h = np.float32(0.5 ** (param["ncoarse"] - nlevel))  # nlevel = 0 is coarse level
+    h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
     f1 = np.float32(-4.0 / 6 * h**2)
     smoothing(x, b, h, param["Npre"], param)
     res_c = restrict_residual(x, b, h, param)
-
-    # Compute correction to solution at coarser level
-    # Initialise array to x_ijk = -b_ijk*h^2/6 (one Jacobi sweep)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
-    # Stop if we are at coarse enough level
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
@@ -770,13 +728,8 @@ def W_cycle(
     x_corr_c = 0
     smoothing(x, b, h, param["Npre"], param)
 
-    ### Now compute again corrections (almost exactly same as the first part) ###
     res_c = restrict_residual(x, b, h, param)
-    # Compute correction to solution at coarser level
-    # Initialise array to x_ijk = -b_ijk*h^2/6 (one Jacobi sweep)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
-
-    # Stop if we are at coarse enough level
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
@@ -824,13 +777,10 @@ def W_cycle_FAS(
     >>> # Call the W_cycle_FAS function
     >>> W_cycle_FAS(x, b, param)
     """
-    h = np.float32(0.5 ** (param["ncoarse"] - nlevel))  # nlevel = 0 is coarse level
+    h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
     smoothing(x, b, h, param["Npre"], param, rhs)
     res_c = restrict_residual(x, b, h, param)
-
-    # Compute correction to solution at coarser level
-    # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
     b_c = mesh.restriction(b)
@@ -838,7 +788,6 @@ def W_cycle_FAS(
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
 
-    # Stop if we are at coarse enough level
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
@@ -850,17 +799,13 @@ def W_cycle_FAS(
     x_corr_c = 0
     smoothing(x, b, h, param["Npre"], param, rhs)
 
-    ### Now compute again corrections (almost exactly same as the first part) ###
     res_c = restrict_residual(x, b, h, param)
-    # Compute correction to solution at coarser level
-    # Use Full Approximation Scheme (Storage) for non-linear Poisson equation. Need to keep R(x) in memory
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
     L_c = operator(x_c, two * h, param, b_c)
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
 
-    # Stop if we are at coarse enough level
     if nlevel >= (param["ncoarse"] - 2):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:

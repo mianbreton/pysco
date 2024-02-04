@@ -41,9 +41,7 @@ _YZ_MASK = _Y_MASK | _Z_MASK
 @njit(fastmath=True, cache=True)
 def interleaving_64bits(
     x: np.int64,
-) -> (
-    np.int64
-):  # Return 64-bits integer, x is 21-bits integer (even if int32 or int64...)
+) -> np.int64:
     """Interleaves 21-bits integer into 64-bits
     Takes an integer which represents the position in 21 bits. \\
     For example: let x, a float between 0 and 1. The 21-bits integer equivalent will be x_i = x* 2^21 \\
@@ -70,7 +68,6 @@ def interleaving_64bits(
     >>> from pysco.morton import interleaving_64bits
     >>> x = 0.6
     >>> x_bits = interleaving_64bits(math.floor(x * 2**21))
-    >>> np.binary_repr(x_bits)
     """
     x &= 0x1FFFFF  # Keep only the last 21-bits. Useful for Periodic Boundary Conditions as positions are automatically wrapped
     x = (x | x << 32) & 0x1F00000000FFFF
@@ -103,11 +100,10 @@ def key(x: np.float32, y: np.float32, z: np.float32) -> np.int64:
     --------
     >>> from pysco.morton import key
     >>> xyz_bits = key(0.25, 0.5, 0.75)
-    >>> np.binary_repr(xyz_bits)
+    >>> #np.binary_repr(xyz_bits)
     """
-    xx = interleaving_64bits(
-        math.floor(x * 2**21)
-    )  # Rewrite as 21-bits integer (positions are automatically rescaled in the [0,1] range)
+    # Rewrite as 21-bits integer (positions are automatically rescaled in the [0,1] range)
+    xx = interleaving_64bits(math.floor(x * 2**21))
     yy = interleaving_64bits(math.floor(y * 2**21))
     zz = interleaving_64bits(math.floor(z * 2**21))
     return xx << 2 | yy << 1 | zz  # 64 bits integer
@@ -132,7 +128,7 @@ def positions_to_keys(positions: npt.NDArray[np.float32]) -> npt.NDArray[np.int6
     >>> import numpy as np
     >>> from pysco.morton import positions_to_keys
     >>> positions = np.array([[0.25, 0.5, 0.75], [0.1, 0.2, 0.3]], dtype=np.float32)
-    >>> positions_to_keys(positions)
+    >>> keys = positions_to_keys(positions)
     """
     size = positions.shape[0]
     keys = np.empty(size, dtype=np.int64)
@@ -161,11 +157,11 @@ def compactify_64bits(key: np.int64) -> np.int64:
     >>> import numpy as np
     >>> from pysco.morton import interleaving_64bits, compactify_64bits
     >>> x = 0.6
-    >>> np.binary_repr(math.floor(x * 2**21))
+    >>> #np.binary_repr(math.floor(x * 2**21))
     >>> x_bits = interleaving_64bits(math.floor(x * 2**21))
-    >>> np.binary_repr(x_bits)
+    >>> #np.binary_repr(x_bits)
     >>> x_compact = compactify_64bits(x_bits)
-    >>> np.binary_repr(x_compact)
+    >>> #np.binary_repr(x_compact)
     """
     key &= 0x1249249249249249
     # Only select z bits (or shift x by two or y by one)
@@ -197,7 +193,7 @@ def key_to_position(key: np.int64) -> np.float32:
     >>> from pysco.morton import interleaving_64bits, key_to_position
     >>> x = 0.6
     >>> x_bits = interleaving_64bits(math.floor(x * 2**21))
-    >>> key_to_position(x_bits)
+    >>> position = key_to_position(x_bits)
     """
     return np.float32(0.5**21 * compactify_64bits(key))
 
@@ -222,7 +218,7 @@ def key_to_position3d(key: np.int64) -> Tuple[np.float32, np.float32, np.float32
     >>> from pysco.morton import interleaving_64bits, key, key_to_position3d
     >>> x = 0.6; y = 0.3; z = 0.1
     >>> xyz_bits = key(x, y, z)
-    >>> key_to_position3d(xyz_bits)
+    >>> position3d = key_to_position3d(xyz_bits)
 
     """
     return (key_to_position(key >> 2), key_to_position(key >> 1), key_to_position(key))
@@ -248,7 +244,7 @@ def keys_to_positions(keys: npt.NDArray[np.int64]) -> npt.NDArray[np.float32]:
     >>> from pysco.morton import positions_to_keys, keys_to_positions
     >>> positions = np.array([[0.25, 0.5, 0.75], [0.1, 0.2, 0.3]], dtype=np.float32)
     >>> keys = positions_to_keys(positions)
-    >>> keys_to_positions(keys)
+    >>> positions = keys_to_positions(keys)
     """
     size = keys.shape[0]
     positions = np.empty((size, 3), dtype=np.float32)
@@ -281,7 +277,7 @@ def cell_ijk_to_21bits(i: np.int64, nlevel: np.int64) -> np.int64:
     >>> from pysco.morton import cell_ijk_to_21bits
     >>> index = 3
     >>> nlevel = 4
-    >>> cell_ijk_to_21bits(index, nlevel)
+    >>> key = cell_ijk_to_21bits(index, nlevel)
     """
     return i << (21 - nlevel)
 
@@ -309,7 +305,7 @@ def key_to_ijk(key: np.int64, nlevel: np.int64) -> np.int64:
     >>> x = 0.6
     >>> key = interleaving_64bits(math.floor(x * 2**21))
     >>> nlevel = 4
-    >>> key_to_ijk(key, nlevel)
+    >>> index = key_to_ijk(key, nlevel)
     """
     return compactify_64bits(key) >> (21 - nlevel)
 
@@ -339,7 +335,7 @@ def add(key1: np.int64, key2: np.int64) -> np.int64:  # Wraps in the [0, 1] rang
     >>> key1 = interleaving_64bits(math.floor(x1 * 2**21))
     >>> key2 = interleaving_64bits(math.floor(x2 * 2**21))
     >>> key_sum = add(key1, key2)
-    >>> key_to_position(key_sum)
+    >>> position = key_to_position(key_sum)
     """
     x_sum = (key1 | _YZ_MASK) + (key2 & _X_MASK)
     y_sum = (key1 | _XZ_MASK) + (key2 & _Y_MASK)
@@ -372,7 +368,7 @@ def subtract(key1: np.int64, key2: np.int64) -> np.int64:  # Wraps in the [0, 1]
     >>> key1 = interleaving_64bits(math.floor(x1 * 2**21))
     >>> key2 = interleaving_64bits(math.floor(x2 * 2**21))
     >>> key_subtraction = subtract(key1, key2)
-    >>> key_to_position(key_subtraction)
+    >>> position = key_to_position(key_subtraction)
     """
     x_diff = (key1 & _X_MASK) - (key2 & _X_MASK)
     y_diff = (key1 & _Y_MASK) - (key2 & _Y_MASK)
@@ -405,7 +401,7 @@ def incX(key: np.int64, level: np.int64) -> np.int64:
     >>> key_xyz = key(x, y, z)
     >>> nlevel = 3
     >>> key_inc = incX(key_xyz, nlevel)
-    >>> key_to_position3d(key_inc)
+    >>> position = key_to_position3d(key_inc)
 
     """
     x_sum = (key | _YZ_MASK) + (4 << (62 - 3 * level))
@@ -437,7 +433,7 @@ def incY(key: np.int64, level: np.int64) -> np.int64:
     >>> key_xyz = key(x, y, z)
     >>> nlevel = 3
     >>> key_inc = incY(key_xyz, nlevel)
-    >>> key_to_position3d(key_inc)
+    >>> position = key_to_position3d(key_inc)
     """
     y_sum = (key | _XZ_MASK) + (2 << (62 - 3 * level))
     return (y_sum & _Y_MASK) | (key & _XZ_MASK)
@@ -468,7 +464,7 @@ def incZ(key: np.int64, level: np.int64) -> np.int64:
     >>> key_xyz = key(x, y, z)
     >>> nlevel = 3
     >>> key_inc = incZ(key_xyz, nlevel)
-    >>> key_to_position3d(key_inc)
+    >>> position = key_to_position3d(key_inc)
     """
     z_sum = (key | _XY_MASK) + (1 << (62 - 3 * level))
     return (z_sum & _Z_MASK) | (key & _XY_MASK)
@@ -499,7 +495,7 @@ def decX(key: np.int64, level: np.int64) -> np.int64:
     >>> key_xyz = key(x, y, z)
     >>> nlevel = 3
     >>> key_dec = decX(key_xyz, nlevel)
-    >>> key_to_position3d(key_dec)
+    >>> position = key_to_position3d(key_dec)
     """
     x_diff = (key & _X_MASK) - (4 << (62 - 3 * level))
     return (x_diff & _X_MASK) | (key & _YZ_MASK)
@@ -530,7 +526,7 @@ def decY(key: np.int64, level: np.int64) -> np.int64:
     >>> key_xyz = key(x, y, z)
     >>> nlevel = 3
     >>> key_dec = decY(key_xyz, nlevel)
-    >>> key_to_position3d(key_dec)
+    >>> position = key_to_position3d(key_dec)
     """
     y_diff = (key & _Y_MASK) - (2 << (62 - 3 * level))
     return (y_diff & _Y_MASK) | (key & _XZ_MASK)
@@ -561,7 +557,7 @@ def decZ(key: np.int64, level: np.int64) -> np.int64:
     >>> key_xyz = key(x, y, z)
     >>> nlevel = 3
     >>> key_dec = decZ(key_xyz, nlevel)
-    >>> key_to_position3d(key_dec)
+    >>> position = key_to_position3d(key_dec)
     """
     z_diff = (key & _Z_MASK) - (1 << (62 - 3 * level))
     return (z_diff & _Z_MASK) | (key & _XY_MASK)

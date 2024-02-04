@@ -3,6 +3,7 @@ Python interface for running cosmological simulations using the PySCo library.
 It provides a convenient way to set simulation parameters and run simulations for studying the evolution
 of large-scale structures in the universe.
 """
+
 import pysco
 
 param = {
@@ -10,29 +11,29 @@ param = {
     "theory": "newton",
     # "fR_logfR0": 5,
     # "fR_n": 2,
-    "H0": 68,
-    "Om_m": 0.31,
-    "Om_lambda": 0.69,
+    "H0": 72,
+    "Om_m": 0.25733,
+    "Om_lambda": 0.742589237,
     "w0": -1.0,
     "wa": 0.0,
     "evolution_table": "no",
     "mpgrafic_table": "no",
     "boxlen": 500,
-    "ncoarse": 8,
-    "npart": 256**3,
+    "ncoarse": 7,
+    "npart": 128**3,
     "z_start": 49,
     "seed": 42,
     "fixed_ICS": 0,
     "paired_ICS": 0,
-    "power_spectrum_file": "/home/mabreton/CLPT_model/src/power_spectra/pk_lcdmw7v2.dat",
+    "power_spectrum_file": "/home/user/pysco/example/pk_lcdmw7v2.dat",
     "initial_conditions": "3LPT",
-    "base": "/home/mabreton/boxlen500_n256_lcdm_00000/",
+    "base": "/home/user/boxlen500_n128_lcdm_00000/",
     "z_out": "[10, 5, 2, 1, 0.5, 0]",
     "output_snapshot_format": "HDF5",
-    "save_power_spectrum": "all",
+    "save_power_spectrum": "yes",
     "integrator": "leapfrog",
     "n_reorder": 25,
-    "Courant_factor": 0.5,
+    "Courant_factor": 1.0,
     "linear_newton_solver": "multigrid",
     "Npre": 2,
     "Npost": 1,
@@ -43,4 +44,4 @@ param = {
 # Run simulation
 pysco.run(param)
 
-print("Finished!")
+print("Run Completed!")
