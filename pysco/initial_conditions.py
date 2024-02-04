@@ -5,6 +5,7 @@ This script generates cosmological initial conditions for N-body simulations.
 It provides functions to generate density and force fields based on the linear power spectrum 
 and various Lagrangian Perturbation Theory (LPT) approximations.
 """
+
 import math
 import numpy as np
 import numpy.typing as npt
@@ -62,7 +63,37 @@ def generate(
     >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.rand(100)) for _ in range(4)]
     >>> position, velocity = generate(param, tables)
     """
-    if param["initial_conditions"][1:4].casefold() == "LPT".casefold():
+    if isinstance(param["initial_conditions"], int):
+        i_restart = int(param["initial_conditions"])
+        param["initial_conditions"] = i_restart
+        if "parquet".casefold() == param["output_snapshot_format"].casefold():
+            filename = f"{param['base']}/output_{i_restart:05d}/particles_{param['extra']}.parquet"
+            position, velocity = utils.read_snapshot_particles_parquet(filename)
+            param_filename = f"{param['base']}/output_{i_restart:05d}/param_{param['extra']}_{i_restart:05d}.txt"
+            param_restart = utils.read_param_file(param_filename)
+            logging.warning(f"Parameter file read at ...{param_filename=}")
+            for key in param_restart.index:
+                if key.casefold() is not "nthreads".casefold():
+                    param[key] = param_restart[key]
+
+        elif "hdf5".casefold() == param["output_snapshot_format"].casefold():
+            import h5py
+
+            filename = (
+                f"{param['base']}/output_{i_restart:05d}/particles_{param['extra']}.h5"
+            )
+            position, velocity = utils.read_snapshot_particles_hdf5(filename)
+            with h5py.File(filename, "r") as h5r:
+                attrs = h5r.attrs
+                for key in attrs.keys():
+                    if key.casefold() is not "nthreads".casefold():
+                        param[key] = attrs[key]
+        else:
+            raise ValueError(
+                f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'"
+            )
+        return position, velocity
+    elif param["initial_conditions"][1:4].casefold() == "LPT".casefold():
         a_start = 1.0 / (1 + param["z_start"])
         logging.warning(f"{param['z_start']=}")
         Omz = (
@@ -161,7 +192,7 @@ def finalise_initial_conditions(
     """Wrap, reorder, and write initial conditions to output files.
 
     This function wraps and reorders particle positions, writes the initial
-    distribution to a Parquet file, and saves parameter information to a CSV file.
+    distribution to an HDF5 or Parquet file.
 
     Parameters
     ----------
@@ -184,13 +215,22 @@ def finalise_initial_conditions(
     ...  })
     >>> finalise_initial_conditions(position, velocity, param)
     """
+
+    if "base" not in param:
+        raise ValueError(f"{param.index=}, should contain 'base'")
+
     utils.periodic_wrap(position)
     utils.reorder_particles(position, velocity)
-    if "base" in param:
+    if "parquet".casefold() == param["output_snapshot_format"].casefold():
         snap_name = f"{param['base']}/output_00000/particles.parquet"
-        logging.warning(f"Write initial snapshot...{snap_name=} {param['aexp']=}")
-        utils.write_snapshot_particles_parquet(f"{snap_name}", position, velocity)
+        utils.write_snapshot_particles_parquet(snap_name, position, velocity)
         param.to_csv(f"{param['base']}/output_00000/param.txt", sep="=", header=False)
+    elif "hdf5".casefold() == param["output_snapshot_format"].casefold():
+        snap_name = f"{param['base']}/output_00000/particles.h5"
+        utils.write_snapshot_particles_hdf5(snap_name, position, velocity, param)
+    else:
+        raise ValueError(f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'")
+    logging.warning(f"Write initial snapshot...{snap_name=} {param['aexp']=}")
 
 
 def read_hdf5(
@@ -656,15 +696,15 @@ def white_noise_fourier_force(
 
     force[0, 0, 0, 0] = force[0, 0, 0, 1] = force[0, 0, 0, 2] = 0
 
-    force[0, middle, 0, 0] = force[0, middle, 0, 1] = force[
-        0, middle, 0, 2
-    ] = invkmiddle * math.sqrt(-math.log(rng.random(dtype=np.float32)))
-    force[0, 0, middle, 0] = force[0, 0, middle, 1] = force[
-        0, 0, middle, 2
-    ] = invkmiddle * math.sqrt(-math.log(rng.random(dtype=np.float32)))
-    force[middle, 0, 0, 0] = force[middle, 0, 0, 1] = force[
-        middle, 0, 0, 2
-    ] = invkmiddle * math.sqrt(-math.log(rng.random(dtype=np.float32)))
+    force[0, middle, 0, 0] = force[0, middle, 0, 1] = force[0, middle, 0, 2] = (
+        invkmiddle * math.sqrt(-math.log(rng.random(dtype=np.float32)))
+    )
+    force[0, 0, middle, 0] = force[0, 0, middle, 1] = force[0, 0, middle, 2] = (
+        invkmiddle * math.sqrt(-math.log(rng.random(dtype=np.float32)))
+    )
+    force[middle, 0, 0, 0] = force[middle, 0, 0, 1] = force[middle, 0, 0, 2] = (
+        invkmiddle * math.sqrt(-math.log(rng.random(dtype=np.float32)))
+    )
 
     force[0, middle, middle, 0] = force[0, middle, middle, 1] = force[
         0, middle, middle, 2

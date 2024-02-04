@@ -5,6 +5,7 @@ This module defines a function for computing Particle-Mesh (PM) acceleration usi
 It includes implementations for solving the Newtonian linear Poisson equation, 
 initializing potentials, and handling additional fields in modified gravity theories.
 """
+
 from typing import List, Tuple, Callable
 import numpy as np
 import numpy.typing as npt
@@ -54,7 +55,7 @@ def pm(
     >>> import pandas as pd
     >>> from pysco.solver import pm
     >>> position = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype=np.float32)
-    >>> param = pd.Series({"ncoarse": 6, "save_power_spectrum": "all", "nthreads": 4})
+    >>> param = pd.Series({"ncoarse": 6, "save_power_spectrum": "yes", "nthreads": 4})
     >>> acceleration, potential, additional_field = pm(position, param)
     """
     ncells_1d = 2 ** (param["ncoarse"])
@@ -62,7 +63,7 @@ def pm(
     MAS_index = 3  # None = 0, NGP = 1, CIC = 2, TSC = 3
 
     save_pk = False
-    if param["save_power_spectrum"].casefold() == "all".casefold() or (
+    if param["save_power_spectrum"].casefold() == "yes".casefold() or (
         param["save_power_spectrum"].casefold() == "z_out".casefold()
         and param["write_snapshot"]
     ):

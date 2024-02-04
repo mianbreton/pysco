@@ -5,8 +5,7 @@ Main executable module to run cosmological N-body simulations
 Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
-__copyright__ = "Copyright 2022-2023, Michel-Andrès Breton"
-__version__ = "0.3.6"
+__version__ = "0.4.0"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -33,7 +32,7 @@ def run(param) -> None:
     param : dict or pd.Series
         Parameter container
     """
-    # Ideally it would have been error/info/debug, but the latter triggers extensive numba verbose
+    # Ideally it would have been error/info/debug, but the latter triggers extensive Numba verbose
     if param["verbose"] == 0:
         logging_level = logging.ERROR
     elif param["verbose"] == 1:
@@ -93,17 +92,21 @@ def run(param) -> None:
     param["t"] = tables[1](param["aexp"])
     logging.warning(f"{param['aexp']=} {param['t']=}")
     logging.warning(f"\n[bold blue]----- Run N-body -----[/bold blue]\n")
-    param["nsteps"] = 0
+    if not "nsteps" in param.index:
+        param["nsteps"] = 0
     acceleration, potential, additional_field = solver.pm(position, param)
     aexp_out = 1.0 / (np.array(z_out) + 1)
     aexp_out.sort()
     t_out = tables[1](aexp_out)
     logging.info(f"{aexp_out=}")
     logging.info(f"{t_out}")
-    i_snap = 1
+    if not "i_snap" in param.index:
+        param["i_snap"] = 1
+    else:
+        param["i_snap"] += 1
+
     while param["aexp"] < 1.0:
         param["nsteps"] += 1
-        param["i_snap"] = i_snap
         (
             position,
             velocity,
@@ -118,7 +121,7 @@ def run(param) -> None:
             additional_field,
             tables,
             param,
-            t_out[i_snap - 1],
+            t_out[param["i_snap"] - 1],
         )  # Put None instead of potential if you do not want to use previous step
 
         if (param["nsteps"] % param["n_reorder"]) == 0:
@@ -126,7 +129,7 @@ def run(param) -> None:
             utils.reorder_particles(position, velocity, acceleration)
         if param["write_snapshot"]:
             utils.write_snapshot_particles(position, velocity, param)
-            i_snap += 1
+            param["i_snap"] += 1
         logging.warning(
             f"{param['nsteps']=} {param['aexp']=} z = {1.0 / param['aexp'] - 1}"
         )
@@ -161,7 +164,7 @@ if __name__ == "__main__":
         """
     )
     print(f"VERSION: {__version__}")
-    print(f"{__copyright__}")
+    print(f"{__author__}")
     print(f"{'':{'-'}<{71}}\n")
     main()
     print("Run Completed!")

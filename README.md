@@ -211,20 +211,20 @@ evolution_table = no # Table specifying the evolution of cosmological parameters
 mpgrafic_table = no  # Table for initial conditions (default: "no")
 # Simulation dimension
 boxlen = 500  # Simulation box length (in Mpc/h)
-ncoarse = 8 # Coarse level. Total number of cells = 2**(3*ncoarse)
-npart = 256**3 # Number of particles in the simulation
+ncoarse = 7 # Coarse level. Total number of cells = 2**(3*ncoarse)
+npart = 128**3 # Number of particles in the simulation
 # Initial conditions
 z_start = 49 # Starting redshift of the simulation
 seed = 42 # Seed for random number generation (completely random if negative)
 fixed_ICS = 0 # Use fixed initial conditions. Gaussian Random Field, 1: Fixes the amplitude to match exactly the input P(k)
 paired_ICS = 0 # Use paired initial conditions. If enabled, add π to the random phases (works only with fixed_ICS = 1)
 power_spectrum_file = /home/user/pysco/examples/pk_lcdmw7v2.dat # File path to the power spectrum data
-initial_conditions = 3LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or .h5 file. Else, assumes Gadget format
+initial_conditions = 3LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or .h5 RayGal file, or snapshot number (for restart). Else, assumes Gadget format
 # Outputs
-base=/home/user/boxlen500_n256_lcdm/ # Base directory for storing simulation data
+base=/home/user/boxlen500_n128_lcdm/ # Base directory for storing simulation data
 z_out = [10, 5, 2, 1, 0.5, 0] # List of redshifts for output snapshots
 output_snapshot_format = HDF5 # Particle snapshot format. "parquet" or "HDF5"
-save_power_spectrum = all # Save power spectra. Either 'no', 'z_out' for specific redshifts given by z_out or 'all' to compute at every time step
+save_power_spectrum = all # Save power spectra. Either 'no', 'z_out' for specific redshifts given by z_out or 'yes' to compute at every time step
 # Particles
 integrator = leapfrog # Integration scheme for time-stepping "Leapfrog" or "Euler"
 n_reorder = 25  # Re-order particles every n_reorder steps
@@ -373,7 +373,7 @@ It contains parameter file informations as well as useful quantities such as the
 
 As a side-product , PySCo can also be used as a library which contains utilities for particle and mesh computations.
 
-Since PySCo uses functionnal programming, it is straightforward to use functions on NumPy arrays for various purposes. **We give a few examples below**.
+Since PySCo does not use classes (not supported by Numba), we made it straightforward to use its functions on NumPy arrays for various purposes. **We give a few examples below**.
 
 - Computing a density grid based on particle positions with a Triangular-Shaped Cloud scheme
 

@@ -2,6 +2,7 @@
 This module contains various utility functions and decorators for profiling and timing, 
 as well as several numerical operations and Fast Fourier Transforms management.
 """
+
 from time import perf_counter
 from typing import Tuple, Callable
 import math
@@ -227,44 +228,60 @@ def read_param_file(name: str) -> pd.Series:
         header=None,
     ).T
     # First row as header
-    param.rename(columns=param.iloc[0], inplace=True)
-    param.drop(param.index[0], inplace=True)
+    param = param.rename(columns=param.iloc[0]).drop(param.index[0])
     # Remove whitespaces from column names and values
     param = param.apply(lambda x: x.str.strip() if x.dtype == "object" else x).rename(
         columns=lambda x: x.strip()
     )
-    # Convert all to string
     param = param.astype("string")
-    param["npart"] = eval(param["npart"].item())
+    for key in param.columns:
+        try:
+            value = eval(param[key].item())
+            if isinstance(value, list):
+                isDigit = False
+            else:
+                isDigit = True
+        except:
+            isDigit = False
+        if isDigit:
+            value = eval(param[key].item())
+            param[key] = value
 
-    param = param.astype(
-        {
-            "nthreads": int,
-            "H0": float,
-            "Om_m": float,
-            "Om_lambda": float,
-            "w0": float,
-            "wa": float,
-            "fixed_ICS": int,
-            "paired_ICS": int,
-            "seed": int,
-            "z_start": float,
-            "boxlen": float,
-            "ncoarse": int,
-            "npart": int,
-            "n_reorder": int,
-            "Npre": int,
-            "Npost": int,
-            "epsrel": float,
-            "Courant_factor": float,
-            "verbose": int,
-        }
-    )
     param["write_snapshot"] = False
-    if param["theory"].item().casefold() == "fr".casefold():
-        param = param.astype({"fR_logfR0": float, "fR_n": int})
 
     return param.T.iloc[:, 0]
+
+
+@time_me
+def read_snapshot_particles_hdf5(
+    filename: str,
+) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+    """Read particles in snapshot from HDF5 file
+
+    Parameters
+    ----------
+    filename : str
+        Filename
+
+    Returns
+    -------
+    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+        Position, Velocity [N_part, 3]
+
+    Examples
+    --------
+    >>> from pysco.utils import read_snapshot_particles_hdf5
+    >>> import os
+    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
+    >>> position, velocity = read_snapshot_particles_hdf5(f"{this_dir}/../examples/snapshot.h5")
+    """
+    import h5py
+
+    logging.warning(f"Read HDF5 snapshot {filename}")
+    with h5py.File(filename, "r") as h5r:
+        position = h5r["position"][:]
+        velocity = h5r["velocity"][:]
+    return (position, velocity)
 
 
 @time_me
@@ -292,6 +309,7 @@ def read_snapshot_particles_parquet(
     """
     import pyarrow.parquet as pq
 
+    logging.warning(f"Read parquet snapshot {filename}")
     position = np.ascontiguousarray(
         np.array(pq.read_table(filename, columns=["x", "y", "z"])).T
     )
