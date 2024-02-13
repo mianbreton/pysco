@@ -250,18 +250,14 @@ def initialise_potential(
         else:
             potential = utils.prod_vector_scalar(rhs, (-1.0 / 6 * h**2))
     else:
-        logging.warning("Rescale potential from previous step")
-        if param["compute_additional_field"]:
-            scaling = (
-                param["aexp"] / param["aexp_old"]
-            ) ** 4  # TODO: find exact linear scaling
-        else:
+        logging.warning("Rescale potential from previous step for Newtonian potential")
+        if not param["compute_additional_field"]:
             scaling = (
                 param["aexp"]
                 * tables[2](param["aexp"])
                 / (param["aexp_old"] * tables[2](param["aexp_old"]))
             )
-        utils.prod_vector_scalar_inplace(potential, scaling)
+            utils.prod_vector_scalar_inplace(potential, scaling)
 
     return potential
 
@@ -331,7 +327,10 @@ def get_additional_field(
         q = np.float32(-param["aexp"] ** 4 * Rbar / (18 * c2)) / (-fR_a)
         param["fR_q"] = q
         logging.warning(f"initialise")
-        u_scalaron = initialise_potential(additional_field, dens_term, h, param, tables)
+        additional_field = initialise_potential(
+            additional_field, dens_term, h, param, tables
+        )
+        u_scalaron = additional_field
         u_scalaron = multigrid.FAS(u_scalaron, dens_term, h, param)
         if (param["nsteps"]) % 10 == 0:
             logging.info(
