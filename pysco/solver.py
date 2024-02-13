@@ -60,7 +60,20 @@ def pm(
     """
     ncells_1d = 2 ** (param["ncoarse"])
     h = np.float32(1.0 / ncells_1d)
-    MAS_index = 3  # None = 0, NGP = 1, CIC = 2, TSC = 3
+
+    if param["mass_scheme"].casefold() == "CIC".casefold():
+        MAS_index = 2
+        func_interpolation = mesh.CIC
+        func_inv_interpolation_vec = mesh.invCIC_vec
+    elif param["mass_scheme"].casefold() == "TSC".casefold():
+        MAS_index = 3
+        if param["nthreads"] < 5:
+            func_interpolation = mesh.TSC_seq
+        else:
+            func_interpolation = mesh.TSC
+        func_inv_interpolation_vec = mesh.invTSC_vec
+    else:
+        raise ValueError(f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'")
 
     save_pk = False
     if param["save_power_spectrum"].casefold() == "yes".casefold() or (
@@ -69,10 +82,8 @@ def pm(
     ):
         save_pk = True
 
-    if param["nthreads"] < 5:
-        density = mesh.TSC_seq(position, ncells_1d)
-    else:
-        density = mesh.TSC(position, ncells_1d)
+    density = func_interpolation(position, ncells_1d)
+
     if ncells_1d**3 != param["npart"]:
         conversion = np.float32(ncells_1d**3 / param["npart"])
         utils.prod_vector_scalar_inplace(density, conversion)
@@ -178,7 +189,7 @@ def pm(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
             )
 
-    acceleration = mesh.invTSC_vec(force, position)
+    acceleration = func_inv_interpolation_vec(force, position)
     return (acceleration, potential, additional_field)
 
 

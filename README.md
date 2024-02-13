@@ -227,6 +227,7 @@ output_snapshot_format = HDF5 # Particle snapshot format. "parquet" or "HDF5"
 save_power_spectrum = all # Save power spectra. Either 'no', 'z_out' for specific redshifts given by z_out or 'yes' to compute at every time step
 # Particles
 integrator = leapfrog # Integration scheme for time-stepping "Leapfrog" or "Euler"
+mass_scheme = TSC # CIC or TSC
 n_reorder = 25  # Re-order particles every n_reorder steps
 Courant_factor = 0.8 # Cell fraction for time stepping (Courant_factor < 1 means more time steps)
 # Newtonian solver
@@ -279,6 +280,7 @@ param = {
     "output_snapshot_format" : "HDF5",
     "save_power_spectrum": "all",
     "integrator": "leapfrog",
+    "mass_scheme": "TSC",
     "n_reorder": 25,
     "Courant_factor": 0.8,
     "linear_newton_solver": "multigrid",
