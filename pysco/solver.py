@@ -18,6 +18,7 @@ import utils
 import cubic
 import quartic
 import logging
+import fourier
 
 
 # @utils.profile_me
@@ -95,8 +96,8 @@ def pm(
         output_pk = (
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
         )
-        density_fourier = utils.fft_3D_real(density, param["nthreads"])
-        k, Pk, Nmodes = utils.fourier_grid_to_Pk(density_fourier, 3)
+        density_fourier = fourier.fft_3D_real(density, param["nthreads"])
+        k, Pk, Nmodes = fourier.fourier_grid_to_Pk(density_fourier, 3)
         density_fourier = 0
         Pk *= (param["boxlen"] / len(density) ** 2) ** 3
         k *= 2 * np.pi / param["boxlen"]
@@ -406,9 +407,9 @@ def fft(
     >>> param = pd.Series({"nthreads": 4, "boxlen": 100.0, "npart": 1000000, "aexp": 1.0, "Om_m": 0.3})
     >>> potential = fft(rhs, param)
     """
-    rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
+    rhs_fourier = fourier.fft_3D_real(rhs, param["nthreads"])
     if save_pk:
-        k, Pk, Nmodes = utils.fourier_grid_to_Pk(rhs_fourier, MAS_index)
+        k, Pk, Nmodes = fourier.fourier_grid_to_Pk(rhs_fourier, MAS_index)
         Pk *= (param["boxlen"] / len(rhs) ** 2) ** 3 / (
             1.5 * param["aexp"] * param["Om_m"]
         ) ** 2
@@ -423,10 +424,10 @@ def fft(
             header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
         )
     if MAS_index == 0:
-        utils.divide_by_minus_k2_fourier(rhs_fourier)
+        fourier.divide_by_minus_k2_fourier(rhs_fourier)
     else:
-        utils.divide_by_minus_k2_fourier_compensated(rhs_fourier, MAS_index)
-    return utils.ifft_3D_real(rhs_fourier, param["nthreads"])
+        fourier.divide_by_minus_k2_fourier_compensated(rhs_fourier, MAS_index)
+    return fourier.ifft_3D_real(rhs_fourier, param["nthreads"])
 
 
 @utils.time_me
@@ -463,15 +464,15 @@ def fft_force(
     >>> param = pd.Series({"nthreads": 4, "boxlen": 100.0, "npart": 1000000, "aexp": 1.0, "Om_m": 0.3})
     >>> force = fft_force(rhs, param)
     """
-    rhs_fourier = utils.fft_3D_real(rhs, param["nthreads"])
+    rhs_fourier = fourier.fft_3D_real(rhs, param["nthreads"])
     if "fdk_fft".casefold() == param["linear_newton_solver"].casefold():
-        force = utils.gradient_laplacian_fourier_fdk(rhs_fourier)
+        force = fourier.gradient_laplacian_fourier_fdk(rhs_fourier)
     elif "ham_fft".casefold() == param["linear_newton_solver"].casefold():
-        force = utils.gradient_laplacian_fourier_hammings(rhs_fourier, MAS_index)
+        force = fourier.gradient_laplacian_fourier_hammings(rhs_fourier, MAS_index)
     else:
-        force = utils.gradient_laplacian_fourier_compensated(rhs_fourier, MAS_index)
+        force = fourier.gradient_laplacian_fourier_compensated(rhs_fourier, MAS_index)
     if save_pk:
-        k, Pk, Nmodes = utils.fourier_grid_to_Pk(rhs_fourier, MAS_index)
+        k, Pk, Nmodes = fourier.fourier_grid_to_Pk(rhs_fourier, MAS_index)
         rhs_fourier = 0
         Pk *= (param["boxlen"] / len(rhs) ** 2) ** 3 / (
             1.5 * param["aexp"] * param["Om_m"]
@@ -487,4 +488,4 @@ def fft_force(
             header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
         )
     rhs_fourier = 0
-    return utils.ifft_3D_real_grad(force, param["nthreads"])
+    return fourier.ifft_3D_real_grad(force, param["nthreads"])

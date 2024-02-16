@@ -4,13 +4,13 @@ build-backend = "pdm.backend"
 
 [project]
 name = "pysco-nbody"
-version = "0.4.2"
+version = "0.4.3"
 authors = [
     { name = "Michel-Andrès Breton", email = "michel-andres.breton@obspm.fr" },
 ]
 description = "A Python library to run N-body simulations with modified gravity"
 readme = "README.md"
-requires-python = ">=3.8, <3.12"
+requires-python = ">=3.11, <3.13"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -27,7 +27,7 @@ dependencies = [
     "pyarrow",
     "h5py",
     "rich",
-    "pyfftw",
+    #"pyfftw",
 ]
 
 [project.urls]

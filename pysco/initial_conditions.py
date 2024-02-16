@@ -18,6 +18,8 @@ import solver
 import utils
 from astropy.constants import pc
 import logging
+import iostream
+import fourier
 
 
 def generate(
@@ -68,9 +70,9 @@ def generate(
         param["initial_conditions"] = i_restart
         if "parquet".casefold() == param["output_snapshot_format"].casefold():
             filename = f"{param['base']}/output_{i_restart:05d}/particles_{param['extra']}.parquet"
-            position, velocity = utils.read_snapshot_particles_parquet(filename)
+            position, velocity = iostream.read_snapshot_particles_parquet(filename)
             param_filename = f"{param['base']}/output_{i_restart:05d}/param_{param['extra']}_{i_restart:05d}.txt"
-            param_restart = utils.read_param_file(param_filename)
+            param_restart = iostream.read_param_file(param_filename)
             logging.warning(f"Parameter file read at ...{param_filename=}")
             for key in param_restart.index:
                 if key.casefold() is not "nthreads".casefold():
@@ -82,7 +84,7 @@ def generate(
             filename = (
                 f"{param['base']}/output_{i_restart:05d}/particles_{param['extra']}.h5"
             )
-            position, velocity = utils.read_snapshot_particles_hdf5(filename)
+            position, velocity = iostream.read_snapshot_particles_hdf5(filename)
             with h5py.File(filename, "r") as h5r:
                 attrs = h5r.attrs
                 for key in attrs.keys():
@@ -223,11 +225,11 @@ def finalise_initial_conditions(
     utils.reorder_particles(position, velocity)
     if "parquet".casefold() == param["output_snapshot_format"].casefold():
         snap_name = f"{param['base']}/output_00000/particles.parquet"
-        utils.write_snapshot_particles_parquet(snap_name, position, velocity)
+        iostream.write_snapshot_particles_parquet(snap_name, position, velocity)
         param.to_csv(f"{param['base']}/output_00000/param.txt", sep="=", header=False)
     elif "hdf5".casefold() == param["output_snapshot_format"].casefold():
         snap_name = f"{param['base']}/output_00000/particles.h5"
-        utils.write_snapshot_particles_hdf5(snap_name, position, velocity, param)
+        iostream.write_snapshot_particles_hdf5(snap_name, position, velocity, param)
     else:
         raise ValueError(f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'")
     logging.warning(f"Write initial snapshot...{snap_name=} {param['aexp']=}")
@@ -377,7 +379,7 @@ def generate_density(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.floa
     utils.prod_vector_vector_inplace(density_k, transfer_grid)
     transfer_grid = 0
     # .real method makes the data not C contiguous
-    return np.ascontiguousarray(utils.ifft_3D(density_k, param["nthreads"]).real)
+    return np.ascontiguousarray(fourier.ifft_3D(density_k, param["nthreads"]).real)
 
 
 @utils.time_me
@@ -421,7 +423,7 @@ def generate_force(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.float3
 
     utils.prod_gradient_vector_inplace(force, transfer_grid)
     transfer_grid = 0
-    force = utils.ifft_3D_grad(force, param["nthreads"])
+    force = fourier.ifft_3D_grad(force, param["nthreads"])
     # .real method makes the data not C contiguous
     return np.ascontiguousarray(force.real)
 

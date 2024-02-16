@@ -5,7 +5,7 @@ Main executable module to run cosmological N-body simulations
 Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -22,6 +22,7 @@ from typing import Dict
 import pandas as pd
 import logging
 from rich.logging import RichHandler
+import iostream
 
 
 def run(param) -> None:
@@ -128,7 +129,7 @@ def run(param) -> None:
             logging.warning("Reordering particles")
             utils.reorder_particles(position, velocity, acceleration)
         if param["write_snapshot"]:
-            utils.write_snapshot_particles(position, velocity, param)
+            iostream.write_snapshot_particles(position, velocity, param)
             param["i_snap"] += 1
         logging.warning(
             f"{param['nsteps']=} {param['aexp']=} z = {1.0 / param['aexp'] - 1}"
@@ -142,7 +143,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config_file", help="Configuration file", required=True)
     args = parser.parse_args()
-    param = utils.read_param_file(args.config_file)
+    param = iostream.read_param_file(args.config_file)
     print(param)
     run(param)
 
