@@ -1,6 +1,6 @@
 """
 This module contains various utility functions and decorators for profiling and timing, 
-as well as several numerical operations and Fast Fourier Transforms management.
+as well as several numerical operations.
 """
 
 from time import perf_counter

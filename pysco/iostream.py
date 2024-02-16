@@ -25,7 +25,7 @@ def read_param_file(name: str) -> pd.Series:
 
     Examples
     --------
-    >>> from pysco.io import read_param_file
+    >>> from pysco.iostream import read_param_file
     >>> import os
     >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> params = read_param_file(f"{this_dir}/../examples/param.ini")
@@ -81,7 +81,7 @@ def read_snapshot_particles_hdf5(
 
     Examples
     --------
-    >>> from pysco.io import read_snapshot_particles_hdf5
+    >>> from pysco.iostream import read_snapshot_particles_hdf5
     >>> import os
     >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> position, velocity = read_snapshot_particles_hdf5(f"{this_dir}/../examples/snapshot.h5")
@@ -113,7 +113,7 @@ def read_snapshot_particles_parquet(
 
     Examples
     --------
-    >>> from pysco.io import read_snapshot_particles_parquet
+    >>> from pysco.iostream import read_snapshot_particles_parquet
     >>> import os
     >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> position, velocity = read_snapshot_particles_parquet(f"{this_dir}/../examples/snapshot.parquet")
@@ -151,7 +151,7 @@ def write_snapshot_particles(
     --------
     >>> import numpy as np
     >>> import pandas as pd
-    >>> from pysco.io import write_snapshot_particles
+    >>> from pysco.iostream import write_snapshot_particles
     >>> import os
     >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> position = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
@@ -200,7 +200,7 @@ def write_snapshot_particles_parquet(
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.io import write_snapshot_particles_parquet
+    >>> from pysco.iostream import write_snapshot_particles_parquet
     >>> import os
     >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> position = np.random.rand(32**3, 3).astype(np.float32)
@@ -248,7 +248,7 @@ def write_snapshot_particles_hdf5(
     --------
     >>> import numpy as np
     >>> import pandas as pd
-    >>> from pysco.io import write_snapshot_particles_hdf5
+    >>> from pysco.iostream import write_snapshot_particles_hdf5
     >>> import os
     >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> position = np.random.rand(32**3, 3).astype(np.float32)
