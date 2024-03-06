@@ -411,7 +411,7 @@ reorder_particles(position, velocity)
 
 ```python
 import numpy as np
-from pysco.utils import fourier_grid_to_Pk, fft_3D_real
+from pysco.fourier import fourier_grid_to_Pk, fft_3D_real
 nthreads = 2
 density = np.random.rand(64, 64, 64).astype(np.float32)
 density_k = fft_3D_real(density, nthreads)

@@ -123,7 +123,8 @@ def generate(
         rhs_2ndorder = compute_rhs_2ndorder(force)
         # potential_2ndorder = solver.fft(rhs_2ndorder, param)
         # force_2ndorder = mesh.derivative(potential_2ndorder)
-        force_2ndorder = solver.fft_force(rhs_2ndorder, param, 0)
+        param["MAS_index"] = 0
+        force_2ndorder = solver.fft_force(rhs_2ndorder, param)
         rhs_2ndorder = 0
         add_2LPT(position, velocity, force_2ndorder, fH_2)
         if param["initial_conditions"].casefold() == "2LPT".casefold():

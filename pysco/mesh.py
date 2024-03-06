@@ -2,6 +2,7 @@
 This module contains various utility functions for mesh calculations 
 such as prolongation, restriction, derivatives, projections and de-projections.
 """
+
 import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange
@@ -140,11 +141,9 @@ def prolongation0(
             for k in prange(ncells_1d):
                 kk = 2 * k
                 kkp1 = kk + 1
-                x_fine[ii, jj, kk] = x_fine[ii, jj, kkp1] = x_fine[
-                    ii, jjp1, kk
-                ] = x_fine[ii, jjp1, kkp1] = x_fine[iip1, jj, kk] = x_fine[
-                    iip1, jj, kkp1
-                ] = x_fine[
+                x_fine[ii, jj, kk] = x_fine[ii, jj, kkp1] = x_fine[ii, jjp1, kk] = (
+                    x_fine[ii, jjp1, kkp1]
+                ) = x_fine[iip1, jj, kk] = x_fine[iip1, jj, kkp1] = x_fine[
                     iip1, jjp1, kk
                 ] = x_fine[
                     iip1, jjp1, kkp1
@@ -378,6 +377,131 @@ def add_prolongation_half(
                     + f2 * (tmp221 + tmp210 + tmp120)
                     + f3 * tmp220
                 )
+
+
+@utils.time_me
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+def divergence2(
+    a: npt.NDArray[np.float32],
+    out: npt.NDArray[np.float32],
+) -> None:
+    """Divergence of a vector field on a grid
+
+    Two-point stencil divergence with finite differences
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Vector Field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+    out : npt.NDArray[np.float32]
+        Scalar field (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import divergence2
+    >>> vector_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
+    >>> field_divergence = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    >>> divergence2(vector_field, field_divergence)
+    """
+    ncells_1d = a.shape[0]
+    invh = np.float32(ncells_1d)
+    for i in prange(ncells_1d):
+        im1 = i - 1
+        for j in prange(ncells_1d):
+            jm1 = j - 1
+            for k in prange(ncells_1d):
+                km1 = k - 1
+                out[i, j, k] = invh * (
+                    (a[im1, j, k, 0] - a[i, j, k, 0])
+                    + (a[i, jm1, k, 1] - a[i, j, k, 1])
+                    + (a[i, j, km1, 2] - a[i, j, k, 2])
+                )
+
+
+@utils.time_me
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+def divergence3(
+    a: npt.NDArray[np.float32],
+    out: npt.NDArray[np.float32],
+) -> None:
+    """Divergence of a vector field on a grid
+
+    Three-point stencil divergence with finite differences
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Vector Field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+    out : npt.NDArray[np.float32]
+        Scalar field (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import divergence3
+    >>> vector_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
+    >>> field_divergence = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    >>> divergence3(vector_field, field_divergence)
+    """
+    ncells_1d = a.shape[0]
+    halfinvh = np.float32(0.5 * ncells_1d)
+    for i in prange(-1, ncells_1d - 1):
+        ip1 = i + 1
+        im1 = i - 1
+        for j in prange(-1, ncells_1d - 1):
+            jp1 = j + 1
+            jm1 = j - 1
+            for k in prange(-1, ncells_1d - 1):
+                kp1 = k + 1
+                km1 = k - 1
+                out[i, j, k] = halfinvh * (
+                    (a[im1, j, k, 0] - a[ip1, j, k, 0])
+                    + (a[i, jm1, k, 1] - a[i, jp1, k, 1])
+                    + (a[i, j, km1, 2] - a[i, j, kp1, 2])
+                )
+
+
+@utils.time_me
+@njit(["f4[:,:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+def derivative2(
+    a: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid
+
+    Two-point stencil derivative with finite differences
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative2
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative3(scalar_field)
+    """
+    ncells_1d = a.shape[0]
+    invh = np.float32(ncells_1d)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
+    for i in prange(-1, ncells_1d - 1):
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                kp1 = k + 1
+                aijk = a[i, j, k]
+                result[i, j, k, 0] = invh * (aijk - a[ip1, j, k])
+                result[i, j, k, 1] = invh * (aijk - a[i, jp1, k])
+                result[i, j, k, 2] = invh * (aijk - a[i, j, kp1])
+    return result
 
 
 @utils.time_me
