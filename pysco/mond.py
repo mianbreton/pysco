@@ -1,5 +1,9 @@
 """
 Implementation of QUMOND interpolating functions (Famaey & McGaugh, 2021)
+
+This module implements the inner gradient of the QUMOND interpolating function
+with the simple, n-family, beta-family, gamma-family, and delta-family
+parameterizations.
 """
 
 import numpy as np
@@ -10,6 +14,17 @@ import math
 
 @njit(["void(f4[:,:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
 def inner_gradient_simple(force: npt.NDArray[np.float32], a0: np.float32) -> None:
+    """
+    This function implements the inner gradient of the QUMOND interpolating function
+    with the simple parameterization.
+
+    Parameters
+    ----------
+    force : npt.NDArray[np.float32]
+        Force field [N, N, N, 3]
+    a0 : np.float32
+        Acceleration constant
+    """
     half = np.float32(0.5)
     one = np.float32(1)
     four = np.float32(4)
@@ -28,6 +43,19 @@ def inner_gradient_simple(force: npt.NDArray[np.float32], a0: np.float32) -> Non
 
 @njit(["void(f4[:,:,:,::1], f4, i4)"], fastmath=True, cache=True, parallel=True)
 def inner_gradient_n(force: npt.NDArray[np.float32], a0: np.float32, n: int) -> None:
+    """
+    This function implements the inner gradient of the QUMOND interpolating function
+    with the n-family parameterization.
+
+    Parameters
+    ----------
+    force : npt.NDArray[np.float32]
+        Force field [N, N, N, 3]
+    a0 : np.float32
+        Acceleration constant
+    n : int
+        Exponent of the n-family parameterization
+    """
     inv_n = np.float32(1.0 / n)
     half = np.float32(0.5)
     one = np.float32(1)
@@ -49,6 +77,19 @@ def inner_gradient_n(force: npt.NDArray[np.float32], a0: np.float32, n: int) -> 
 def inner_gradient_beta(
     force: npt.NDArray[np.float32], a0: np.float32, beta: np.float32
 ) -> None:
+    """
+    This function implements the inner gradient of the QUMOND interpolating function
+    with the beta-family parameterization.
+
+    Parameters
+    ----------
+    force : npt.NDArray[np.float32]
+        Force field [N, N, N, 3]
+    a0 : np.float32
+        Acceleration constant
+    beta : int
+        Parameter of the beta-family parameterization
+    """
     half = np.float32(0.5)
     one = np.float32(1)
     inv_a0 = np.float32(1.0 / a0)
@@ -69,6 +110,19 @@ def inner_gradient_beta(
 def inner_gradient_gamma(
     force: npt.NDArray[np.float32], a0: np.float32, gamma: np.float32
 ) -> None:
+    """
+    This function implements the inner gradient of the QUMOND interpolating function
+    with the beta-family parameterization.
+
+    Parameters
+    ----------
+    force : npt.NDArray[np.float32]
+        Force field [N, N, N, 3]
+    a0 : np.float32
+        Acceleration constant
+    beta : np.float32
+        Parameter of the beta-family parameterization
+    """
     one = np.float32(1)
     inv_a0 = np.float32(1.0 / a0)
     half_gamma = np.float32(0.5 * gamma)
@@ -92,6 +146,17 @@ def inner_gradient_gamma(
 def inner_gradient_delta(
     force: npt.NDArray[np.float32], a0: np.float32, delta: np.float32
 ) -> None:
+    """This function implements the inner gradient of the QUMOND interpolating
+    function with the gamma-family parameterization.
+
+    Parameters:
+    force: npt.NDArray[np.float32]
+        Force field [N, N, N, 3]
+    a0: np.float32
+        Acceleration constant
+    gamma: np.float32
+        Parameter of the gamma-family parameterization
+    """
     one = np.float32(1)
     inv_a0 = np.float32(1.0 / a0)
     half_beta = np.float32(0.5 * delta)

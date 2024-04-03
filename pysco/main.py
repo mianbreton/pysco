@@ -5,7 +5,7 @@ Main executable module to run cosmological N-body simulations
 Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
-__version__ = "0.4.4"
+__version__ = "0.4.5"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -74,6 +74,8 @@ def run(param) -> None:
     extra = param["theory"].casefold()
     if extra.casefold() == "fr".casefold():
         extra += f"{param['fR_logfR0']}_n{param['fR_n']}"
+    elif extra.casefold() == "parametrized".casefold():
+        extra += f"_mu0_{param['parametrized_mu0']}"
     extra += f"_{param['linear_newton_solver']}_ncoarse{param['ncoarse']}"
     param["extra"] = extra
     z_out = ast.literal_eval(param["z_out"])

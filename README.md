@@ -199,8 +199,14 @@ A example parameter file is available in `examples/param.ini`. **All strings (ex
 nthreads = 1  # Number of threads to use in the simulation. For nthreads <= 0 use all threads
 # Theoretical model
 theory= newton # Cosmological theory to use, either "Newton" or  "fR"
+## f(R)
 fR_logfR0 = 5 # Background value of the scalaron field today -log(fR0)
-fR_n = 2 # Exponent on the curvature in the Hu & Sawicki model. Currently n = 1 or 2
+fR_n = 1 # Exponent on the curvature in the Hu & Sawicki model. Currently n = 1 or 2
+## QUMOND
+qumond_a0 = 1.2 # Acceleration constant (in 1e-10 m/s²)
+qumond_alpha = 1 #  Interpolating function parameter:  0 <= alpha <= 1
+## Parametrized
+parametrized_mu0 = -0.1 # If null, then is equivalent to GR. Model from Abbott et al. (2019)
 # Cosmology -- Put more parameters later
 H0 = 68  # Hubble constant at redshift z=0 (in km/s/Mpc).
 Om_m = 0.31   # Matter density parameter

@@ -11,7 +11,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from scipy.interpolate import interp1d
-from astropy.constants import c
+from astropy.constants import c, pc
 import mesh
 import multigrid
 import utils
@@ -87,7 +87,21 @@ def pm(
     density = func_interpolation(position, ncells_1d)
     if ncells_1d**3 != param["npart"]:
         conversion = np.float32(ncells_1d**3 / param["npart"])
-        utils.prod_vector_scalar_inplace(density, conversion)
+        if "parametrized".casefold() == param["theory"].casefold():
+            aexpterm = param["aexp"]**(-3*(1 + param["w0"] + param["wa"]))*np.exp(-3*param["wa"]*(1 - param["aexp"]))
+            omega_lambda_z = param["Om_lambda"]*aexpterm/(param["Om_m"]*param["aexp"]**(-3) + param["Om_lambda"]*aexpterm)
+            conversion *= 1 + param["parametrized_mu0"]*omega_lambda_z/param["Om_lambda"]
+            utils.prod_vector_scalar_inplace(density, conversion)
+        else:
+            utils.prod_vector_scalar_inplace(density, conversion)
+    else:
+        if "parametrized".casefold() == param["theory"].casefold():
+            aexpterm = param["aexp"]**(-3*(1 + param["w0"] + param["wa"]))*np.exp(-3*param["wa"]*(1 - param["aexp"]))
+            omega_lambda_z = param["Om_lambda"]*aexpterm/(param["Om_m"]*param["aexp"]**(-3) + param["Om_lambda"]*aexpterm)
+            conversion = 1 + param["parametrized_mu0"]*omega_lambda_z/param["Om_lambda"]
+            utils.prod_vector_scalar_inplace(density, conversion)
+    
+
     if save_pk and "multigrid".casefold() == param["linear_newton_solver"].casefold():
         output_pk = (
             f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
@@ -307,10 +321,10 @@ def get_additional_field(
     >>> tables = [interp1d([0, 1], [1, 2]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [1, 2])]
     >>> additional_field = get_additional_field(additional_field, density, h, param, tables)
     """
-    if param["theory"].casefold() == "newton".casefold():
+    if param["theory"].casefold() == "newton".casefold() or param["theory"].casefold() == "parametrized".casefold():
         return np.empty(0, dtype=np.float32)
     elif param["theory"].casefold() == "fr".casefold():
-        Rbar = 3 * param["Om_m"] * param["aexp"] ** (-3) + 12 * param["Om_lambda"]
+        Rbar =  3 * param["Om_m"] * param["aexp"] ** (-3) + 12 * param["Om_lambda"]
         Rbar0 = 3 * param["Om_m"] + 12 * param["Om_lambda"]
         fR_a = (
             -param["aexp"] ** 2
@@ -353,7 +367,7 @@ def get_additional_field(
             additional_field = fft(density, param)
         return additional_field
     else:
-        raise ValueError(f"{param['theory']=}, should be 'newton', 'fr' or '*qumond*'")
+        raise ValueError(f"{param['theory']=}, should be 'newton', 'fr', 'parametrized' or '*qumond*'")
 
 
 def rhs_poisson(
@@ -387,7 +401,7 @@ def rhs_poisson(
         param["compute_additional_field"] is False
         and "qumond".casefold() in param["theory"].casefold()
     ):
-        a0 = param["qumond_a0"]
+        a0 = param["qumond_a0"]*1e-3*1e-10*param["unit_t"]**2 / (param["unit_l"]*param["aexp"])
         alpha = param["qumond_alpha"]
         force = mesh.derivative2(additional_field)
         if "qumond_simple".casefold() == param["theory"].casefold():
