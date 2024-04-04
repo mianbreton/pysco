@@ -688,7 +688,7 @@ def derivative7(
 def derivative5_with_fR_n1(
     a: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    f: npt.NDArray[np.float32],
+    f: np.float32,
 ) -> npt.NDArray[np.float32]:
     """Spatial derivatives of a scalar field on a grid
 
@@ -782,7 +782,7 @@ def derivative5_with_fR_n1(
 def add_derivative5_fR_n1(
     force: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    f: npt.NDArray[np.float32],
+    f: np.float32,
 ) -> None:
     """Inplace add spatial derivatives of a scalar field on a grid
 
@@ -849,7 +849,7 @@ def add_derivative5_fR_n1(
 def derivative5_with_fR_n2(
     a: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    f: npt.NDArray[np.float32],
+    f: np.float32,
 ) -> npt.NDArray[np.float32]:
     """Spatial derivatives of a scalar field on a grid
 
@@ -943,7 +943,7 @@ def derivative5_with_fR_n2(
 def add_derivative5_fR_n2(
     force: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    f: npt.NDArray[np.float32],
+    f: np.float32,
 ) -> None:
     """Inplace add spatial derivatives of a scalar field on a grid
 

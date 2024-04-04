@@ -13,6 +13,7 @@ param = {
     # "fR_n": 1,
     # "qumond_a0": 1e-15,
     # "qumond_alpha": 1,
+    # "parametrized_mu0": 0.1,
     "H0": 72,
     "Om_m": 0.25733,
     "Om_lambda": 0.742589237,

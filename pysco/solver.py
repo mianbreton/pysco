@@ -65,17 +65,54 @@ def pm(
 
     if param["mass_scheme"].casefold() == "CIC".casefold():
         param["MAS_index"] = 2
-        func_interpolation = mesh.CIC
-        func_inv_interpolation_vec = mesh.invCIC_vec
+        density = mesh.CIC(position, ncells_1d)
     elif param["mass_scheme"].casefold() == "TSC".casefold():
         param["MAS_index"] = 3
         if param["nthreads"] < 5:
-            func_interpolation = mesh.TSC_seq
+            print(f"Compute dens")
+            density = mesh.TSC_seq(position, ncells_1d)
         else:
-            func_interpolation = mesh.TSC
-        func_inv_interpolation_vec = mesh.invTSC_vec
+            density = mesh.TSC(position, ncells_1d)
     else:
         raise ValueError(f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'")
+
+    if ncells_1d**3 != param["npart"]:
+        conversion = np.float32(ncells_1d**3 / param["npart"])
+        if "parametrized".casefold() == param["theory"].casefold():
+            evolution_term = param["aexp"] ** (
+                -3 * (1 + param["w0"] + param["wa"])
+            ) * np.exp(-3 * param["wa"] * (1 - param["aexp"]))
+            omega_lambda_z = (
+                param["Om_lambda"]
+                * evolution_term
+                / (
+                    param["Om_m"] * param["aexp"] ** (-3)
+                    + param["Om_lambda"] * evolution_term
+                )
+            )
+            conversion *= (
+                1 + param["parametrized_mu0"] * omega_lambda_z / param["Om_lambda"]
+            )
+            utils.prod_vector_scalar_inplace(density, conversion)
+        else:
+            utils.prod_vector_scalar_inplace(density, conversion)
+    else:
+        if "parametrized".casefold() == param["theory"].casefold():
+            evolution_term = param["aexp"] ** (
+                -3 * (1 + param["w0"] + param["wa"])
+            ) * np.exp(-3 * param["wa"] * (1 - param["aexp"]))
+            omega_lambda_z = (
+                param["Om_lambda"]
+                * evolution_term
+                / (
+                    param["Om_m"] * param["aexp"] ** (-3)
+                    + param["Om_lambda"] * evolution_term
+                )
+            )
+            conversion = (
+                1 + param["parametrized_mu0"] * omega_lambda_z / param["Om_lambda"]
+            )
+            utils.prod_vector_scalar_inplace(density, conversion)
 
     save_pk = False
     if param["save_power_spectrum"].casefold() == "yes".casefold() or (
@@ -83,24 +120,6 @@ def pm(
         and param["write_snapshot"]
     ):
         save_pk = True
-
-    density = func_interpolation(position, ncells_1d)
-    if ncells_1d**3 != param["npart"]:
-        conversion = np.float32(ncells_1d**3 / param["npart"])
-        if "parametrized".casefold() == param["theory"].casefold():
-            aexpterm = param["aexp"]**(-3*(1 + param["w0"] + param["wa"]))*np.exp(-3*param["wa"]*(1 - param["aexp"]))
-            omega_lambda_z = param["Om_lambda"]*aexpterm/(param["Om_m"]*param["aexp"]**(-3) + param["Om_lambda"]*aexpterm)
-            conversion *= 1 + param["parametrized_mu0"]*omega_lambda_z/param["Om_lambda"]
-            utils.prod_vector_scalar_inplace(density, conversion)
-        else:
-            utils.prod_vector_scalar_inplace(density, conversion)
-    else:
-        if "parametrized".casefold() == param["theory"].casefold():
-            aexpterm = param["aexp"]**(-3*(1 + param["w0"] + param["wa"]))*np.exp(-3*param["wa"]*(1 - param["aexp"]))
-            omega_lambda_z = param["Om_lambda"]*aexpterm/(param["Om_m"]*param["aexp"]**(-3) + param["Om_lambda"]*aexpterm)
-            conversion = 1 + param["parametrized_mu0"]*omega_lambda_z/param["Om_lambda"]
-            utils.prod_vector_scalar_inplace(density, conversion)
-    
 
     if save_pk and "multigrid".casefold() == param["linear_newton_solver"].casefold():
         output_pk = (
@@ -147,7 +166,6 @@ def pm(
         raise ValueError(
             f"{param['linear_newton_solver']=}, should be multigrid, fft, fdk_fft, ham_fft or full_fft"
         )
-
 
     if "fr".casefold() == param["theory"].casefold():
         Rbar = 3 * param["Om_m"] * param["aexp"] ** (-3) + 12 * param["Om_lambda"]
@@ -204,7 +222,13 @@ def pm(
         else:
             force = mesh.derivative5(potential)
 
-    acceleration = func_inv_interpolation_vec(force, position)
+    if param["mass_scheme"].casefold() == "CIC".casefold():
+        acceleration = mesh.invCIC_vec(force, position)
+    elif param["mass_scheme"].casefold() == "TSC".casefold():
+        acceleration = mesh.invTSC_vec(force, position)
+    else:
+        raise ValueError(f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'")
+
     return (acceleration, potential, additional_field)
 
 
@@ -321,10 +345,13 @@ def get_additional_field(
     >>> tables = [interp1d([0, 1], [1, 2]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [1, 2])]
     >>> additional_field = get_additional_field(additional_field, density, h, param, tables)
     """
-    if param["theory"].casefold() == "newton".casefold() or param["theory"].casefold() == "parametrized".casefold():
+    if (
+        param["theory"].casefold() == "newton".casefold()
+        or param["theory"].casefold() == "parametrized".casefold()
+    ):
         return np.empty(0, dtype=np.float32)
     elif param["theory"].casefold() == "fr".casefold():
-        Rbar =  3 * param["Om_m"] * param["aexp"] ** (-3) + 12 * param["Om_lambda"]
+        Rbar = 3 * param["Om_m"] * param["aexp"] ** (-3) + 12 * param["Om_lambda"]
         Rbar0 = 3 * param["Om_m"] + 12 * param["Om_lambda"]
         fR_a = (
             -param["aexp"] ** 2
@@ -367,7 +394,9 @@ def get_additional_field(
             additional_field = fft(density, param)
         return additional_field
     else:
-        raise ValueError(f"{param['theory']=}, should be 'newton', 'fr', 'parametrized' or '*qumond*'")
+        raise ValueError(
+            f"{param['theory']=}, should be 'newton', 'fr', 'parametrized' or '*qumond*'"
+        )
 
 
 def rhs_poisson(
@@ -401,7 +430,13 @@ def rhs_poisson(
         param["compute_additional_field"] is False
         and "qumond".casefold() in param["theory"].casefold()
     ):
-        a0 = param["qumond_a0"]*1e-3*1e-10*param["unit_t"]**2 / (param["unit_l"]*param["aexp"])
+        a0 = (
+            param["qumond_a0"]
+            * 1e-3
+            * 1e-10
+            * param["unit_t"] ** 2
+            / (param["unit_l"] * param["aexp"])
+        )
         alpha = param["qumond_alpha"]
         force = mesh.derivative2(additional_field)
         if "qumond_simple".casefold() == param["theory"].casefold():
@@ -415,7 +450,9 @@ def rhs_poisson(
         elif "qumond_delta".casefold() == param["theory"].casefold():
             mond.inner_gradient_delta(force, a0, delta=alpha)
         else:
-            raise NotImplementedError(f"{param["theory"].casefold()=}, should be 'qumond_simple', 'qumond_n', 'qumond_beta', qumond_gamma or 'qumond_delta'")
+            raise NotImplementedError(
+                f"{param['theory'].casefold()=}, should be 'qumond_simple', 'qumond_n', 'qumond_beta', qumond_gamma or 'qumond_delta'"
+            )
         mesh.divergence2(force, density)
     else:
         f1 = np.float32(1.5 * param["aexp"] * param["Om_m"])

@@ -198,7 +198,7 @@ A example parameter file is available in `examples/param.ini`. **All strings (ex
 # examples/param.ini
 nthreads = 1  # Number of threads to use in the simulation. For nthreads <= 0 use all threads
 # Theoretical model
-theory= newton # Cosmological theory to use, either "Newton" or  "fR"
+theory= newton # Cosmological theory to use, either "Newton", "fR", "qumond_simple", "qumond_n", "qumond_beta", "qumond_gamma", "qumond_delta" or "parametrized"
 ## f(R)
 fR_logfR0 = 5 # Background value of the scalaron field today -log(fR0)
 fR_n = 1 # Exponent on the curvature in the Hu & Sawicki model. Currently n = 1 or 2

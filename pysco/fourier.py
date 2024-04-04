@@ -263,7 +263,7 @@ def ifft_3D_real(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.f
     >>> result = ifft_3D_real(complex_grid, num_threads)
     """
     if "pyfftw" not in sys.modules:
-        return np.ascontiguousarray(np.fft.irfftn(x).astype(np.complex64))
+        return np.ascontiguousarray(np.fft.irfftn(x).astype(np.float32))
 
     ncells_1d = len(x)
     x_in = pyfftw.empty_aligned(
