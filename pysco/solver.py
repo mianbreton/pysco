@@ -69,7 +69,6 @@ def pm(
     elif param["mass_scheme"].casefold() == "TSC".casefold():
         param["MAS_index"] = 3
         if param["nthreads"] < 5:
-            print(f"Compute dens")
             density = mesh.TSC_seq(position, ncells_1d)
         else:
             density = mesh.TSC(position, ncells_1d)
@@ -173,7 +172,7 @@ def pm(
         fR_a = (
             -param["aexp"] ** 2
             * ((Rbar0 / Rbar) ** (param["fR_n"] + 1))
-            * 10 ** (-param["fR_logfR0"])
+            * 10.0 ** (-param["fR_logfR0"])
         )
         half_c2 = np.float32(
             0.5
@@ -356,7 +355,7 @@ def get_additional_field(
         fR_a = (
             -param["aexp"] ** 2
             * ((Rbar0 / Rbar) ** (param["fR_n"] + 1))
-            * 10 ** (-param["fR_logfR0"])
+            * 10.0 ** (-param["fR_logfR0"])
         )
         c2 = (
             c.value * 1e-3 * param["unit_t"] / (param["unit_l"] * param["aexp"])
@@ -383,7 +382,7 @@ def get_additional_field(
             )
         logging.info(f"{fR_a=}")
         return u_scalaron
-    elif "qumond".casefold() in param["theory"].casefold():
+    elif "mond".casefold() == param["theory"].casefold():
         rhs_poisson(density, additional_field, param)
         additional_field = initialise_potential(
             additional_field, density, h, param, tables
@@ -395,7 +394,7 @@ def get_additional_field(
         return additional_field
     else:
         raise ValueError(
-            f"{param['theory']=}, should be 'newton', 'fr', 'parametrized' or '*qumond*'"
+            f"{param['theory']=}, should be 'newton', 'fr', 'parametrized' or 'mond'"
         )
 
 
@@ -428,30 +427,31 @@ def rhs_poisson(
     """
     if (
         param["compute_additional_field"] is False
-        and "qumond".casefold() in param["theory"].casefold()
+        and "mond".casefold() == param["theory"].casefold()
     ):
         a0 = (
-            param["qumond_a0"]
+            param["mond_a0"]
             * 1e-3
             * 1e-10
             * param["unit_t"] ** 2
             / (param["unit_l"] * param["aexp"])
         )
-        alpha = param["qumond_alpha"]
+        alpha = param["mond_alpha"]
         force = mesh.derivative2(additional_field)
-        if "qumond_simple".casefold() == param["theory"].casefold():
+        mond_function = param["mond_function"].casefold()
+        if "simple".casefold() == mond_function:
             mond.inner_gradient_simple(force, a0)
-        elif "qumond_n".casefold() == param["theory"].casefold():
+        elif "n".casefold() == mond_function:
             mond.inner_gradient_n(force, a0, n=alpha)
-        elif "qumond_beta".casefold() == param["theory"].casefold():
+        elif "beta".casefold() == mond_function:
             mond.inner_gradient_beta(force, a0, beta=alpha)
-        elif "qumond_gamma".casefold() == param["theory"].casefold():
+        elif "gamma".casefold() == mond_function:
             mond.inner_gradient_gamma(force, a0, gamma=alpha)
-        elif "qumond_delta".casefold() == param["theory"].casefold():
+        elif "delta".casefold() == mond_function:
             mond.inner_gradient_delta(force, a0, delta=alpha)
         else:
             raise NotImplementedError(
-                f"{param['theory'].casefold()=}, should be 'qumond_simple', 'qumond_n', 'qumond_beta', qumond_gamma or 'qumond_delta'"
+                f"{mond_function=}, should be 'simple', 'n', 'beta', 'gamma' or 'delta'"
             )
         mesh.divergence2(force, density)
     else:

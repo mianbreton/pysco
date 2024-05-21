@@ -49,6 +49,8 @@ PySCo is a multi-threaded Particle-Mesh code (no MPI parallelization) for cosmol
 
 - Newtonian gravity
 - $f(R)$ model from [Hu & Sawicki (2007)](https://ui.adsabs.harvard.edu/abs/2007PhRvD..76f4004H/abstract).
+- MOND gravity (quasi-linear formulation) from [Milgrom (2010)](https://ui.adsabs.harvard.edu/abs/2010MNRAS.403..886M/abstract).
+- Parametrized gravity (scale independent)
 
 The goal is to develop a Python-based N-body code that is user-friendly and efficient. Python was chosen for its widespread use and rapid development capabilities, making it well-suited for collaborative open-source projects. To address performance issues in Python, we utilize [Numba](https://github.com/numba/numba), a high-performance library that compiles Python functions using LLVM. Additionally, Numba facilitates straightforward loop parallelization.
 
@@ -60,7 +62,13 @@ The goal is to develop a Python-based N-body code that is user-friendly and effi
 
 ### Prerequisites
 
-In principle, all dependencies will be automatically installed when using pip install (see [Installation](#installation)) so you can skip this section.
+The only package that needs to be installed by hand is pyFFTW (which is currently not available for Python 3.12)
+
+```sh
+python -m pip install pyfftw
+```
+
+Then, all dependencies will be automatically installed when using pip install (see [Installation](#installation)) so you can skip the remainder of this section.
 
 However, if you prefer to install each of them by hand, then you will need the following libraries (the _conda_ installation is shown, but the same result can be achieved with _pip_).
 
@@ -98,15 +106,6 @@ However, if you prefer to install each of them by hand, then you will need the f
 
   ```sh
   conda install -c anaconda scipy
-  ```
-
-- PyFFTW
-
-  ```sh
-  # For Linux users
-  python -m pip install pyfftw
-  # For Mac users
-  conda install -c conda-forge pyfftw
   ```
 
 - Rich
@@ -198,13 +197,14 @@ A example parameter file is available in `examples/param.ini`. **All strings (ex
 # examples/param.ini
 nthreads = 1  # Number of threads to use in the simulation. For nthreads <= 0 use all threads
 # Theoretical model
-theory= newton # Cosmological theory to use, either "Newton", "fR", "qumond_simple", "qumond_n", "qumond_beta", "qumond_gamma", "qumond_delta" or "parametrized"
+theory= newton # Cosmological theory to use, either "Newton", "fR", "mond" or "parametrized"
 ## f(R)
 fR_logfR0 = 5 # Background value of the scalaron field today -log(fR0)
 fR_n = 1 # Exponent on the curvature in the Hu & Sawicki model. Currently n = 1 or 2
 ## QUMOND
-qumond_a0 = 1.2 # Acceleration constant (in 1e-10 m/s²)
-qumond_alpha = 1 #  Interpolating function parameter:  0 <= alpha <= 1
+mond_function = simple # "simple", "n", "beta", "gamma" or "delta"
+mond_a0 = 1.2 # Acceleration constant (in 1e-10 m/s²)
+mond_alpha = 1 #  Interpolating function parameter
 ## Parametrized
 parametrized_mu0 = -0.1 # If null, then is equivalent to GR. Model from Abbott et al. (2019)
 # Cosmology -- Put more parameters later

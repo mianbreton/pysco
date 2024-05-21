@@ -56,6 +56,9 @@ def inner_gradient_n(force: npt.NDArray[np.float32], a0: np.float32, n: int) -> 
     n : int
         Exponent of the n-family parameterization
     """
+    minus_n = np.float32(
+        -n
+    )  # LLVM sometimes cannot compile if n is an integer. Hope this gets fixed.
     inv_n = np.float32(1.0 / n)
     half = np.float32(0.5)
     one = np.float32(1)
@@ -69,7 +72,7 @@ def inner_gradient_n(force: npt.NDArray[np.float32], a0: np.float32, n: int) -> 
             force_ravel[i] = 0
             continue
         y = abs(force_tmp) * inv_a0
-        nu = (half + half * math.sqrt(one + four * y ** (-n))) ** inv_n
+        nu = (half + half * math.sqrt(one + four * y**minus_n)) ** inv_n
         force_ravel[i] *= nu
 
 
@@ -90,7 +93,7 @@ def inner_gradient_beta(
     beta : int
         Parameter of the beta-family parameterization
     """
-    half = np.float32(0.5)
+    minus_half = np.float32(-0.5)
     one = np.float32(1)
     inv_a0 = np.float32(1.0 / a0)
     force_ravel = force.ravel()
@@ -102,7 +105,10 @@ def inner_gradient_beta(
             continue
         y = abs(force_tmp) * inv_a0
         exp_minus_y = math.exp(-y)
-        nu = (one - exp_minus_y) ** (-half) + beta * exp_minus_y
+        nu = beta * exp_minus_y
+        one_minus_expmy = one - exp_minus_y
+        if one_minus_expmy > 0:
+            nu += one_minus_expmy**minus_half
         force_ravel[i] *= nu
 
 
