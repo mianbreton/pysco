@@ -190,8 +190,8 @@ Om_m = 0.31   # Matter density parameter
 Om_lambda = 0.69 # Dark energy density parameter
 w0 = -1.0 # Equation of state for dark energy
 wa = 0.0 # Evolution parameter for dark energy equation of state
-evolution_table = no # Table specifying the evolution of cosmological parameters (default: "no")
-mpgrafic_table = no  # Table for initial conditions (default: "no")
+evolution_table =  # Table specifying the evolution of cosmological parameters, or leave blank
+mpgrafic_table =  # Table for initial conditions, or leave blank
 # Simulation dimension
 boxlen = 500  # Simulation box length (in Mpc/h)
 ncoarse = 7 # Coarse level. Total number of cells = 2**(3*ncoarse)

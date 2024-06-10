@@ -45,7 +45,17 @@ def read_param_file(name: str) -> pd.Series:
         columns=lambda x: x.strip()
     )
     param = param.astype("string")
+    is_null = param.isnull()
     for key in param.columns:
+
+        if is_null[key].item():
+            param[key] = "False"
+
+        if "true".casefold() == param[key].item().casefold():
+            param[key] = "True"
+        if "false".casefold() == param[key].item().casefold():
+            param[key] = "False"
+
         try:
             value = eval(param[key].item())
             if isinstance(value, list):

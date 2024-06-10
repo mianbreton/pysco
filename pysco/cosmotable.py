@@ -55,8 +55,8 @@ def generate(param: pd.Series) -> List[interp1d]:
     >>> a_interp_ramses, t_interp_ramses, Dplus_interp_ramses, H_interp_ramses = interpolators_ramses
     """
     # Get cosmo
-    if param["evolution_table"] == "no":
-        logging.warning(f"No evolution table read: computes all quantities")
+    if not param["evolution_table"] and not param["mpgrafic_table"]:
+        logging.warning(f"No evolution tables read: computes all quantities")
         cosmo = w0waCDM(
             H0=param["H0"],
             Om0=param["Om_m"],
