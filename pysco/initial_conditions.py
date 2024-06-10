@@ -107,9 +107,10 @@ def generate(
         mpc_to_km = 1e3 * pc.value
         Hz *= param["unit_t"] / mpc_to_km  # km/s/Mpc to BU
         Dplus = np.float32(tables[2](a_start))
-        # density_initial = generate_density(param, Dplus)
+        param["Dplus"] = Dplus
+        # density_initial = generate_density(param)
         # force = mesh.derivative(solver.fft(density_initial, param))
-        force = generate_force(param, Dplus)
+        force = generate_force(param)
         # 1LPT
         fH_1 = np.float32(Omz**0.55 * Hz)
         position, velocity = initialise_1LPT(force, fH_1)
@@ -339,15 +340,13 @@ def read_gadget(
 
 
 @utils.time_me
-def generate_density(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.float32]:
+def generate_density(param: pd.Series) -> npt.NDArray[np.float32]:
     """Compute density initial conditions from power spectrum
 
     Parameters
     ----------
     param : pd.Series
         Parameter container
-    Dplus : np.float32
-        D+(z) at the initial redshift
 
     Returns
     -------
@@ -364,11 +363,11 @@ def generate_density(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.floa
          'seed': 42,
          'fixed_ICS': False,
          'paired_ICS': False,
+         'Dplus': 1.5
      })
-    >>> Dplus = 1.5
-    >>> generate_density(param, Dplus)
+    >>> generate_density(param)
     """
-    transfer_grid = get_transfer_grid(param, Dplus)
+    transfer_grid = get_transfer_grid(param)
 
     ncells_1d = int(math.cbrt(param["npart"]))
     rng = np.random.default_rng(param["seed"])
@@ -384,15 +383,13 @@ def generate_density(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.floa
 
 
 @utils.time_me
-def generate_force(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.float32]:
+def generate_force(param: pd.Series) -> npt.NDArray[np.float32]:
     """Compute force initial conditions from power spectrum
 
     Parameters
     ----------
     param : pd.Series
         Parameter container
-    Dplus : np.float32
-        D+(z) at the initial redshift
 
     Returns
     -------
@@ -409,11 +406,11 @@ def generate_force(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.float3
          'seed': 42,
          'fixed_ICS': False,
          'paired_ICS': False,
+         'Dplus': 1.5
      })
-    >>> Dplus = 1.5
-    >>> generate_force(param, Dplus)
+    >>> generate_force(param)
     """
-    transfer_grid = get_transfer_grid(param, Dplus)
+    transfer_grid = get_transfer_grid(param)
 
     ncells_1d = int(math.cbrt(param["npart"]))
     rng = np.random.default_rng(param["seed"])
@@ -430,7 +427,7 @@ def generate_force(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.float3
 
 
 @utils.time_me
-def get_transfer_grid(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.float32]:
+def get_transfer_grid(param: pd.Series) -> npt.NDArray[np.float32]:
     """Compute transfer 3D grid
 
     Computes sqrt(P(k,z)) on a 3D grid
@@ -439,8 +436,6 @@ def get_transfer_grid(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.flo
     ----------
     param : pd.Series
         Parameter container
-    Dplus : np.float32
-        D+(z) at the initial redshift
 
     Returns
     -------
@@ -454,12 +449,14 @@ def get_transfer_grid(param: pd.Series, Dplus: np.float32) -> npt.NDArray[np.flo
     >>> param = pd.Series({
          'power_spectrum_file': 'path/to/power_spectrum.txt',
          'npart': 64,
+         'Dplus': 1.5
      })
-    >>> Dplus = 1.5
-    >>> get_transfer_grid(param, Dplus)
+    >>> get_transfer_grid(param)
     """
     k, Pk = np.loadtxt(param["power_spectrum_file"]).T
-    Pk *= Dplus**2
+
+    if param["rescale_initial_power_spectrum"]:
+        Pk *= param["Dplus"] ** 2
 
     ncells_1d = int(math.cbrt(param["npart"]))
     if param["npart"] != ncells_1d**3:
@@ -556,7 +553,7 @@ def white_noise_fourier(
     parallel=True,
 )
 def white_noise_fourier_fixed(
-    ncells_1d: int, rng: np.random.Generator, is_paired: int
+    ncells_1d: int, rng: np.random.Generator, is_paired: bool
 ) -> npt.NDArray[np.complex64]:
     """Generate Fourier-space white noise with fixed amplitude on a regular 3D grid
 
@@ -566,7 +563,7 @@ def white_noise_fourier_fixed(
         Number of cells along one direction
     rng : np.random.Generator
         Random generator (NumPy)
-    is_paired : int
+    is_paired : bool
         If paired, add π to the random phases
 
     Returns
@@ -733,7 +730,7 @@ def white_noise_fourier_force(
     error_model="numpy",
 )
 def white_noise_fourier_fixed_force(
-    ncells_1d: int, rng: np.random.Generator, is_paired: int
+    ncells_1d: int, rng: np.random.Generator, is_paired: bool
 ) -> npt.NDArray[np.complex64]:
     """Generate Fourier-space white FORCE noise with fixed amplitude on a regular 3D grid
 
@@ -743,7 +740,7 @@ def white_noise_fourier_fixed_force(
         Number of cells along one direction
     rng : np.random.Generator
         Random generator (NumPy)
-    is_paired : int
+    is_paired : bool
         If paired, add π to the random phases
 
     Returns
@@ -757,7 +754,7 @@ def white_noise_fourier_fixed_force(
     >>> from pysco.initial_conditions import white_noise_fourier_fixed_force
     >>> ncells_1d = 64
     >>> rng = np.random.default_rng(42)
-    >>> is_paired = 1
+    >>> is_paired = True
     >>> white_noise_fourier_fixed_force(ncells_1d, rng, is_paired)
     """
     invtwopi = np.float32(0.5 / np.pi)

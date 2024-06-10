@@ -429,26 +429,28 @@ def rhs_poisson(
         param["compute_additional_field"] is False
         and "mond".casefold() == param["theory"].casefold()
     ):
-        a0 = (
-            param["mond_a0"]
+        g0 = (
+            param["mond_g0"]
             * 1e-3
             * 1e-10
             * param["unit_t"] ** 2
-            / (param["unit_l"] * param["aexp"])
+            / param["unit_l"]
+            / param["aexp"]
         )
         alpha = param["mond_alpha"]
         force = mesh.derivative2(additional_field)
+
         mond_function = param["mond_function"].casefold()
         if "simple".casefold() == mond_function:
-            mond.inner_gradient_simple(force, a0)
+            mond.inner_gradient_simple(force, g0)
         elif "n".casefold() == mond_function:
-            mond.inner_gradient_n(force, a0, n=alpha)
+            mond.inner_gradient_n(force, g0, n=alpha)
         elif "beta".casefold() == mond_function:
-            mond.inner_gradient_beta(force, a0, beta=alpha)
+            mond.inner_gradient_beta(force, g0, beta=alpha)
         elif "gamma".casefold() == mond_function:
-            mond.inner_gradient_gamma(force, a0, gamma=alpha)
+            mond.inner_gradient_gamma(force, g0, gamma=alpha)
         elif "delta".casefold() == mond_function:
-            mond.inner_gradient_delta(force, a0, delta=alpha)
+            mond.inner_gradient_delta(force, g0, delta=alpha)
         else:
             raise NotImplementedError(
                 f"{mond_function=}, should be 'simple', 'n', 'beta', 'gamma' or 'delta'"

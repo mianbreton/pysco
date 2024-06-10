@@ -5,7 +5,7 @@ Main executable module to run cosmological N-body simulations
 Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
-__version__ = "0.4.7"
+__version__ = "0.4.8"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -23,6 +23,7 @@ import pandas as pd
 import logging
 from rich.logging import RichHandler
 import iostream
+from time import perf_counter
 
 
 def run(param) -> None:
@@ -33,6 +34,7 @@ def run(param) -> None:
     param : dict or pd.Series
         Parameter container
     """
+    t_start = perf_counter()
     # Ideally it would have been error/info/debug, but the latter triggers extensive Numba verbose
     if param["verbose"] == 0:
         logging_level = logging.ERROR
@@ -76,7 +78,7 @@ def run(param) -> None:
         extra += f"{param['fR_logfR0']}_n{param['fR_n']}"
     elif extra.casefold() == "mond".casefold():
         mond_function = param["mond_function"].casefold()
-        extra += f"_a0_{param['mond_a0']}_{mond_function}"
+        extra += f"_g0_{param['mond_g0']}_{mond_function}"
         if "simple".casefold() != mond_function:
             extra += f"_{param['mond_alpha']}"
     elif extra.casefold() == "parametrized".casefold():
@@ -141,6 +143,8 @@ def run(param) -> None:
         logging.warning(
             f"{param['nsteps']=} {param['aexp']=} z = {1.0 / param['aexp'] - 1}"
         )
+    t_end = perf_counter()
+    print(f"Simulation run time: {t_end - t_start} seconds.")
 
 
 def main():

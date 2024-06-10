@@ -13,7 +13,7 @@ import math
 
 
 @njit(["void(f4[:,:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
-def inner_gradient_simple(force: npt.NDArray[np.float32], a0: np.float32) -> None:
+def inner_gradient_simple(force: npt.NDArray[np.float32], g0: np.float32) -> None:
     """
     This function implements the inner gradient of the QUMOND interpolating function
     with the simple parameterization.
@@ -22,13 +22,13 @@ def inner_gradient_simple(force: npt.NDArray[np.float32], a0: np.float32) -> Non
     ----------
     force : npt.NDArray[np.float32]
         Force field [N, N, N, 3]
-    a0 : np.float32
+    g0 : np.float32
         Acceleration constant
     """
     half = np.float32(0.5)
     one = np.float32(1)
     four = np.float32(4)
-    inv_a0 = np.float32(1.0 / a0)
+    inv_g0 = np.float32(1.0 / g0)
     force_ravel = force.ravel()
     size = force_ravel.shape[0]
     for i in prange(size):
@@ -36,13 +36,13 @@ def inner_gradient_simple(force: npt.NDArray[np.float32], a0: np.float32) -> Non
         if force_tmp == 0:
             force_ravel[i] = 0
             continue
-        y = abs(force_tmp) * inv_a0
+        y = abs(force_tmp) * inv_g0
         nu = half + half * math.sqrt(one + four / y)
         force_ravel[i] *= nu
 
 
 @njit(["void(f4[:,:,:,::1], f4, i4)"], fastmath=True, cache=True, parallel=True)
-def inner_gradient_n(force: npt.NDArray[np.float32], a0: np.float32, n: int) -> None:
+def inner_gradient_n(force: npt.NDArray[np.float32], g0: np.float32, n: int) -> None:
     """
     This function implements the inner gradient of the QUMOND interpolating function
     with the n-family parameterization.
@@ -51,7 +51,7 @@ def inner_gradient_n(force: npt.NDArray[np.float32], a0: np.float32, n: int) -> 
     ----------
     force : npt.NDArray[np.float32]
         Force field [N, N, N, 3]
-    a0 : np.float32
+    g0 : np.float32
         Acceleration constant
     n : int
         Exponent of the n-family parameterization
@@ -63,7 +63,7 @@ def inner_gradient_n(force: npt.NDArray[np.float32], a0: np.float32, n: int) -> 
     half = np.float32(0.5)
     one = np.float32(1)
     four = np.float32(4)
-    inv_a0 = np.float32(1.0 / a0)
+    inv_g0 = np.float32(1.0 / g0)
     force_ravel = force.ravel()
     size = force_ravel.shape[0]
     for i in prange(size):
@@ -71,14 +71,14 @@ def inner_gradient_n(force: npt.NDArray[np.float32], a0: np.float32, n: int) -> 
         if force_tmp == 0:
             force_ravel[i] = 0
             continue
-        y = abs(force_tmp) * inv_a0
+        y = abs(force_tmp) * inv_g0
         nu = (half + half * math.sqrt(one + four * y**minus_n)) ** inv_n
         force_ravel[i] *= nu
 
 
 @njit(["void(f4[:,:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True)
 def inner_gradient_beta(
-    force: npt.NDArray[np.float32], a0: np.float32, beta: np.float32
+    force: npt.NDArray[np.float32], g0: np.float32, beta: np.float32
 ) -> None:
     """
     This function implements the inner gradient of the QUMOND interpolating function
@@ -88,14 +88,14 @@ def inner_gradient_beta(
     ----------
     force : npt.NDArray[np.float32]
         Force field [N, N, N, 3]
-    a0 : np.float32
+    g0 : np.float32
         Acceleration constant
     beta : int
         Parameter of the beta-family parameterization
     """
     minus_half = np.float32(-0.5)
     one = np.float32(1)
-    inv_a0 = np.float32(1.0 / a0)
+    inv_g0 = np.float32(1.0 / g0)
     force_ravel = force.ravel()
     size = force_ravel.shape[0]
     for i in prange(size):
@@ -103,7 +103,7 @@ def inner_gradient_beta(
         if force_tmp == 0:
             force_ravel[i] = 0
             continue
-        y = abs(force_tmp) * inv_a0
+        y = abs(force_tmp) * inv_g0
         exp_minus_y = math.exp(-y)
         nu = beta * exp_minus_y
         one_minus_expmy = one - exp_minus_y
@@ -114,7 +114,7 @@ def inner_gradient_beta(
 
 @njit(["void(f4[:,:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True)
 def inner_gradient_gamma(
-    force: npt.NDArray[np.float32], a0: np.float32, gamma: np.float32
+    force: npt.NDArray[np.float32], g0: np.float32, gamma: np.float32
 ) -> None:
     """
     This function implements the inner gradient of the QUMOND interpolating function
@@ -124,13 +124,13 @@ def inner_gradient_gamma(
     ----------
     force : npt.NDArray[np.float32]
         Force field [N, N, N, 3]
-    a0 : np.float32
+    g0 : np.float32
         Acceleration constant
     beta : np.float32
         Parameter of the beta-family parameterization
     """
     one = np.float32(1)
-    inv_a0 = np.float32(1.0 / a0)
+    inv_g0 = np.float32(1.0 / g0)
     half_gamma = np.float32(0.5 * gamma)
     minus_inv_gamma = np.float32(1.0 / gamma)
     force_ravel = force.ravel()
@@ -140,7 +140,7 @@ def inner_gradient_gamma(
         if force_tmp == 0:
             force_ravel[i] = 0
             continue
-        y = abs(force_tmp) * inv_a0
+        y = abs(force_tmp) * inv_g0
         exp_minus_y_halfgamma = math.exp(-(y**half_gamma))
         nu = (one - exp_minus_y_halfgamma) ** (minus_inv_gamma) + (
             1 - gamma ** (-1)
@@ -150,7 +150,7 @@ def inner_gradient_gamma(
 
 @njit(["void(f4[:,:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True)
 def inner_gradient_delta(
-    force: npt.NDArray[np.float32], a0: np.float32, delta: np.float32
+    force: npt.NDArray[np.float32], g0: np.float32, delta: np.float32
 ) -> None:
     """This function implements the inner gradient of the QUMOND interpolating
     function with the gamma-family parameterization.
@@ -158,13 +158,13 @@ def inner_gradient_delta(
     Parameters:
     force: npt.NDArray[np.float32]
         Force field [N, N, N, 3]
-    a0: np.float32
+    g0: np.float32
         Acceleration constant
     gamma: np.float32
         Parameter of the gamma-family parameterization
     """
     one = np.float32(1)
-    inv_a0 = np.float32(1.0 / a0)
+    inv_g0 = np.float32(1.0 / g0)
     half_beta = np.float32(0.5 * delta)
     minus_inv_beta = np.float32(1.0 / delta)
     force_ravel = force.ravel()
@@ -174,6 +174,6 @@ def inner_gradient_delta(
         if force_tmp == 0:
             force_ravel[i] = 0
             continue
-        y = abs(force_tmp) * inv_a0
+        y = abs(force_tmp) * inv_g0
         nu = (one - math.exp(-(y**half_beta))) ** (minus_inv_beta)
         force_ravel[i] *= nu

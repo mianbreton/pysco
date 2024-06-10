@@ -4,7 +4,7 @@ build-backend = "pdm.backend"
 
 [project]
 name = "pysco-nbody"
-version = "0.4.7"
+version = "0.4.8"
 authors = [
     { name = "Michel-Andrès Breton", email = "michel-andres.breton@obspm.fr" },
 ]
@@ -27,6 +27,7 @@ dependencies = [
     "pyarrow",
     "h5py",
     "rich",
+    "Pylians",
     #"pyfftw",
 ]
 
