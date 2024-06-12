@@ -101,7 +101,11 @@ def generate(
         Omz = (
             param["Om_m"]
             * a_start ** (-3)
-            / (param["Om_m"] * a_start ** (-3) + param["Om_lambda"])
+            / (
+                param["Om_m"] * a_start ** (-3)
+                + param["Om_lambda"]
+                + param["Om_r"] * a_start ** (-4)
+            )
         )
         Hz = tables[3](a_start)
         mpc_to_km = 1e3 * pc.value
@@ -226,11 +230,11 @@ def finalise_initial_conditions(
     utils.periodic_wrap(position)
     utils.reorder_particles(position, velocity)
     if "parquet".casefold() == param["output_snapshot_format"].casefold():
-        snap_name = f"{param['base']}/output_00000/particles.parquet"
+        snap_name = f"{param['base']}/output_00000/particles_{param['extra']}.parquet"
         iostream.write_snapshot_particles_parquet(snap_name, position, velocity)
         param.to_csv(f"{param['base']}/output_00000/param.txt", sep="=", header=False)
     elif "hdf5".casefold() == param["output_snapshot_format"].casefold():
-        snap_name = f"{param['base']}/output_00000/particles.h5"
+        snap_name = f"{param['base']}/output_00000/particles_{param['extra']}.h5"
         iostream.write_snapshot_particles_hdf5(snap_name, position, velocity, param)
     else:
         raise ValueError(f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'")

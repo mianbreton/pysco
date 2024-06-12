@@ -7,7 +7,7 @@ the growth factor based on the w0waCDM cosmology model.
 import numpy as np
 import pandas as pd
 from astropy.constants import pc
-from astropy.cosmology import w0waCDM
+from astropy.cosmology import Flatw0waCDM
 from scipy.interpolate import interp1d
 import numpy.typing as npt
 from typing import List
@@ -37,7 +37,8 @@ def generate(param: pd.Series) -> List[interp1d]:
     ...     "evolution_table": "no",
     ...     "H0": 70.0,
     ...     "Om_m": 0.3,
-    ...     "Om_lambda": 0.7,
+    ...     "T_cmb": 2.726,
+    ...     "N_eff": 3.044,
     ...     "w0": -1.0,
     ...     "wa": 0.0,
     ...     "base": f"{this_dir}/../examples/"
@@ -54,16 +55,19 @@ def generate(param: pd.Series) -> List[interp1d]:
     >>> interpolators_ramses = generate(params_ramses)
     >>> a_interp_ramses, t_interp_ramses, Dplus_interp_ramses, H_interp_ramses = interpolators_ramses
     """
+    cosmo = Flatw0waCDM(
+        H0=param["H0"],
+        Om0=param["Om_m"],
+        Tcmb0=param["T_cmb"],
+        Neff=param["N_eff"],
+        w0=param["w0"],
+        wa=param["wa"],
+    )
+    param["Om_r"] = cosmo.Ogamma0 + cosmo.Onu0
+    param["Om_lambda"] = cosmo.Ode0
     # Get cosmo
     if not param["evolution_table"] and not param["mpgrafic_table"]:
         logging.warning(f"No evolution tables read: computes all quantities")
-        cosmo = w0waCDM(
-            H0=param["H0"],
-            Om0=param["Om_m"],
-            Ode0=param["Om_lambda"],
-            w0=param["w0"],
-            wa=param["wa"],
-        )
         zmax = 150
         a = np.linspace(1.15, 1.0 / (1 + zmax), 100_000)
         t_lookback = (
@@ -104,7 +108,7 @@ def generate(param: pd.Series) -> List[interp1d]:
 
 
 # TODO: Extend for large range of cosmologies and more accurate calculation
-def Dplus(cosmo: w0waCDM, z: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+def Dplus(cosmo: Flatw0waCDM, z: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """Computes growth factor
 
     Parameters
@@ -121,14 +125,14 @@ def Dplus(cosmo: w0waCDM, z: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]
     Examples
     --------
     >>> import numpy as np
-    >>> from astropy.cosmology import w0waCDM
+    >>> from astropy.cosmology import Flatw0waCDM
     >>> from pysco.cosmotable import Dplus
-    >>> cosmo_example = w0waCDM(H0=70.0, Om0=0.3, Ode0=0.7, w0=-1.0, wa=0.0)
+    >>> cosmo_example = Flatw0waCDM(H0=70.0, Om0=0.3, Tcmb0=2.726, Neff=3.044,, w0=-1.0, wa=0.0)
     >>> redshifts = np.linspace(0, 2, 100)
     >>> growth_factor = Dplus(cosmo_example, redshifts)
     """
     omega = cosmo.Om(z)
-    lamb = 1 - omega
+    lamb = cosmo.Ode(z)
     a = 1 / (1 + z)
     return (
         (5.0 / 2.0)
