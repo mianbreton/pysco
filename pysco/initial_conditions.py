@@ -33,7 +33,7 @@ def generate(
         Parameter container
 
     tables : List[interp1]
-        Interpolated functions [a(t), t(a), Dplus(a), H(a)]
+        Interpolated functions [a(t), t(a), H(a), Dplus1(a), f1(a), Dplus2(a), f2(a), Dplus3a(a), f3a(a), Dplus3b(a), f3b(a), Dplus3c(a), f3c(a)]
 
     Returns
     -------
@@ -62,7 +62,7 @@ def generate(
     ...     'nthreads': 1,
     ...     'linear_newton_solver': "fft",
     ...  })
-    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.rand(100)) for _ in range(4)]
+    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.rand(100)) for _ in range(13)]
     >>> position, velocity = generate(param, tables)
     """
     if isinstance(param["initial_conditions"], int):
@@ -98,67 +98,62 @@ def generate(
     elif param["initial_conditions"][1:4].casefold() == "LPT".casefold():
         a_start = 1.0 / (1 + param["z_start"])
         logging.warning(f"{param['z_start']=}")
-        Omz = (
-            param["Om_m"]
-            * a_start ** (-3)
-            / (
-                param["Om_m"] * a_start ** (-3)
-                + param["Om_lambda"]
-                + param["Om_r"] * a_start ** (-4)
-            )
-        )
-        Hz = tables[3](a_start)
+        Hz = tables[2](a_start)
         mpc_to_km = 1e3 * pc.value
         Hz *= param["unit_t"] / mpc_to_km  # km/s/Mpc to BU
-        Dplus = np.float32(tables[2](a_start))
-        param["Dplus"] = Dplus
         # density_initial = generate_density(param)
         # force = mesh.derivative(solver.fft(density_initial, param))
         force = generate_force(param)
         # 1LPT
-        fH_1 = np.float32(Omz**0.55 * Hz)
-        position, velocity = initialise_1LPT(force, fH_1)
+        dplus_1_z0 = tables[3](1)
+        dplus_1 = np.float32(tables[3](a_start) / dplus_1_z0)
+        f1 = tables[4](a_start)
+        fH_1 = np.float32(f1 * Hz)
+        position, velocity = initialise_1LPT(force, dplus_1, fH_1)
         if param["initial_conditions"].casefold() == "1LPT".casefold():
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
             finalise_initial_conditions(position, velocity, param)
             return position, velocity
         # 2LPT
-        fH_2 = np.float32(2 * Omz ** (6.0 / 11) * Hz)  # Bouchet et al. (1995, Eq. 50)
+        dplus_2 = np.float32(tables[5](a_start) / dplus_1_z0**2)
+        f2 = tables[6](a_start)
+        fH_2 = np.float32(f2 * Hz)
         rhs_2ndorder = compute_rhs_2ndorder(force)
         # potential_2ndorder = solver.fft(rhs_2ndorder, param)
         # force_2ndorder = mesh.derivative(potential_2ndorder)
         param["MAS_index"] = 0
         force_2ndorder = solver.fft_force(rhs_2ndorder, param)
         rhs_2ndorder = 0
-        add_2LPT(position, velocity, force_2ndorder, fH_2)
+        add_2LPT(position, velocity, force_2ndorder, dplus_2, fH_2)
         if param["initial_conditions"].casefold() == "2LPT".casefold():
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
             finalise_initial_conditions(position, velocity, param)
             return position, velocity
         elif param["initial_conditions"].casefold() == "3LPT".casefold():
-            fH_3 = 3 * Omz ** (13.0 / 24) * Hz  # Bouchet et al. (1995, Eq. 51)
+            dplus_3a = np.float32(tables[7](a_start) / dplus_1_z0**3)
+            f3a = tables[8](a_start)
+            fH_3a = np.float32(f3a * Hz)
+            dplus_3b = np.float32(tables[9](a_start) / dplus_1_z0**3)
+            f3b = tables[10](a_start)
+            fH_3b = np.float32(f3b * Hz)
+            dplus_3c = np.float32(tables[11](a_start) / dplus_1_z0**3)
+            f3c = tables[12](a_start)
+            fH_3c = np.float32(f3c * Hz)
             (
-                rhs_3rdorder_a,
-                rhs_3rdorder_b,
+                rhs_3a,
+                rhs_3b,
                 rhs_Ax_3c,
                 rhs_Ay_3c,
                 rhs_Az_3c,
             ) = compute_rhs_3rdorder(force, force_2ndorder)
-            force = force_2ndorder = 0
-            force_3rdorder_a = solver.fft_force(rhs_3rdorder_a, param, 0)
-            rhs_3rdorder_a = 0
-            force_3rdorder_b = solver.fft_force(rhs_3rdorder_b, param, 0)
-            rhs_3rdorder_b = 0
-            utils.add_vector_scalar_inplace(
-                force_3rdorder_a,
-                force_3rdorder_b,
-                np.float32(-30.0 / 21),  # 1/3 * (-30/21) force_3b
-            )
-            force_3rdorder_b = 0
-            force_3rdorder_ab = force_3rdorder_a
-            del force_3rdorder_a
+            force = 0
+            force_2ndorder = 0
+            force_3a = solver.fft_force(rhs_3a, param, 0)
+            rhs_3a = 0
+            force_3b = solver.fft_force(rhs_3b, param, 0)
+            rhs_3b = 0
             force_Ax_3c = solver.fft_force(rhs_Ax_3c, param, 0)
             rhs_Ax_3c = 0
             force_Ay_3c = solver.fft_force(rhs_Ay_3c, param, 0)
@@ -168,12 +163,23 @@ def generate(
             add_3LPT(
                 position,
                 velocity,
-                force_3rdorder_ab,
+                force_3a,
+                force_3b,
                 force_Ax_3c,
                 force_Ay_3c,
                 force_Az_3c,
-                fH_3,
+                dplus_3a,
+                fH_3a,
+                dplus_3b,
+                fH_3b,
+                dplus_3c,
+                fH_3c,
             )
+            force_3a = 0
+            force_3b = 0
+            force_Ax_3c = 0
+            force_Ay_3c = 0
+            force_Az_3c = 0
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
             finalise_initial_conditions(position, velocity, param)
@@ -367,7 +373,6 @@ def generate_density(param: pd.Series) -> npt.NDArray[np.float32]:
          'seed': 42,
          'fixed_ICS': False,
          'paired_ICS': False,
-         'Dplus': 1.5
      })
     >>> generate_density(param)
     """
@@ -410,7 +415,6 @@ def generate_force(param: pd.Series) -> npt.NDArray[np.float32]:
          'seed': 42,
          'fixed_ICS': False,
          'paired_ICS': False,
-         'Dplus': 1.5
      })
     >>> generate_force(param)
     """
@@ -453,14 +457,10 @@ def get_transfer_grid(param: pd.Series) -> npt.NDArray[np.float32]:
     >>> param = pd.Series({
          'power_spectrum_file': 'path/to/power_spectrum.txt',
          'npart': 64,
-         'Dplus': 1.5
      })
     >>> get_transfer_grid(param)
     """
     k, Pk = np.loadtxt(param["power_spectrum_file"]).T
-
-    if param["rescale_initial_power_spectrum"]:
-        Pk *= param["Dplus"] ** 2
 
     ncells_1d = int(math.cbrt(param["npart"]))
     if param["npart"] != ncells_1d**3:
@@ -1094,13 +1094,13 @@ def compute_rhs_3rdorder(
 
 @utils.time_me
 @njit(
-    ["UniTuple(f4[:,:,:,::1], 2)(f4[:,:,:,::1], f4)"],
+    ["UniTuple(f4[:,:,:,::1], 2)(f4[:,:,:,::1], f4, f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def initialise_1LPT(
-    force: npt.NDArray[np.float32], fH: np.float32
+    force: npt.NDArray[np.float32], dplus_1: np.float32, fH: np.float32
 ) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Initialise particles according to 1LPT (Zel'Dovich) displacement field
 
@@ -1108,8 +1108,10 @@ def initialise_1LPT(
     ----------
     force : npt.NDArray[np.float32]
         Force field [N, N, N, 3]
+    dplus1 : np.float32
+        First-order growth factor
     fH : np.float32
-        Growth rate times Hubble parameter
+        First-order growth rate times Hubble parameter
 
     Returns
     -------
@@ -1121,12 +1123,14 @@ def initialise_1LPT(
     >>> import numpy as np
     >>> from pysco.initial_conditions import initialise_1LPT
     >>> force_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> dplus_1 = 0.1
     >>> fH = 0.1
-    >>> initialise_1LPT(force_1storder, fH)
+    >>> initialise_1LPT(force_1storder, dplus_1, fH)
     """
     ncells_1d = force.shape[0]
     h = np.float32(1.0 / ncells_1d)
     half_h = np.float32(0.5 / ncells_1d)
+    dfH_1 = dplus_1 * fH
     position = np.empty_like(force)
     velocity = np.empty_like(force)
     for i in prange(ncells_1d):
@@ -1135,18 +1139,21 @@ def initialise_1LPT(
             y = half_h + j * h
             for k in prange(ncells_1d):
                 z = half_h + k * h
-                position[i, j, k, 0] = x + force[i, j, k, 0]
-                position[i, j, k, 1] = y + force[i, j, k, 1]
-                position[i, j, k, 2] = z + force[i, j, k, 2]
-                velocity[i, j, k, 0] = fH * force[i, j, k, 0]
-                velocity[i, j, k, 1] = fH * force[i, j, k, 1]
-                velocity[i, j, k, 2] = fH * force[i, j, k, 2]
+                fx = force[i, j, k, 0]
+                fy = force[i, j, k, 1]
+                fz = force[i, j, k, 2]
+                position[i, j, k, 0] = x + dplus_1 * fx
+                position[i, j, k, 1] = y + dplus_1 * fy
+                position[i, j, k, 2] = z + dplus_1 * fz
+                velocity[i, j, k, 0] = dfH_1 * fx
+                velocity[i, j, k, 1] = dfH_1 * fy
+                velocity[i, j, k, 2] = dfH_1 * fz
     return position, velocity
 
 
 @utils.time_me
 @njit(
-    ["void(f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4)"],
+    ["void(f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4, f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
@@ -1155,6 +1162,7 @@ def add_2LPT(
     position: npt.NDArray[np.float32],
     velocity: npt.NDArray[np.float32],
     force_2ndorder: npt.NDArray[np.float32],
+    dplus_2: np.float32,
     fH_2: np.float32,
 ) -> None:
     """Initialise particles according to 2LPT displacement field
@@ -1167,6 +1175,8 @@ def add_2LPT(
         1LPT velocity [N, N, N, 3]
     force_2ndorder : npt.NDArray[np.float32]
         Force field [N, N, N, 3]
+    dplus_2 : np.float32
+        2nd-order growth factor
     fH_2 : np.float32
         2nd-order growth rate times Hubble parameter
 
@@ -1177,27 +1187,30 @@ def add_2LPT(
     >>> position_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
     >>> velocity_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
     >>> force_2ndorder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> dplus_2 = 0.2
     >>> fH_2 = 0.2
-    >>> add_2LPT(position_1storder, velocity_1storder, force_2ndorder, fH_2)
+    >>> add_2LPT(position_1storder, velocity_1storder, force_2ndorder, dplus_2, fH_2)
     """
     ncells_1d = force_2ndorder.shape[0]
-    pos_factor_2ndorder = np.float32(3.0 / 7)
-    vel_factor_2ndorder = np.float32(3.0 / 7 * fH_2)
+    dfH_2 = dplus_2 * fH_2
     for i in prange(ncells_1d):
         for j in prange(ncells_1d):
             for k in prange(ncells_1d):
-                position[i, j, k, 0] += pos_factor_2ndorder * force_2ndorder[i, j, k, 0]
-                position[i, j, k, 1] += pos_factor_2ndorder * force_2ndorder[i, j, k, 1]
-                position[i, j, k, 2] += pos_factor_2ndorder * force_2ndorder[i, j, k, 2]
-                velocity[i, j, k, 0] += vel_factor_2ndorder * force_2ndorder[i, j, k, 0]
-                velocity[i, j, k, 1] += vel_factor_2ndorder * force_2ndorder[i, j, k, 1]
-                velocity[i, j, k, 2] += vel_factor_2ndorder * force_2ndorder[i, j, k, 2]
+                fx = force_2ndorder[i, j, k, 0]
+                fy = force_2ndorder[i, j, k, 1]
+                fz = force_2ndorder[i, j, k, 2]
+                position[i, j, k, 0] += dplus_2 * fx
+                position[i, j, k, 1] += dplus_2 * fy
+                position[i, j, k, 2] += dplus_2 * fz
+                velocity[i, j, k, 0] += dfH_2 * fx
+                velocity[i, j, k, 1] += dfH_2 * fy
+                velocity[i, j, k, 2] += dfH_2 * fz
 
 
 @utils.time_me
 @njit(
     [
-        "void(f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4)"
+        "void(f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4, f4, f4, f4, f4, f4)"
     ],
     fastmath=True,
     cache=True,
@@ -1206,13 +1219,19 @@ def add_2LPT(
 def add_3LPT(
     position: npt.NDArray[np.float32],
     velocity: npt.NDArray[np.float32],
-    force_3rdorder_ab: npt.NDArray[np.float32],
+    force_3a: npt.NDArray[np.float32],
+    force_3b: npt.NDArray[np.float32],
     force_Ax_3c: npt.NDArray[np.float32],
     force_Ay_3c: npt.NDArray[np.float32],
     force_Az_3c: npt.NDArray[np.float32],
-    fH_3: np.float32,
+    dplus_3a: np.float32,
+    fH_3a: np.float32,
+    dplus_3b: np.float32,
+    fH_3b: np.float32,
+    dplus_3c: np.float32,
+    fH_3c: np.float32,
 ) -> None:
-    """Initialise particles according to 2LPT displacement field
+    """Initialise particles according to 3LPT displacement field
 
     Parameters
     ----------
@@ -1220,16 +1239,28 @@ def add_3LPT(
         2LPT position [N, N, N, 3]
     velocity : npt.NDArray[np.float32]
         2LPT velocity [N, N, N, 3]
-    force_3rdorder_ab : npt.NDArray[np.float32]
-        3rd-order (a - 30/21 b) force field [N, N, N, 3]
+    force_3a : npt.NDArray[np.float32]
+        3a force field [N, N, N, 3]
+    force_3b : npt.NDArray[np.float32]
+        3a force field [N, N, N, 3]
     force_Ax_3c : npt.NDArray[np.float32]
         3rd-order (Ax 3c) force field [N, N, N, 3]
     force_Ay_3c : npt.NDArray[np.float32]
         3rd-order (Ay 3c) force field [N, N, N, 3]
     force_Az_3c : npt.NDArray[np.float32]
         3rd-order (Az 3c) force field [N, N, N, 3]
-    fH_3 : np.float32
-        3rd-order growth rate times Hubble parameter
+    dplus_3a : np.float32
+        3a growth factor
+    fH_3a : np.float32
+        3a growth rate times Hubble parameter
+    dplus_3b : np.float32
+        3b growth factor
+    fH_3b : np.float32
+        3b growth rate times Hubble parameter
+    dplus_3c : np.float32
+        3c growth factor
+    fH_3c : np.float32
+        3c growth rate times Hubble parameter
 
     Returns
     -------
@@ -1249,29 +1280,46 @@ def add_3LPT(
     >>> fH_3 = 0.3
     >>> add_3LPT(position_2ndorder, velocity_2ndorder, force_3rdorder_ab, force_Ax_3c, force_Ay_3c, force_Az_3c, fH_3)
     """
-    ncells_1d = force_3rdorder_ab.shape[0]
-    pos_factor_3a = np.float32(-1.0 / 3)
-    vel_factor_3a = np.float32(-1.0 / 3 * fH_3)
-    pos_factor_3c = np.float32(-1.0 / 7)
-    vel_factor_3c = np.float32(-1.0 / 7 * fH_3)
+    ncells_1d = force_3a.shape[0]
+    dfH_3a = dplus_3a * fH_3a
+    dfH_3b = dplus_3b * fH_3b
+    dfH_3c = dplus_3c * fH_3c
     for i in prange(ncells_1d):
         for j in prange(ncells_1d):
             for k in prange(ncells_1d):
-                position[i, j, k, 0] += +pos_factor_3a * force_3rdorder_ab[
-                    i, j, k, 0
-                ] + pos_factor_3c * (force_Az_3c[i, j, k, 0] - force_Ay_3c[i, j, k, 0])
-                position[i, j, k, 1] += +pos_factor_3a * force_3rdorder_ab[
-                    i, j, k, 1
-                ] + pos_factor_3c * (force_Ax_3c[i, j, k, 1] - force_Az_3c[i, j, k, 1])
-                position[i, j, k, 2] += +pos_factor_3a * force_3rdorder_ab[
-                    i, j, k, 2
-                ] + pos_factor_3c * (force_Ay_3c[i, j, k, 2] - force_Ax_3c[i, j, k, 2])
-                velocity[i, j, k, 0] += +vel_factor_3a * force_3rdorder_ab[
-                    i, j, k, 0
-                ] + vel_factor_3c * (force_Az_3c[i, j, k, 0] - force_Ay_3c[i, j, k, 0])
-                velocity[i, j, k, 1] += +vel_factor_3a * force_3rdorder_ab[
-                    i, j, k, 1
-                ] + vel_factor_3c * (force_Ax_3c[i, j, k, 1] - force_Az_3c[i, j, k, 1])
-                velocity[i, j, k, 2] += +vel_factor_3a * force_3rdorder_ab[
-                    i, j, k, 2
-                ] + vel_factor_3c * (force_Ay_3c[i, j, k, 2] - force_Ax_3c[i, j, k, 2])
+                fx_3a = force_3a[i, j, k, 0]
+                fy_3a = force_3a[i, j, k, 1]
+                fz_3a = force_3a[i, j, k, 2]
+                fx_3b = force_3b[i, j, k, 0]
+                fy_3b = force_3b[i, j, k, 1]
+                fz_3b = force_3b[i, j, k, 2]
+                position[i, j, k, 0] += (
+                    dplus_3a * fx_3a
+                    + dplus_3b * fx_3b
+                    + dplus_3c * (force_Az_3c[i, j, k, 0] - force_Ay_3c[i, j, k, 0])
+                )
+                position[i, j, k, 1] += (
+                    dplus_3a * fy_3a
+                    + dplus_3b * fy_3b
+                    + dplus_3c * (force_Ax_3c[i, j, k, 1] - force_Az_3c[i, j, k, 1])
+                )
+                position[i, j, k, 2] += (
+                    dplus_3a * fz_3a
+                    + dplus_3b * fz_3b
+                    + dplus_3c * (force_Ay_3c[i, j, k, 2] - force_Ax_3c[i, j, k, 2])
+                )
+                velocity[i, j, k, 0] += (
+                    dfH_3a * fx_3a
+                    + dfH_3b * fx_3b
+                    + dfH_3c * (force_Az_3c[i, j, k, 0] - force_Ay_3c[i, j, k, 0])
+                )
+                velocity[i, j, k, 1] += (
+                    dfH_3a * fy_3a
+                    + dfH_3b * fy_3b
+                    + dfH_3c * (force_Ax_3c[i, j, k, 1] - force_Az_3c[i, j, k, 1])
+                )
+                velocity[i, j, k, 2] += (
+                    dfH_3a * fz_3a
+                    + dfH_3b * fz_3b
+                    + dfH_3c * (force_Ay_3c[i, j, k, 2] - force_Ax_3c[i, j, k, 2])
+                )

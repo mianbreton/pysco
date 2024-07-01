@@ -5,7 +5,7 @@ Main executable module to run cosmological N-body simulations
 Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
-__version__ = "0.4.10"
+__version__ = "0.4.11"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -93,6 +93,9 @@ def run(param) -> None:
         output_directory = f"{param['base']}/output_{i:05d}"
         os.makedirs(output_directory, exist_ok=True)
 
+    logging.warning(
+        f"\n[bold blue]----- Compute background cosmology -----[/bold blue]\n"
+    )
     tables = cosmotable.generate(param)
     # aexp and t are overwritten if we read a snapshot
     param["aexp"] = 1.0 / (1 + param["z_start"])

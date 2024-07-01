@@ -44,7 +44,7 @@ def pm(
     additional_field : npt.NDArray[np.float32], optional
         Additional potential [N_cells_1d, N_cells_1d,N_cells_1d], by default np.empty(0, dtype=np.float32)
     tables : List[interp1d], optional
-        Interpolated functions [a(t), t(a), Dplus(a), H(a)], by default []
+        Interpolated functions [a(t), t(a), H(a), Dplus1(a), f1(a), Dplus2(a), f2(a), Dplus3a(a), f3a(a), Dplus3b(a), f3b(a), Dplus3c(a), f3c(a)], by default []
 
     Returns
     -------
@@ -253,7 +253,7 @@ def initialise_potential(
     param : pd.Series
         Parameter container
     tables : List[interp1d], optional
-        Interpolated functions [a(t), t(a), Dplus(a), H(a)], by default []
+        Interpolated functions [a(t), t(a), H(a), Dplus1(a), f1(a), Dplus2(a), f2(a), Dplus3a(a), f3a(a), Dplus3b(a), f3b(a), Dplus3c(a), f3c(a)], by default []
     
     Returns
     -------
@@ -269,7 +269,7 @@ def initialise_potential(
     >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
     >>> h = 1.0 / 32
     >>> param = pd.Series({"compute_additional_field": False})
-    >>> tables = [interp1d([0, 1], [1, 2]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [1, 2])]
+    >>> tables = [interp1d([0, 1], [1, 2])]*13
     >>> potential = initialise_potential(potential, rhs, h, param, tables)
     """
     if len(potential) == 0:
@@ -295,8 +295,8 @@ def initialise_potential(
         if not param["compute_additional_field"]:
             scaling = (
                 param["aexp"]
-                * tables[2](param["aexp"])
-                / (param["aexp_old"] * tables[2](param["aexp_old"]))
+                * tables[3](param["aexp"])
+                / (param["aexp_old"] * tables[3](param["aexp_old"]))
             )
             utils.prod_vector_scalar_inplace(potential, scaling)
 
@@ -341,7 +341,7 @@ def get_additional_field(
     >>> density = np.random.rand(32, 32, 32).astype(np.float32)
     >>> h = 1.0 / 32
     >>> param = pd.Series({"theory": "newton"})
-    >>> tables = [interp1d([0, 1], [1, 2]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [0, 1]), interp1d([0, 1], [1, 2])]
+    >>> tables = [interp1d([0, 1], [1, 2])]*13
     >>> additional_field = get_additional_field(additional_field, density, h, param, tables)
     """
     if (

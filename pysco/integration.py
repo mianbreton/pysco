@@ -45,7 +45,7 @@ def integrate(
     additional_field : npt.NDArray[np.float32]
         Additional potential [N_cells_1d, N_cells_1d, N_cells_1d]
     tables : List[interp1d]
-        Interpolated functions [a(t), t(a), Dplus(a), H(a)]
+        Interpolated functions [a(t), t(a), H(a), Dplus1(a), f1(a), Dplus2(a), f2(a), Dplus3a(a), f3a(a), Dplus3b(a), f3b(a), Dplus3c(a), f3c(a)]
     param : pd.Series
         Parameter container
     t_snap_next : np.float32
@@ -72,7 +72,7 @@ def integrate(
     >>> acceleration = np.random.random((32, 32, 32)).astype(np.float32)
     >>> potential = np.random.random((32, 32, 32)).astype(np.float32)
     >>> additional_field = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100))]*4
+    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100))]*13
     >>> param = pd.Series({"H0": 100, "boxlen": 500, "Om_m": 0.3, "npart": 64, "save_power_spectrum": "no", "nthreads": 1, "theory": "newton", "linear_newton_solver": "fft", "epsrel": 1e-2, "Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
     >>> pos, vel, acc, potential, additional_field = integrate(position, velocity, acceleration, potential, additional_field, tables, param)
     """
