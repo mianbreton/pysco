@@ -190,8 +190,6 @@ Om_m = 0.31   # Matter density parameter
 Om_lambda = 0.69 # Dark energy density parameter
 w0 = -1.0 # Equation of state for dark energy
 wa = 0.0 # Evolution parameter for dark energy equation of state
-evolution_table =  # Table specifying the evolution of cosmological parameters, or leave blank
-mpgrafic_table =  # Table for initial conditions, or leave blank
 # Simulation dimension
 boxlen = 500  # Simulation box length (in Mpc/h)
 ncoarse = 7 # Coarse level. Total number of cells = 2**(3*ncoarse)
@@ -203,7 +201,6 @@ fixed_ICS = False # Use fixed initial conditions (Gaussian Random Field). If Tru
 paired_ICS = False # Use paired initial conditions. If True, add π to the random phases (works only with fixed_ICS = True)
 power_spectrum_file = /home/user/pysco/examples/pk_lcdmw7v2.dat # File path to the power spectrum data
 initial_conditions = 3LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or .h5 RayGal file, or snapshot number (for restart). Else, assumes Gadget format
-rescale_initial_power_spectrum = True # If true, rescale the input P(k,z=0) at z_start.
 # Outputs
 base=/home/user/boxlen500_n128_lcdm/ # Base directory for storing simulation data
 z_out = [10, 5, 2, 1, 0.5, 0] # List of redshifts for output snapshots
@@ -250,8 +247,6 @@ param = {
     "Om_lambda": 0.742589237,
     "w0": -1.0,
     "wa": 0.0,
-    "evolution_table": "no",
-    "mpgrafic_table": "no",
     "boxlen": 500,
     "ncoarse": 7,
     "npart": 128**3,

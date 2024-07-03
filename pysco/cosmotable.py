@@ -11,7 +11,7 @@ from astropy.cosmology import Flatw0waCDM
 from scipy.interpolate import interp1d
 import numpy.typing as npt
 from typing import List
-from scipy.integrate import solve_ivp
+from scipy.integrate import solve_ivp, cumulative_trapezoid
 
 
 def generate(param: pd.Series) -> List[interp1d]:
@@ -65,54 +65,68 @@ def generate(param: pd.Series) -> List[interp1d]:
     param["Om_r"] = cosmo.Ogamma0 + cosmo.Onu0
     param["Om_lambda"] = cosmo.Ode0
 
-    zmax = 150
-    a = np.linspace(1.15, 1.0 / (1 + zmax), 100_000)
-    t_lookback = (
-        -cosmo.lookback_time(1.0 / a - 1).value * 1e9 * (86400 * 365.25)
-    )  # In Gyrs -> seconds
-    mpc_to_km = 1e3 * pc.value  # Converts Mpc to km
-    H0 = param["H0"] / mpc_to_km  # km/s/Mpc -> 1/s
-    t_lookback *= H0  # In H0 units
-    dt_lookback = np.diff(t_lookback)
-    dt_supercomoving = 1.0 / a[1:] ** 2 * dt_lookback
-    t_supercomoving = np.concatenate(([0], np.cumsum(dt_supercomoving)))
-    H_array = cosmo.H(1.0 / a - 1)
-
+    z_start = 200
+    a_start = 1.0 / (1 + z_start)
+    lna = np.linspace(np.log(a_start), 0, 100_000)
+    a = np.exp(lna)
+    dlna = lna[1] - lna[0]
+    E_array = cosmo.efunc(1.0 / a - 1)
+    dt_supercomoving = dlna / (a**2 * E_array)
+    t_supercomoving = cumulative_trapezoid(dt_supercomoving, initial=0)
+    t_supercomoving -= t_supercomoving[-1]
     growth_functions = compute_growth_functions(cosmo)
-    aexp_growth = growth_functions[0]
-    d1 = np.interp(a, aexp_growth, growth_functions[1])
-    f1 = np.interp(a, aexp_growth, growth_functions[2])
-    d2 = np.interp(a, aexp_growth, growth_functions[3])
-    f2 = np.interp(a, aexp_growth, growth_functions[4])
-    d3a = np.interp(a, aexp_growth, growth_functions[5])
-    f3a = np.interp(a, aexp_growth, growth_functions[6])
-    d3b = np.interp(a, aexp_growth, growth_functions[7])
-    f3b = np.interp(a, aexp_growth, growth_functions[8])
-    d3c = np.interp(a, aexp_growth, growth_functions[9])
-    f3c = np.interp(a, aexp_growth, growth_functions[10])
+    mask = growth_functions[0] > lna[0]
+    growth_functions = growth_functions[:, mask]
+    lnaexp_growth = growth_functions[0]
+    d1 = growth_functions[1]
+    f1 = growth_functions[2]
+    d2 = growth_functions[3]
+    f2 = growth_functions[4]
+    d3a = growth_functions[5]
+    f3a = growth_functions[6]
+    d3b = growth_functions[7]
+    f3b = growth_functions[8]
+    d3c = growth_functions[9]
+    f3c = growth_functions[10]
+
+    print(f"Write table in: {param['base']}/evolution_table_pysco_{param['extra']}.txt")
     np.savetxt(
         f"{param['base']}/evolution_table_pysco_{param['extra']}.txt",
-        np.c_[a, t_supercomoving, d1, f1, d2, f2, d3a, f3a, d3b, f3b, d3c, f3c],
-        header="aexp, t_supercomoving, dplus1, f1, dplus2, f2, dplus3a, f3a, dplus3b, f3b, dplus3c, f3c",
+        np.c_[
+            a,
+            E_array,
+            t_supercomoving,
+            np.interp(lna, lnaexp_growth, d1),
+            np.interp(lna, lnaexp_growth, f1),
+            np.interp(lna, lnaexp_growth, d2),
+            np.interp(lna, lnaexp_growth, f2),
+            np.interp(lna, lnaexp_growth, d3a),
+            np.interp(lna, lnaexp_growth, f3a),
+            np.interp(lna, lnaexp_growth, d3b),
+            np.interp(lna, lnaexp_growth, f3b),
+            np.interp(lna, lnaexp_growth, d3c),
+            np.interp(lna, lnaexp_growth, f3c),
+        ],
+        header="aexp, H/H0, t_supercomoving, dplus1, f1, dplus2, f2, dplus3a, f3a, dplus3b, f3b, dplus3c, f3c",
     )
     return [
         interp1d(t_supercomoving, a, fill_value="extrapolate"),
         interp1d(a, t_supercomoving, fill_value="extrapolate"),
-        interp1d(a, H_array, fill_value="extrapolate"),
-        interp1d(a, d1, fill_value="extrapolate"),
-        interp1d(a, f1, fill_value="extrapolate"),
-        interp1d(a, d2, fill_value="extrapolate"),
-        interp1d(a, f2, fill_value="extrapolate"),
-        interp1d(a, d3a, fill_value="extrapolate"),
-        interp1d(a, f3a, fill_value="extrapolate"),
-        interp1d(a, d3b, fill_value="extrapolate"),
-        interp1d(a, f3b, fill_value="extrapolate"),
-        interp1d(a, d3c, fill_value="extrapolate"),
-        interp1d(a, f3c, fill_value="extrapolate"),
+        interp1d(a, param["H0"] * E_array, fill_value="extrapolate"),
+        interp1d(lnaexp_growth, d1, fill_value="extrapolate"),
+        interp1d(lnaexp_growth, f1, fill_value="extrapolate"),
+        interp1d(lnaexp_growth, d2, fill_value="extrapolate"),
+        interp1d(lnaexp_growth, f2, fill_value="extrapolate"),
+        interp1d(lnaexp_growth, d3a, fill_value="extrapolate"),
+        interp1d(lnaexp_growth, f3a, fill_value="extrapolate"),
+        interp1d(lnaexp_growth, d3b, fill_value="extrapolate"),
+        interp1d(lnaexp_growth, f3b, fill_value="extrapolate"),
+        interp1d(lnaexp_growth, d3c, fill_value="extrapolate"),
+        interp1d(lnaexp_growth, f3c, fill_value="extrapolate"),
     ]
 
 
-def compute_growth_functions(cosmo: Flatw0waCDM) -> List[np.ndarray]:
+def compute_growth_functions(cosmo: Flatw0waCDM) -> npt.NDArray[np.float64]:
     """
     This function computes the growth functions Dplus1, Dplus2, Dplus3a, Dplus3b, Dplus3c,
     and their derivatives with respect to the logarithm of the scale factor (lnaexp)
@@ -124,15 +138,17 @@ def compute_growth_functions(cosmo: Flatw0waCDM) -> List[np.ndarray]:
 
     Returns
     ----------
-    List[np.ndarray]: A list containing the scale factors aexp, Dplus1, f1, Dplus2, f2, Dplus3a, f3a, Dplus3b, f3b, Dplus3c, f3c.
+    npt.NDArray[np.float64]: A list containing the scale factors aexp, Dplus1, f1, Dplus2, f2, Dplus3a, f3a, Dplus3b, f3b, Dplus3c, f3c.
     """
     # Initial conditions
     aexp_start = 1e-8
+    aexp_end = 1.0
     lnaexp_start = np.log(aexp_start)
+    lnaexp_end = np.log(aexp_end)
     aexp_equality = (cosmo.Ogamma0 + cosmo.Onu0) / cosmo.Om0
 
     # Works in a matter-domianted era (Rampf & Bucher 2012) #TODO: Add Om(z) dependence?
-    dplus1_ini = 13.0 / 15 * aexp_equality
+    dplus1_ini = 3.0 / 5 * aexp_equality
     dplus2_ini = -3.0 / 7 * dplus1_ini**2
     dplus3a_ini = -1.0 / 3.0 * dplus1_ini**3
     dplus3b_ini = 10.0 / 21.0 * dplus1_ini**3
@@ -157,18 +173,18 @@ def compute_growth_functions(cosmo: Flatw0waCDM) -> List[np.ndarray]:
     ]
 
     # Time span to solve the ODE over
-    lnaexp_span = (lnaexp_start, 0)
+    lnaexp_span = (lnaexp_start, lnaexp_end)
 
     # Time points where the solution is computed
-    lnaexp_array = np.linspace(lnaexp_span[0], lnaexp_span[1], 100000)
+    lnaexp_array = np.linspace(lnaexp_span[0], lnaexp_span[1], 100_000)
 
     solution = solve_ivp(
         growth,
         lnaexp_span,
         y0,
         t_eval=lnaexp_array,
-        rtol=1e-13,
-        atol=1e-13,
+        rtol=1e-14,
+        atol=1e-14,
         args=(cosmo,),
     )
 
@@ -183,10 +199,12 @@ def compute_growth_functions(cosmo: Flatw0waCDM) -> List[np.ndarray]:
     f3a = solution.y[5] / d3a
     f3b = solution.y[7] / d3b
     f3c = solution.y[9] / d3c
-    return [np.exp(lnaexp_array), d1, f1, d2, f2, d3a, f3a, d3b, f3b, d3c, f3c]
+    return np.array([lnaexp_array, d1, f1, d2, f2, d3a, f3a, d3b, f3b, d3c, f3c])
 
 
-def growth(lnaexp: float, y: List[float], cosmo: Flatw0waCDM) -> List[float]:
+def growth(
+    lnaexp: float, y: List[float], cosmo: Flatw0waCDM
+) -> npt.NDArray[np.float64]:
     """
     This function calculates the derivatives of the growth functions Dplus1, Dplus2, Dplus3a, Dplus3b, Dplus3c,
     and their derivatives with respect to the logarithm of the scale factor (lnaexp) at a given scale factor (aexp).
@@ -199,7 +217,7 @@ def growth(lnaexp: float, y: List[float], cosmo: Flatw0waCDM) -> List[float]:
 
     Returns
     ----------
-    List[float]: A list containing the derivatives of the growth functions and their derivatives.
+    npt.NDArray[np.float64]: A list containing the derivatives of the growth functions and their derivatives.
     """
     aexp = np.exp(lnaexp)
     z = 1.0 / aexp - 1
@@ -234,24 +252,26 @@ def growth(lnaexp: float, y: List[float], cosmo: Flatw0waCDM) -> List[float]:
     dy4_dt = -gamma * dD2dlnaexp + beta * (D2 - D1**2)
     # 3rd order a) term
     dy5_dt = dD3adlnaexp
-    dy6_dt = -gamma * dD3adlnaexp + beta * (D3a - 2 * D1**3)
+    dy6_dt = -gamma * dD3adlnaexp + beta * (D3a - 2.0 * D1**3)
     # 3rd order b) term
     dy7_dt = dD3bdlnaexp
-    dy8_dt = -gamma * dD3bdlnaexp + beta * (D3b - 2 * D1 * (D2 - D1**2))
+    dy8_dt = -gamma * dD3bdlnaexp + beta * (D3b - 2.0 * D1 * (D2 - D1**2))
     # 3rd order c) term
     dy9_dt = dD3cdlnaexp
     dy10_dt = (
         (1 - gamma) * dD3cdlnaexp + D2 * dD1dlnaexp - D1 * dD2dlnaexp - beta * D1**3
     )
-    return [
-        dy1_dt,
-        dy2_dt,
-        dy3_dt,
-        dy4_dt,
-        dy5_dt,
-        dy6_dt,
-        dy7_dt,
-        dy8_dt,
-        dy9_dt,
-        dy10_dt,
-    ]
+    return np.array(
+        [
+            dy1_dt,
+            dy2_dt,
+            dy3_dt,
+            dy4_dt,
+            dy5_dt,
+            dy6_dt,
+            dy7_dt,
+            dy8_dt,
+            dy9_dt,
+            dy10_dt,
+        ]
+    )
