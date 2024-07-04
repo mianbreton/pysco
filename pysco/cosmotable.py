@@ -12,6 +12,7 @@ from scipy.interpolate import interp1d
 import numpy.typing as npt
 from typing import List
 from scipy.integrate import solve_ivp, cumulative_trapezoid
+import logging
 
 
 def generate(param: pd.Series) -> List[interp1d]:
@@ -89,7 +90,9 @@ def generate(param: pd.Series) -> List[interp1d]:
     d3c = growth_functions[9]
     f3c = growth_functions[10]
 
-    print(f"Write table in: {param['base']}/evolution_table_pysco_{param['extra']}.txt")
+    logging.warning(
+        f"Write table in: {param['base']}/evolution_table_pysco_{param['extra']}.txt"
+    )
     np.savetxt(
         f"{param['base']}/evolution_table_pysco_{param['extra']}.txt",
         np.c_[
@@ -228,7 +231,7 @@ def growth(
     wa = cosmo.wa
 
     beta = 1.5 * Om_z
-    gamma = 0.5 * (1 - 3 * Ode_z * (w0 + wa * (1 - aexp)) - Or_z)
+    gamma = 0.5 * (1.0 - 3.0 * Ode_z * (w0 + wa * (1.0 - aexp)) - Or_z)
 
     (
         D1,

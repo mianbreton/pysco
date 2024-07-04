@@ -109,6 +109,15 @@ def generate(
         dplus_1_z0 = tables[3](0)
         dplus_1 = np.float32(tables[3](lna_start) / dplus_1_z0)
         f1 = tables[4](lna_start)
+        """ f1 = (
+            param["Om_m"]
+            * a_start ** (-3)
+            / (
+                param["Om_m"] * a_start ** (-3)
+                + param["Om_r"] * a_start ** (-4)
+                + param["Om_lambda"]
+            )
+        ) * 0.55 """
         fH_1 = np.float32(f1 * Hz)
         position, velocity = initialise_1LPT(psi_1lpt, dplus_1, fH_1)
         if param["initial_conditions"].casefold() == "1LPT".casefold():
@@ -888,35 +897,35 @@ def compute_rhs_2ndorder(
                 kp2 = k + 2
                 km2 = k - 2
                 phixz = inv12h * (
-                    eight * (force[i, j, km1, 0] - force[i, j, kp1, 0])
-                    - force[i, j, km2, 0]
-                    + force[i, j, kp2, 0]
+                    eight * (-force[i, j, km1, 0] + force[i, j, kp1, 0])
+                    + force[i, j, km2, 0]
+                    - force[i, j, kp2, 0]
                 )
                 phiyz = inv12h * (
-                    eight * (force[i, j, km1, 1] - force[i, j, kp1, 1])
-                    - force[i, j, km2, 1]
-                    + force[i, j, kp2, 1]
+                    eight * (-force[i, j, km1, 1] + force[i, j, kp1, 1])
+                    + force[i, j, km2, 1]
+                    - force[i, j, kp2, 1]
                 )
                 phizz = inv12h * (
-                    eight * (force[i, j, km1, 2] - force[i, j, kp1, 2])
-                    - force[i, j, km2, 2]
-                    + force[i, j, kp2, 2]
+                    eight * (-force[i, j, km1, 2] + force[i, j, kp1, 2])
+                    + force[i, j, km2, 2]
+                    - force[i, j, kp2, 2]
                 )
                 phixy = inv12h * (
-                    eight * (force[i, jm1, k, 0] - force[i, jp1, k, 0])
-                    - force[i, jm2, k, 0]
-                    + force[i, jp2, k, 0]
+                    eight * (-force[i, jm1, k, 0] + force[i, jp1, k, 0])
+                    + force[i, jm2, k, 0]
+                    - force[i, jp2, k, 0]
                 )
 
                 phiyy = inv12h * (
-                    eight * (force[i, jm1, k, 1] - force[i, jp1, k, 1])
-                    - force[i, jm2, k, 1]
-                    + force[i, jp2, k, 1]
+                    eight * (-force[i, jm1, k, 1] + force[i, jp1, k, 1])
+                    + force[i, jm2, k, 1]
+                    - force[i, jp2, k, 1]
                 )
                 phixx = inv12h * (
-                    eight * (force[im1, j, k, 0] - force[ip1, j, k, 0])
-                    - force[im2, j, k, 0]
-                    + force[ip2, j, k, 0]
+                    eight * (-force[im1, j, k, 0] + force[ip1, j, k, 0])
+                    + force[im2, j, k, 0]
+                    - force[ip2, j, k, 0]
                 )
                 result[i, j, k] = (
                     phixx * (phiyy + phizz)
@@ -992,70 +1001,70 @@ def compute_rhs_3rdorder(
                 km2 = k - 2
 
                 phixz = inv12h * (
-                    eight * (force[i, j, km1, 0] - force[i, j, kp1, 0])
-                    - force[i, j, km2, 0]
-                    + force[i, j, kp2, 0]
+                    eight * (-force[i, j, km1, 0] + force[i, j, kp1, 0])
+                    + force[i, j, km2, 0]
+                    - force[i, j, kp2, 0]
                 )
                 phiyz = inv12h * (
-                    eight * (force[i, j, km1, 1] - force[i, j, kp1, 1])
-                    - force[i, j, km2, 1]
-                    + force[i, j, kp2, 1]
+                    eight * (-force[i, j, km1, 1] + force[i, j, kp1, 1])
+                    + force[i, j, km2, 1]
+                    - force[i, j, kp2, 1]
                 )
                 phizz = inv12h * (
-                    eight * (force[i, j, km1, 2] - force[i, j, kp1, 2])
-                    - force[i, j, km2, 2]
-                    + force[i, j, kp2, 2]
+                    eight * (-force[i, j, km1, 2] + force[i, j, kp1, 2])
+                    + force[i, j, km2, 2]
+                    - force[i, j, kp2, 2]
                 )
                 phixy = inv12h * (
-                    eight * (force[i, jm1, k, 0] - force[i, jp1, k, 0])
-                    - force[i, jm2, k, 0]
-                    + force[i, jp2, k, 0]
+                    eight * (-force[i, jm1, k, 0] + force[i, jp1, k, 0])
+                    + force[i, jm2, k, 0]
+                    - force[i, jp2, k, 0]
                 )
                 phiyy = inv12h * (
-                    eight * (force[i, jm1, k, 1] - force[i, jp1, k, 1])
-                    - force[i, jm2, k, 1]
-                    + force[i, jp2, k, 1]
+                    eight * (-force[i, jm1, k, 1] + force[i, jp1, k, 1])
+                    + force[i, jm2, k, 1]
+                    - force[i, jp2, k, 1]
                 )
                 phixx = inv12h * (
-                    eight * (force[im1, j, k, 0] - force[ip1, j, k, 0])
-                    - force[im2, j, k, 0]
-                    + force[ip2, j, k, 0]
+                    eight * (-force[im1, j, k, 0] + force[ip1, j, k, 0])
+                    + force[im2, j, k, 0]
+                    - force[ip2, j, k, 0]
                 )
                 phi_2_xz = inv12h * (
                     eight
-                    * (force_2ndorder[i, j, km1, 0] - force_2ndorder[i, j, kp1, 0])
-                    - force_2ndorder[i, j, km2, 0]
-                    + force_2ndorder[i, j, kp2, 0]
+                    * (-force_2ndorder[i, j, km1, 0] + force_2ndorder[i, j, kp1, 0])
+                    + force_2ndorder[i, j, km2, 0]
+                    - force_2ndorder[i, j, kp2, 0]
                 )
                 phi_2_yz = inv12h * (
                     eight
-                    * (force_2ndorder[i, j, km1, 1] - force_2ndorder[i, j, kp1, 1])
-                    - force_2ndorder[i, j, km2, 1]
-                    + force_2ndorder[i, j, kp2, 1]
+                    * (-force_2ndorder[i, j, km1, 1] + force_2ndorder[i, j, kp1, 1])
+                    + force_2ndorder[i, j, km2, 1]
+                    - force_2ndorder[i, j, kp2, 1]
                 )
                 phi_2_zz = inv12h * (
                     eight
-                    * (force_2ndorder[i, j, km1, 2] - force_2ndorder[i, j, kp1, 2])
-                    - force_2ndorder[i, j, km2, 2]
-                    + force_2ndorder[i, j, kp2, 2]
+                    * (-force_2ndorder[i, j, km1, 2] + force_2ndorder[i, j, kp1, 2])
+                    + force_2ndorder[i, j, km2, 2]
+                    - force_2ndorder[i, j, kp2, 2]
                 )
                 phi_2_xy = inv12h * (
                     eight
-                    * (force_2ndorder[i, jm1, k, 0] - force_2ndorder[i, jp1, k, 0])
-                    - force_2ndorder[i, jm2, k, 0]
-                    + force_2ndorder[i, jp2, k, 0]
+                    * (-force_2ndorder[i, jm1, k, 0] + force_2ndorder[i, jp1, k, 0])
+                    + force_2ndorder[i, jm2, k, 0]
+                    - force_2ndorder[i, jp2, k, 0]
                 )
                 phi_2_yy = inv12h * (
                     eight
-                    * (force_2ndorder[i, jm1, k, 1] - force_2ndorder[i, jp1, k, 1])
-                    - force_2ndorder[i, jm2, k, 1]
-                    + force_2ndorder[i, jp2, k, 1]
+                    * (-force_2ndorder[i, jm1, k, 1] + force_2ndorder[i, jp1, k, 1])
+                    + force_2ndorder[i, jm2, k, 1]
+                    - force_2ndorder[i, jp2, k, 1]
                 )
                 phi_2_xx = inv12h * (
                     eight
-                    * (force_2ndorder[im1, j, k, 0] - force_2ndorder[ip1, j, k, 0])
-                    - force_2ndorder[im2, j, k, 0]
-                    + force_2ndorder[ip2, j, k, 0]
+                    * (-force_2ndorder[im1, j, k, 0] + force_2ndorder[ip1, j, k, 0])
+                    + force_2ndorder[im2, j, k, 0]
+                    - force_2ndorder[ip2, j, k, 0]
                 )
                 result_3a[i, j, k] = (
                     phixx * phiyy * phizz
