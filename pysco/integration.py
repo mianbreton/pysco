@@ -350,8 +350,4 @@ def dt_weak_variation(
     >>> param = pd.Series({"aexp": 0.5})
     >>> dt = dt_weak_variation(func_t_a, param)
     """
-    if param["aexp"] > (1.0 / 1.1):
-        a_end = 1.0
-    else:
-        a_end = 1.1 * param["aexp"]
-    return np.float32(func_t_a(a_end) - func_t_a(param["aexp"]))
+    return np.float32(func_t_a(1.1 * param["aexp"]) - func_t_a(param["aexp"]))
