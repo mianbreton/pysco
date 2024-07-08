@@ -90,30 +90,32 @@ def integrate(
     logging.warning(
         f"Conditions: velocity {dt1=}, acceleration {dt2=}, scale factor {dt3=}"
     )
-    if param.integrator == "leapfrog":
-        return leapfrog(
-            position,
-            velocity,
-            acceleration,
-            potential,
-            additional_field,
-            dt,
-            tables,
-            param,
-        )
-    elif param.integrator == "euler":
-        return euler(
-            position,
-            velocity,
-            acceleration,
-            potential,
-            additional_field,
-            dt,
-            tables,
-            param,
-        )
-    else:
-        raise ValueError("ERROR: Integrator must be 'leapfrog' or 'euler'")
+    INTEGRATOR = param["integrator"].casefold()
+    match INTEGRATOR:
+        case "leapfrog":
+            return leapfrog(
+                position,
+                velocity,
+                acceleration,
+                potential,
+                additional_field,
+                dt,
+                tables,
+                param,
+            )
+        case "euler":
+            return euler(
+                position,
+                velocity,
+                acceleration,
+                potential,
+                additional_field,
+                dt,
+                tables,
+                param,
+            )
+        case _:
+            raise ValueError("ERROR: Integrator must be 'leapfrog' or 'euler'")
 
 
 def euler(
@@ -180,7 +182,7 @@ def euler(
     param["aexp"] = tables[0](param["t"])
     utils.set_units(param)
     utils.periodic_wrap(position)
-    utils.add_vector_scalar_inplace(velocity, acceleration, dt)
+    utils.add_vector_scalar_inplace(velocity, acceleration, -dt)
     acceleration, potential, additional_field = solver.pm(
         position, param, potential, additional_field, tables
     )
@@ -246,7 +248,7 @@ def leapfrog(
     >>> pos, vel, acc, potential, additional_field = leapfrog(position, velocity, acceleration, potential, additional_field, dt, tables, param)
     """
     half_dt = np.float32(0.5 * dt)
-    utils.add_vector_scalar_inplace(velocity, acceleration, half_dt)
+    utils.add_vector_scalar_inplace(velocity, acceleration, -half_dt)
     utils.add_vector_scalar_inplace(position, velocity, dt)
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
@@ -257,7 +259,7 @@ def leapfrog(
     acceleration, potential, additional_field = solver.pm(
         position, param, potential, additional_field, tables
     )
-    utils.add_vector_scalar_inplace(velocity, acceleration, half_dt)
+    utils.add_vector_scalar_inplace(velocity, acceleration, -half_dt)
 
     return position, velocity, acceleration, potential, additional_field
 

@@ -413,9 +413,9 @@ def divergence2(
             for k in prange(ncells_1d):
                 km1 = k - 1
                 out[i, j, k] = invh * (
-                    (a[im1, j, k, 0] - a[i, j, k, 0])
-                    + (a[i, jm1, k, 1] - a[i, j, k, 1])
-                    + (a[i, j, km1, 2] - a[i, j, k, 2])
+                    (-a[im1, j, k, 0] + a[i, j, k, 0])
+                    + (-a[i, jm1, k, 1] + a[i, j, k, 1])
+                    + (-a[i, j, km1, 2] + a[i, j, k, 2])
                 )
 
 
@@ -434,7 +434,7 @@ def divergence3(
     a : npt.NDArray[np.float32]
         Vector Field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
     out : npt.NDArray[np.float32]
-        Scalar field (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d]
+        Scalar field [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Examples
     --------
@@ -445,7 +445,7 @@ def divergence3(
     >>> divergence3(vector_field, field_divergence)
     """
     ncells_1d = a.shape[0]
-    halfinvh = np.float32(0.5 * ncells_1d)
+    inv2h = np.float32(0.5 * ncells_1d)
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
         im1 = i - 1
@@ -455,10 +455,10 @@ def divergence3(
             for k in prange(-1, ncells_1d - 1):
                 kp1 = k + 1
                 km1 = k - 1
-                out[i, j, k] = halfinvh * (
-                    (a[im1, j, k, 0] - a[ip1, j, k, 0])
-                    + (a[i, jm1, k, 1] - a[i, jp1, k, 1])
-                    + (a[i, j, km1, 2] - a[i, j, kp1, 2])
+                out[i, j, k] = inv2h * (
+                    (-a[im1, j, k, 0] + a[ip1, j, k, 0])
+                    + (-a[i, jm1, k, 1] + a[i, jp1, k, 1])
+                    + (-a[i, j, km1, 2] + a[i, j, kp1, 2])
                 )
 
 
@@ -469,7 +469,7 @@ def derivative2(
 ) -> npt.NDArray[np.float32]:
     """Spatial derivatives of a scalar field on a grid
 
-    Two-point stencil derivative with finite differences
+    Two-point forward stencil derivative with finite differences
 
     Parameters
     ----------
@@ -479,14 +479,14 @@ def derivative2(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
 
     Examples
     --------
     >>> import numpy as np
     >>> from pysco.mesh import derivative2
     >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> deriv = derivative3(scalar_field)
+    >>> deriv = derivative2(scalar_field)
     """
     ncells_1d = a.shape[0]
     invh = np.float32(ncells_1d)
@@ -497,10 +497,10 @@ def derivative2(
             jp1 = j + 1
             for k in prange(-1, ncells_1d - 1):
                 kp1 = k + 1
-                aijk = a[i, j, k]
-                result[i, j, k, 0] = invh * (aijk - a[ip1, j, k])
-                result[i, j, k, 1] = invh * (aijk - a[i, jp1, k])
-                result[i, j, k, 2] = invh * (aijk - a[i, j, kp1])
+                minus_aijk = -a[i, j, k]
+                result[i, j, k, 0] = invh * (minus_aijk + a[ip1, j, k])
+                result[i, j, k, 1] = invh * (minus_aijk + a[i, jp1, k])
+                result[i, j, k, 2] = invh * (minus_aijk + a[i, j, kp1])
     return result
 
 
@@ -521,7 +521,7 @@ def derivative3(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
 
     Examples
     --------
@@ -531,7 +531,7 @@ def derivative3(
     >>> deriv = derivative3(scalar_field)
     """
     ncells_1d = a.shape[0]
-    halfinvh = np.float32(0.5 * ncells_1d)
+    inv2h = np.float32(0.5 * ncells_1d)
     result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
@@ -542,9 +542,9 @@ def derivative3(
             for k in prange(-1, ncells_1d - 1):
                 kp1 = k + 1
                 km1 = k - 1
-                result[i, j, k, 0] = halfinvh * (a[im1, j, k] - a[ip1, j, k])
-                result[i, j, k, 1] = halfinvh * (a[i, jm1, k] - a[i, jp1, k])
-                result[i, j, k, 2] = halfinvh * (a[i, j, km1] - a[i, j, kp1])
+                result[i, j, k, 0] = inv2h * (-a[im1, j, k] + a[ip1, j, k])
+                result[i, j, k, 1] = inv2h * (-a[i, jm1, k] + a[i, jp1, k])
+                result[i, j, k, 2] = inv2h * (-a[i, j, km1] + a[i, j, kp1])
     return result
 
 
@@ -565,7 +565,7 @@ def derivative5(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
 
     Examples
     --------
@@ -594,13 +594,13 @@ def derivative5(
                 kp2 = k + 2
                 km2 = k - 2
                 result[i, j, k, 0] = inv12h * (
-                    eight * (a[im1, j, k] - a[ip1, j, k]) - a[im2, j, k] + a[ip2, j, k]
+                    eight * (-a[im1, j, k] + a[ip1, j, k]) + a[im2, j, k] - a[ip2, j, k]
                 )
                 result[i, j, k, 1] = inv12h * (
-                    eight * (a[i, jm1, k] - a[i, jp1, k]) - a[i, jm2, k] + a[i, jp2, k]
+                    eight * (-a[i, jm1, k] + a[i, jp1, k]) + a[i, jm2, k] - a[i, jp2, k]
                 )
                 result[i, j, k, 2] = inv12h * (
-                    eight * (a[i, j, km1] - a[i, j, kp1]) - a[i, j, km2] + a[i, j, kp2]
+                    eight * (-a[i, j, km1] + a[i, j, kp1]) + a[i, j, km2] - a[i, j, kp2]
                 )
     return result
 
@@ -622,7 +622,7 @@ def derivative7(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
 
     Examples
     --------
@@ -658,22 +658,22 @@ def derivative7(
                 kp3 = k + 3
                 km3 = k - 3
                 result[i, j, k, 0] = inv60h * (
-                    fortyfive * (a[im1, j, k] - a[ip1, j, k])
-                    + nine * (-a[im2, j, k] + a[ip2, j, k])
-                    + a[im3, j, k]
-                    - a[ip3, j, k]
+                    fortyfive * (-a[im1, j, k] + a[ip1, j, k])
+                    + nine * (a[im2, j, k] - a[ip2, j, k])
+                    - a[im3, j, k]
+                    + a[ip3, j, k]
                 )
                 result[i, j, k, 1] = inv60h * (
-                    fortyfive * (a[i, jm1, k] - a[i, jp1, k])
-                    + nine * (-a[i, jm2, k] + a[i, jp2, k])
-                    + a[i, jm3, k]
-                    - a[i, jp3, k]
+                    fortyfive * (-a[i, jm1, k] + a[i, jp1, k])
+                    + nine * (a[i, jm2, k] - a[i, jp2, k])
+                    - a[i, jm3, k]
+                    + a[i, jp3, k]
                 )
                 result[i, j, k, 2] = inv60h * (
-                    fortyfive * (a[i, j, km1] - a[i, j, kp1])
-                    + nine * (-a[i, j, km2] + a[i, j, kp2])
-                    + a[i, j, km3]
-                    - a[i, j, kp3]
+                    fortyfive * (-a[i, j, km1] + a[i, j, kp1])
+                    + nine * (a[i, j, km2] - a[i, j, kp2])
+                    - a[i, j, km3]
+                    + a[i, j, kp3]
                 )
     return result
 
@@ -685,7 +685,144 @@ def derivative7(
     cache=True,
     parallel=True,
 )
-def derivative5_with_fR_n1(
+def derivative2_fR_n1(
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid
+
+    Two-point forward stencil derivative with finite differences
+
+    grad(a) + f*grad(b^2) // For f(R) n = 1
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative2_fR_n1
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative2_fR_n1(scalar_field)
+    """
+    ncells_1d = a.shape[0]
+    invh = np.float32(ncells_1d)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
+    for i in prange(-1, ncells_1d - 1):
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                kp1 = k + 1
+                minus_aijk = -a[i, j, k]
+                minus_bijk_2 = -b[i, j, k] ** 2
+                result[i, j, k, 0] = invh * (
+                    (minus_aijk + a[ip1, j, k] + f * (minus_bijk_2 + b[ip1, j, k] ** 2))
+                )
+                result[i, j, k, 1] = invh * (
+                    (minus_aijk + a[i, jp1, k] + f * (minus_bijk_2 + b[i, jp1, k] ** 2))
+                )
+                result[i, j, k, 2] = invh * (
+                    (minus_aijk + a[i, j, kp1] + f * (minus_bijk_2 + b[i, j, kp1] ** 2))
+                )
+    return result
+
+
+@utils.time_me
+@njit(
+    ["f4[:,:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def derivative3_fR_n1(
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid
+
+    Three-point stencil derivative with finite differences
+
+    grad(a) + f*grad(b^2) // For f(R) n = 1
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative3_fR_n1
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative3_fR_n1(scalar_field)
+    """
+    ncells_1d = a.shape[0]
+    inv2h = np.float32(0.5 * ncells_1d)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
+    for i in prange(-1, ncells_1d - 1):
+        ip1 = i + 1
+        im1 = i - 1
+        for j in prange(-1, ncells_1d - 1):
+            jp1 = j + 1
+            jm1 = j - 1
+            for k in prange(-1, ncells_1d - 1):
+                kp1 = k + 1
+                km1 = k - 1
+                result[i, j, k, 0] = inv2h * (
+                    (
+                        -a[im1, j, k]
+                        + a[ip1, j, k]
+                        + f * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
+                    )
+                )
+                result[i, j, k, 1] = inv2h * (
+                    (
+                        -a[i, jm1, k]
+                        + a[i, jp1, k]
+                        + f * (-b[i, jm1, k] ** 2 + b[i, jp1, k] ** 2)
+                    )
+                )
+                result[i, j, k, 2] = inv2h * (
+                    (
+                        -a[i, j, km1]
+                        + a[i, j, kp1]
+                        + f * (-b[i, j, km1] ** 2 + b[i, j, kp1] ** 2)
+                    )
+                )
+    return result
+
+
+@utils.time_me
+@njit(
+    ["f4[:,:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def derivative5_fR_n1(
     a: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     f: np.float32,
@@ -708,14 +845,14 @@ def derivative5_with_fR_n1(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
 
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.mesh import derivative5_with_fR_n1
+    >>> from pysco.mesh import derivative5_fR_n1
     >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> deriv = derivative5_with_fR_n1(scalar_field)
+    >>> deriv = derivative5_fR_n1(scalar_field)
     """
     eight = np.float32(8)
     ncells_1d = a.shape[0]
@@ -739,37 +876,258 @@ def derivative5_with_fR_n1(
                 result[i, j, k, 0] = inv12h * (
                     eight
                     * (
-                        a[im1, j, k]
-                        - a[ip1, j, k]
-                        + f * (b[im1, j, k] ** 2 - b[ip1, j, k] ** 2)
+                        -a[im1, j, k]
+                        + a[ip1, j, k]
+                        + f * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
                     )
-                    - a[im2, j, k]
-                    + a[ip2, j, k]
-                    + f * (-b[im2, j, k] ** 2 + b[ip2, j, k] ** 2)
+                    + a[im2, j, k]
+                    - a[ip2, j, k]
+                    + f * (b[im2, j, k] ** 2 - b[ip2, j, k] ** 2)
                 )
                 result[i, j, k, 1] = inv12h * (
                     eight
                     * (
-                        a[i, jm1, k]
-                        - a[i, jp1, k]
-                        + f * (b[i, jm1, k] ** 2 - b[i, jp1, k] ** 2)
+                        -a[i, jm1, k]
+                        + a[i, jp1, k]
+                        + f * (-b[i, jm1, k] ** 2 + b[i, jp1, k] ** 2)
                     )
-                    - a[i, jm2, k]
-                    + a[i, jp2, k]
-                    + f * (-b[i, jm2, k] ** 2 + b[i, jp2, k] ** 2)
+                    + a[i, jm2, k]
+                    - a[i, jp2, k]
+                    + f * (b[i, jm2, k] ** 2 - b[i, jp2, k] ** 2)
                 )
                 result[i, j, k, 2] = inv12h * (
                     eight
                     * (
-                        a[i, j, km1]
-                        - a[i, j, kp1]
-                        + f * (b[i, j, km1] ** 2 - b[i, j, kp1] ** 2)
+                        -a[i, j, km1]
+                        + a[i, j, kp1]
+                        + f * (-b[i, j, km1] ** 2 + b[i, j, kp1] ** 2)
                     )
-                    - a[i, j, km2]
-                    + a[i, j, kp2]
-                    + f * (-b[i, j, km2] ** 2 + b[i, j, kp2] ** 2)
+                    + a[i, j, km2]
+                    - a[i, j, kp2]
+                    + f * (b[i, j, km2] ** 2 - b[i, j, kp2] ** 2)
                 )
     return result
+
+
+@utils.time_me
+@njit(
+    ["f4[:,:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def derivative7_fR_n1(
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid
+
+    Seven-point stencil derivative with finite differences
+
+    grad(a) + f*grad(b^2) // For f(R) n = 1
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative7_fR_n1
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative7_fR_n1(scalar_field)
+    """
+    nine = np.float32(9)
+    fortyfive = np.float32(45)
+    ncells_1d = a.shape[0]
+    inv60h = np.float32(ncells_1d / 60.0)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
+
+    for i in prange(-3, ncells_1d - 3):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        ip3 = i + 3
+        im3 = i - 3
+        for j in prange(-3, ncells_1d - 3):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            jp3 = j + 3
+            jm3 = j - 3
+            for k in prange(-3, ncells_1d - 3):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+                kp3 = k + 3
+                km3 = k - 3
+                result[i, j, k, 0] = inv60h * (
+                    fortyfive
+                    * (
+                        -a[im1, j, k]
+                        + a[ip1, j, k]
+                        + f * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
+                    )
+                    + nine
+                    * (
+                        +a[im2, j, k]
+                        - a[ip2, j, k]
+                        + f * (b[im2, j, k] ** 2 - b[ip2, j, k] ** 2)
+                    )
+                    - a[im3, j, k]
+                    + a[ip3, j, k]
+                    + f * (-b[im2, j, k] ** 2 + b[ip2, j, k] ** 2)
+                )
+
+                result[i, j, k, 1] = inv60h * (
+                    fortyfive
+                    * (
+                        -a[i, jm1, k]
+                        + a[i, jp1, k]
+                        + f * (-b[i, jm1, k] ** 2 + b[i, jp1, k] ** 2)
+                    )
+                    + nine
+                    * (
+                        +a[i, jm2, k]
+                        - a[i, jp2, k]
+                        + f * (b[i, jm2, k] ** 2 - b[i, jp2, k] ** 2)
+                    )
+                    - a[i, jm3, k]
+                    + a[i, jm3, k]
+                    + f * (-b[i, jm3, k] ** 2 + b[i, jp3, k] ** 2)
+                )
+                result[i, j, k, 2] = inv60h * (
+                    fortyfive
+                    * (
+                        -a[i, j, km1]
+                        + a[i, j, kp1]
+                        + f * (-b[i, j, km1] ** 2 + b[i, j, kp1] ** 2)
+                    )
+                    + nine
+                    * (
+                        +a[i, j, km2]
+                        - a[i, j, kp2]
+                        + f * (b[i, j, km2] ** 2 - b[i, j, kp2] ** 2)
+                    )
+                    - a[i, j, km3]
+                    + a[i, j, kp3]
+                    + f * (-b[i, j, km3] ** 2 + b[i, j, kp3] ** 2)
+                )
+    return result
+
+
+@utils.time_me
+@njit(
+    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def add_derivative2_fR_n1(
+    force: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+) -> None:
+    """Inplace add spatial derivatives of a scalar field on a grid
+
+    Two-point forward stencil derivative with finite differences
+
+    force += f grad(b^2) // For f(R) n = 1
+
+    Parameters
+    ----------
+    force : npt.NDArray[np.float32]
+        Force field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import add_derivative2_fR_n1
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
+    >>> add_derivative2_fR_n1(deriv_field, scalar_field)
+    """
+    ncells_1d = b.shape[0]
+    invh_f = np.float32(ncells_1d * f)
+    for i in prange(-1, ncells_1d - 1):
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                kp1 = k + 1
+                minus_bijk_2 = -b[i, j, k] ** 2
+                force[i, j, k, 0] += invh_f * (minus_bijk_2 + b[ip1, j, k] ** 2)
+                force[i, j, k, 1] += invh_f * (minus_bijk_2 + b[i, jp1, k] ** 2)
+                force[i, j, k, 2] += invh_f * (minus_bijk_2 + b[i, j, kp1] ** 2)
+
+
+@utils.time_me
+@njit(
+    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def add_derivative3_fR_n1(
+    force: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+) -> None:
+    """Inplace add spatial derivatives of a scalar field on a grid
+
+    Three-point stencil derivative with finite differences
+
+    force += f grad(b^2) // For f(R) n = 1
+
+    Parameters
+    ----------
+    force : npt.NDArray[np.float32]
+        Force field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import add_derivative3_fR_n1
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
+    >>> add_derivative3_fR_n1(deriv_field, scalar_field)
+    """
+    ncells_1d = b.shape[0]
+    inv2h_f = np.float32(0.5 * ncells_1d * f)
+    for i in prange(-2, ncells_1d - 2):
+        ip1 = i + 1
+        im1 = i - 1
+        for j in prange(-2, ncells_1d - 2):
+            jp1 = j + 1
+            jm1 = j - 1
+            for k in prange(-2, ncells_1d - 2):
+                kp1 = k + 1
+                km1 = k - 1
+                force[i, j, k, 0] += inv2h_f * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
+                force[i, j, k, 1] += inv2h_f * (-b[i, jm1, k] ** 2 + b[i, jp1, k] ** 2)
+                force[i, j, k, 2] += inv2h_f * (-b[i, j, km1] ** 2 + b[i, j, kp1] ** 2)
 
 
 @utils.time_me
@@ -807,9 +1165,9 @@ def add_derivative5_fR_n1(
     >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
     >>> add_derivative5_fR_n1(deriv_field, scalar_field)
     """
-    eightf = np.float32(8 * f)
+    eight = np.float32(8)
     ncells_1d = b.shape[0]
-    inv12h = np.float32(ncells_1d / 12.0)
+    inv12h_f = np.float32(f * ncells_1d / 12.0)
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
@@ -825,17 +1183,100 @@ def add_derivative5_fR_n1(
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                force[i, j, k, 0] += inv12h * (
-                    eightf * (b[im1, j, k] ** 2 - b[ip1, j, k] ** 2)
-                    + f * (-b[im2, j, k] ** 2 + b[ip2, j, k] ** 2)
+                force[i, j, k, 0] += inv12h_f * (
+                    eight * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
+                    + b[im2, j, k] ** 2
+                    - b[ip2, j, k] ** 2
                 )
-                force[i, j, k, 1] += inv12h * (
-                    eightf * (b[i, jm1, k] ** 2 - b[i, jp1, k] ** 2)
-                    + f * (-b[i, jm2, k] ** 2 + b[i, jp2, k] ** 2)
+                force[i, j, k, 1] += inv12h_f * (
+                    eight * (-b[i, jm1, k] ** 2 + b[i, jp1, k] ** 2)
+                    + b[i, jm2, k] ** 2
+                    - b[i, jp2, k] ** 2
                 )
-                force[i, j, k, 2] += inv12h * (
-                    eightf * (b[i, j, km1] ** 2 - b[i, j, kp1] ** 2)
-                    + f * (-b[i, j, km2] ** 2 + b[i, j, kp2] ** 2)
+                force[i, j, k, 2] += inv12h_f * (
+                    eight * (-b[i, j, km1] ** 2 + b[i, j, kp1] ** 2)
+                    + b[i, j, km2] ** 2
+                    - b[i, j, kp2] ** 2
+                )
+
+
+@utils.time_me
+@njit(
+    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def add_derivative7_fR_n1(
+    force: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+) -> None:
+    """Inplace add spatial derivatives of a scalar field on a grid
+
+    Seven-point stencil derivative with finite differences
+
+    force += f*grad(b^2) // For f(R) n = 1
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import add_derivative7_fR_n1
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
+    >>> add_derivative7_fR_n1(deriv_field, scalar_field)
+    """
+    nine = np.float32(9)
+    fortyfive = np.float32(45.0)
+    ncells_1d = b.shape[0]
+    inv60h_f = np.float32(f * ncells_1d / 60.0)
+    for i in prange(-2, ncells_1d - 2):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        ip3 = i + 3
+        im3 = i - 3
+        for j in prange(-2, ncells_1d - 2):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            jp3 = j + 3
+            jm3 = j - 3
+            for k in prange(-2, ncells_1d - 2):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+                kp3 = k + 3
+                km3 = k - 3
+                force[i, j, k, 0] += inv60h_f * (
+                    fortyfive * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
+                    + nine * (+b[im2, j, k] ** 2 - b[ip2, j, k] ** 2)
+                    - b[im3, j, k] ** 2
+                    + b[ip3, j, k] ** 2
+                )
+                force[i, j, k, 1] += inv60h_f * (
+                    fortyfive * (-b[i, jm1, k] ** 2 + b[i, jp1, k] ** 2)
+                    + nine * (+b[i, jm2, k] ** 2 - b[i, jp2, k] ** 2)
+                    - b[i, jm3, k] ** 2
+                    + b[i, jp3, k] ** 2
+                )
+                force[i, j, k, 2] += inv60h_f * (
+                    fortyfive * (-b[i, j, km1] ** 2 + b[i, j, kp1] ** 2)
+                    + nine * (+b[i, j, km2] ** 2 - b[i, j, kp2] ** 2)
+                    - b[i, j, km3] ** 2
+                    + b[i, j, kp3] ** 2
                 )
 
 
@@ -846,7 +1287,138 @@ def add_derivative5_fR_n1(
     cache=True,
     parallel=True,
 )
-def derivative5_with_fR_n2(
+def derivative2_fR_n2(
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid
+
+    Two-point forward stencil derivative with finite differences
+
+    grad(a) + f*grad(b^3) // For f(R) n = 2
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative2_fR_n2
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative2_fR_n2(scalar_field)
+    """
+    ncells_1d = a.shape[0]
+    invh = np.float32(ncells_1d)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
+    for i in prange(-1, ncells_1d - 1):
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                kp1 = k + 1
+                minus_aijk = -a[i, j, k]
+                minus_bijk_3 = -b[i, j, k] ** 3
+                result[i, j, k, 0] = invh * (
+                    minus_aijk + a[ip1, j, k] + f * (minus_bijk_3 + b[ip1, j, k] ** 3)
+                )
+                result[i, j, k, 1] = invh * (
+                    minus_aijk + a[i, jp1, k] + f * (minus_bijk_3 + b[i, jp1, k] ** 3)
+                )
+                result[i, j, k, 2] = invh * (
+                    minus_aijk + a[i, j, kp1] + f * (minus_bijk_3 + b[i, j, kp1] ** 3)
+                )
+    return result
+
+
+@utils.time_me
+@njit(
+    ["f4[:,:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def derivative3_fR_n2(
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid
+
+    Three-point stencil derivative with finite differences
+
+    grad(a) + f*grad(b^3) // For f(R) n = 2
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative3_fR_n2
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative3_fR_n2(scalar_field)
+    """
+    ncells_1d = a.shape[0]
+    inv2h = np.float32(0.5 * ncells_1d)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
+    for i in prange(-1, ncells_1d - 1):
+        ip1 = i + 1
+        im1 = i - 1
+        for j in prange(-1, ncells_1d - 1):
+            jp1 = j + 1
+            jm1 = j - 1
+            for k in prange(-1, ncells_1d - 1):
+                kp1 = k + 1
+                km1 = k - 1
+                result[i, j, k, 0] = inv2h * (
+                    -a[im1, j, k]
+                    + a[ip1, j, k]
+                    + f * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
+                )
+                result[i, j, k, 1] = inv2h * (
+                    -a[i, jm1, k]
+                    + a[i, jp1, k]
+                    + f * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
+                )
+                result[i, j, k, 2] = inv2h * (
+                    -a[i, j, km1]
+                    + a[i, j, kp1]
+                    + f * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
+                )
+    return result
+
+
+@utils.time_me
+@njit(
+    ["f4[:,:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def derivative5_fR_n2(
     a: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     f: np.float32,
@@ -869,14 +1441,14 @@ def derivative5_with_fR_n2(
     Returns
     -------
     npt.NDArray[np.float32]
-        Field derivative (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
 
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.mesh import derivative5_with_fR_n2
+    >>> from pysco.mesh import derivative5_fR_n2
     >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> deriv = derivative5_with_fR_n2(scalar_field)
+    >>> deriv = derivative5_fR_n2(scalar_field)
     """
     eight = np.float32(8)
     ncells_1d = a.shape[0]
@@ -900,37 +1472,258 @@ def derivative5_with_fR_n2(
                 result[i, j, k, 0] = inv12h * (
                     eight
                     * (
-                        a[im1, j, k]
-                        - a[ip1, j, k]
-                        + f * (b[im1, j, k] ** 3 - b[ip1, j, k] ** 3)
+                        -a[im1, j, k]
+                        + a[ip1, j, k]
+                        + f * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
                     )
-                    - a[im2, j, k]
-                    + a[ip2, j, k]
-                    + f * (-b[im2, j, k] ** 3 + b[ip2, j, k] ** 3)
+                    + a[im2, j, k]
+                    - a[ip2, j, k]
+                    + f * (b[im2, j, k] ** 3 - b[ip2, j, k] ** 3)
                 )
                 result[i, j, k, 1] = inv12h * (
                     eight
                     * (
-                        a[i, jm1, k]
-                        - a[i, jp1, k]
-                        + f * (b[i, jm1, k] ** 3 - b[i, jp1, k] ** 3)
+                        -a[i, jm1, k]
+                        + a[i, jp1, k]
+                        + f * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
                     )
-                    - a[i, jm2, k]
-                    + a[i, jp2, k]
-                    + f * (-b[i, jm2, k] ** 3 + b[i, jp2, k] ** 3)
+                    + a[i, jm2, k]
+                    - a[i, jp2, k]
+                    + f * (b[i, jm2, k] ** 3 - b[i, jp2, k] ** 3)
                 )
                 result[i, j, k, 2] = inv12h * (
                     eight
                     * (
-                        a[i, j, km1]
-                        - a[i, j, kp1]
-                        + f * (b[i, j, km1] ** 3 - b[i, j, kp1] ** 3)
+                        -a[i, j, km1]
+                        + a[i, j, kp1]
+                        + f * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
                     )
-                    - a[i, j, km2]
-                    + a[i, j, kp2]
-                    + f * (-b[i, j, km2] ** 3 + b[i, j, kp2] ** 3)
+                    + a[i, j, km2]
+                    - a[i, j, kp2]
+                    + f * (b[i, j, km2] ** 3 - b[i, j, kp2] ** 3)
                 )
     return result
+
+
+@utils.time_me
+@njit(
+    ["f4[:,:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def derivative7_fR_n2(
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid
+
+    Seven-point stencil derivative with finite differences
+
+    grad(a) + f*grad(b^3) // For f(R) n = 2
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative7_fR_n2
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative7_fR_n2(scalar_field)
+    """
+    nine = np.float32(9)
+    fortyfive = np.float32(45)
+    ncells_1d = a.shape[0]
+    inv60h = np.float32(ncells_1d / 60.0)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
+
+    for i in prange(-3, ncells_1d - 3):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        ip3 = i + 3
+        im3 = i - 3
+        for j in prange(-3, ncells_1d - 3):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            jp3 = j + 3
+            jm3 = j - 3
+            for k in prange(-3, ncells_1d - 3):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+                kp3 = k + 3
+                km3 = k - 3
+                result[i, j, k, 0] = inv60h * (
+                    fortyfive
+                    * (
+                        -a[im1, j, k]
+                        + a[ip1, j, k]
+                        + f * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
+                    )
+                    + nine
+                    * (
+                        +a[im2, j, k]
+                        - a[ip2, j, k]
+                        + f * (b[im2, j, k] ** 3 - b[ip2, j, k] ** 3)
+                    )
+                    - a[im3, j, k]
+                    + a[ip3, j, k]
+                    + f * (-b[im2, j, k] ** 3 + b[ip2, j, k] ** 3)
+                )
+
+                result[i, j, k, 1] = inv60h * (
+                    fortyfive
+                    * (
+                        -a[i, jm1, k]
+                        + a[i, jp1, k]
+                        + f * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
+                    )
+                    + nine
+                    * (
+                        +a[i, jm2, k]
+                        - a[i, jp2, k]
+                        + f * (b[i, jm2, k] ** 3 - b[i, jp2, k] ** 3)
+                    )
+                    - a[i, jm3, k]
+                    + a[i, jm3, k]
+                    + f * (-b[i, jm3, k] ** 3 + b[i, jp3, k] ** 3)
+                )
+                result[i, j, k, 2] = inv60h * (
+                    fortyfive
+                    * (
+                        -a[i, j, km1]
+                        + a[i, j, kp1]
+                        + f * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
+                    )
+                    + nine
+                    * (
+                        +a[i, j, km2]
+                        - a[i, j, kp2]
+                        + f * (b[i, j, km2] ** 3 - b[i, j, kp2] ** 3)
+                    )
+                    - a[i, j, km3]
+                    + a[i, j, kp3]
+                    + f * (-b[i, j, km3] ** 3 + b[i, j, kp3] ** 3)
+                )
+    return result
+
+
+@utils.time_me
+@njit(
+    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def add_derivative2_fR_n2(
+    force: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+) -> None:
+    """Inplace add spatial derivatives of a scalar field on a grid
+
+    Two-point forward stencil derivative with finite differences
+
+    force += f*grad(b^3) // For f(R) n = 2
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import add_derivative5_fR_n2
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
+    >>> add_derivative5_fR_n2(deriv_field, scalar_field)
+    """
+    ncells_1d = b.shape[0]
+    invh_f = np.float32(ncells_1d * f)
+    for i in prange(-1, ncells_1d - 1):
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                kp1 = k + 1
+                minus_bijk_3 = -b[i, j, k] ** 3
+                force[i, j, k, 0] += invh_f * (minus_bijk_3 + b[ip1, j, k] ** 3)
+                force[i, j, k, 1] += invh_f * (minus_bijk_3 + b[i, jp1, k] ** 3)
+                force[i, j, k, 2] += invh_f * (minus_bijk_3 + b[i, j, kp1] ** 3)
+
+
+@utils.time_me
+@njit(
+    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def add_derivative3_fR_n2(
+    force: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+) -> None:
+    """Inplace add spatial derivatives of a scalar field on a grid
+
+    Three-point stencil derivative with finite differences
+
+    force += f*grad(b^3) // For f(R) n = 2
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import add_derivative3_fR_n2
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
+    >>> add_derivative3_fR_n2(deriv_field, scalar_field)
+    """
+    ncells_1d = b.shape[0]
+    inv2h_f = np.float32(0.5 * ncells_1d * f)
+    for i in prange(-1, ncells_1d - 1):
+        ip1 = i + 1
+        im1 = i - 1
+        for j in prange(-1, ncells_1d - 1):
+            jp1 = j + 1
+            jm1 = j - 1
+            for k in prange(-1, ncells_1d - 1):
+                kp1 = k + 1
+                km1 = k - 1
+                force[i, j, k, 0] += inv2h_f * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
+                force[i, j, k, 1] += inv2h_f * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
+                force[i, j, k, 2] += inv2h_f * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
 
 
 @utils.time_me
@@ -968,9 +1761,9 @@ def add_derivative5_fR_n2(
     >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
     >>> add_derivative5_fR_n2(deriv_field, scalar_field)
     """
-    eightf = np.float32(8 * f)
+    eight = np.float32(8)
     ncells_1d = b.shape[0]
-    inv12h = np.float32(ncells_1d / 12.0)
+    inv12h_f = np.float32(f * ncells_1d / 12.0)
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
@@ -986,18 +1779,257 @@ def add_derivative5_fR_n2(
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
-                force[i, j, k, 0] += inv12h * (
-                    eightf * (b[im1, j, k] ** 3 - b[ip1, j, k] ** 3)
-                    + f * (-b[im2, j, k] ** 3 + b[ip2, j, k] ** 3)
+                force[i, j, k, 0] += inv12h_f * (
+                    eight * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
+                    + (+b[im2, j, k] ** 3 - b[ip2, j, k] ** 3)
                 )
-                force[i, j, k, 1] += inv12h * (
-                    eightf * (b[i, jm1, k] ** 3 - b[i, jp1, k] ** 3)
-                    + f * (-b[i, jm2, k] ** 3 + b[i, jp2, k] ** 3)
+                force[i, j, k, 1] += inv12h_f * (
+                    eight * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
+                    + (+b[i, jm2, k] ** 3 - b[i, jp2, k] ** 3)
                 )
-                force[i, j, k, 2] += inv12h * (
-                    eightf * (b[i, j, km1] ** 3 - b[i, j, kp1] ** 3)
-                    + f * (-b[i, j, km2] ** 3 + b[i, j, kp2] ** 3)
+                force[i, j, k, 2] += inv12h_f * (
+                    eight * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
+                    + (+b[i, j, km2] ** 3 - b[i, j, kp2] ** 3)
                 )
+
+
+@utils.time_me
+@njit(
+    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def add_derivative7_fR_n2(
+    force: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+) -> None:
+    """Inplace add spatial derivatives of a scalar field on a grid
+
+    Seven-point stencil derivative with finite differences
+
+    force += f*grad(b^3) // For f(R) n = 2
+
+    Parameters
+    ----------
+    force : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import add_derivative7_fR_n2
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
+    >>> add_derivative7_fR_n2(deriv_field, scalar_field)
+    """
+    nine = np.float32(9)
+    fortyfive = np.float32(45.0)
+    ncells_1d = b.shape[0]
+    inv60h_f = np.float32(f * ncells_1d / 60.0)
+    for i in prange(-2, ncells_1d - 2):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        for j in prange(-2, ncells_1d - 2):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            for k in prange(-2, ncells_1d - 2):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+                force[i, j, k, 0] += inv60h_f * (
+                    fortyfive * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
+                    + nine * (+b[im2, j, k] ** 3 - b[ip2, j, k] ** 3)
+                    - b[im2, j, k] ** 3
+                    + b[ip2, j, k] ** 3
+                )
+                force[i, j, k, 1] += inv60h_f * (
+                    fortyfive * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
+                    + nine * (+b[i, jm2, k] ** 3 - b[i, jp2, k] ** 3)
+                    - b[i, jm2, k] ** 3
+                    + b[i, jp2, k] ** 3
+                )
+                force[i, j, k, 2] += inv60h_f * (
+                    fortyfive * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
+                    + nine * (+b[i, j, km2] ** 3 - b[i, j, kp2] ** 3)
+                    - b[i, j, km2] ** 3
+                    + b[i, j, kp2] ** 3
+                )
+
+
+def derivative(
+    a: npt.NDArray[np.float32], gradient_order: int
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid
+
+    N-point stencil derivative with finite differences
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    gradient_order : int
+        Gradient order
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative
+    >>> gradient_order = 5
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative(scalar_field, gradient_order)
+    """
+    match gradient_order:
+        case 2:
+            return derivative2(a)
+        case 3:
+            return derivative3(a)
+        case 5:
+            return derivative5(a)
+        case 7:
+            return derivative7(a)
+        case _:
+            raise ValueError(f"Unsupported: {gradient_order=}")
+
+
+def derivative_fR(
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+    fR_n: int,
+    gradient_order: int,
+) -> npt.NDArray[np.float32]:
+    """Spatial derivatives of a scalar field on a grid
+
+    N-point stencil derivative with finite differences
+
+    Parameters
+    ----------
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+    fR_n : int
+        f(R) n parameter
+    gradient_order : int
+        Gradient order
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative
+    >>> gradient_order = 5
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative(scalar_field, gradient_order)
+    """
+    if fR_n == 1:
+        match gradient_order:
+            case 2:
+                return derivative2_fR_n1(a, b, f)
+            case 3:
+                return derivative3_fR_n1(a, b, f)
+            case 5:
+                return derivative5_fR_n1(a, b, f)
+            case 7:
+                return derivative7_fR_n1(a, b, f)
+            case _:
+                raise ValueError(f"Unsupported: {gradient_order=}")
+    elif fR_n == 2:
+        match gradient_order:
+            case 2:
+                return derivative2_fR_n2(a, b, f)
+            case 3:
+                return derivative3_fR_n2(a, b, f)
+            case 5:
+                return derivative5_fR_n2(a, b, f)
+            case 7:
+                return derivative7_fR_n2(a, b, f)
+            case _:
+                raise ValueError(f"Unsupported: {gradient_order=}")
+    else:
+        raise ValueError(f"Unsupported: {fR_n=}")
+
+
+def add_derivative_fR(
+    force: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    f: np.float32,
+    fR_n: int,
+    gradient_order: int,
+) -> None:
+    """Spatial derivatives of a scalar field on a grid
+
+    N-point stencil derivative with finite differences
+
+    Parameters
+    ----------
+    force : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Additional Field [N_cells_1d, N_cells_1d, N_cells_1d]
+    f : np.float32
+        Multiplicative factor to additional field
+    fR_n : int
+        f(R) n parameter
+    gradient_order : int
+        Gradient order
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative
+    >>> gradient_order = 5
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative(scalar_field, gradient_order)
+    """
+    if fR_n == 1:
+        match gradient_order:
+            case 2:
+                add_derivative2_fR_n1(force, b, f)
+            case 3:
+                add_derivative3_fR_n1(force, b, f)
+            case 5:
+                add_derivative5_fR_n1(force, b, f)
+            case 7:
+                add_derivative7_fR_n1(force, b, f)
+            case _:
+                raise ValueError(f"Unsupported: {gradient_order=}")
+    elif fR_n == 2:
+        match gradient_order:
+            case 2:
+                add_derivative2_fR_n2(force, b, f)
+            case 3:
+                add_derivative3_fR_n2(force, b, f)
+            case 5:
+                add_derivative5_fR_n2(force, b, f)
+            case 7:
+                add_derivative7_fR_n2(force, b, f)
+            case _:
+                raise ValueError(f"Unsupported: {gradient_order=}")
+    else:
+        raise ValueError(f"Unsupported: {fR_n=}")
 
 
 # TODO: To be improved when numba atomics are available

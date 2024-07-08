@@ -552,7 +552,7 @@ def gradient_laplacian_fourier_exact(
     >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
     >>> result = gradient_laplacian_fourier_exact(complex_field)
     """
-    ii = np.complex64(1j)
+    minus_ii = np.complex64(-1j)
     invtwopi = np.float32(0.5 / np.pi)
     ncells_1d = len(x)
     middle = ncells_1d // 2
@@ -572,7 +572,7 @@ def gradient_laplacian_fourier_exact(
             for k in prange(middle + 1):
                 kz = np.float32(k)
                 invk2 = invtwopi / (kx2_ky2 + kz**2)
-                x_k2_tmp = ii * invk2 * x[i, j, k]
+                x_k2_tmp = minus_ii * invk2 * x[i, j, k]
                 result[i, j, k, 0] = x_k2_tmp * kx
                 result[i, j, k, 1] = x_k2_tmp * ky
                 result[i, j, k, 2] = x_k2_tmp * kz
@@ -612,7 +612,7 @@ def gradient_laplacian_fourier_compensated(
     >>> p_val = 2
     >>> result = gradient_laplacian_fourier_compensated(complex_field, p_val)
     """
-    ii = np.complex64(1j)
+    minus_ii = np.complex64(-1j)
     invtwopi = np.float32(0.5 / np.pi)
     ncells_1d = len(x)
     prefactor = np.float32(1.0 / ncells_1d)
@@ -637,7 +637,7 @@ def gradient_laplacian_fourier_compensated(
                 kz = np.float32(k)
                 w_xyz = w_xy * np.sinc(kz * prefactor)
                 invk2 = invtwopi / (kx2_ky2 + kz**2)
-                x_k2_tmp = ii * w_xyz**minus_twop * invk2 * x[i, j, k]
+                x_k2_tmp = minus_ii * w_xyz**minus_twop * invk2 * x[i, j, k]
                 result[i, j, k, 0] = x_k2_tmp * kx
                 result[i, j, k, 1] = x_k2_tmp * ky
                 result[i, j, k, 2] = x_k2_tmp * kz
@@ -673,7 +673,7 @@ def gradient_laplacian_fourier_fdk(
     >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
     >>> result = gradient_laplacian_fourier_fdk(complex_field)
     """
-    ii = np.complex64(1j)
+    minus_ii = np.complex64(-1j)
     invpi = np.float32(0.5 / np.pi)
     twopi = np.float32(2 * np.pi)
     ncells_1d = len(x)
@@ -712,7 +712,7 @@ def gradient_laplacian_fourier_fdk(
                 d1_w_z = invsix * (eight * sin_w_z - sin_2w_z)
                 f_z = (w_z * np.sinc(invpi * w_z)) ** 2
                 inv_f_xyz = h / (f_xy + f_z)
-                x_k2_tmp = ii * x[i, j, k] * inv_f_xyz
+                x_k2_tmp = minus_ii * x[i, j, k] * inv_f_xyz
                 result[i, j, k, 0] = x_k2_tmp * d1_w_x
                 result[i, j, k, 1] = x_k2_tmp * d1_w_y
                 result[i, j, k, 2] = x_k2_tmp * d1_w_z
@@ -752,7 +752,7 @@ def gradient_laplacian_fourier_hammings(
     >>> p_val = 2
     >>> result = gradient_laplacian_fourier_hammings(complex_field, p_val)
     """
-    ii = np.complex64(1j)
+    minus_ii = np.complex64(-1j)
     invfourpi2 = np.float32(0.25 / np.pi**2)
     twopi = np.float32(2 * np.pi)
     two = np.float32(2)
@@ -794,7 +794,7 @@ def gradient_laplacian_fourier_hammings(
                 d1_w_z = invsix * (eight * sin_w_z - sin_2w_z)
                 k2 = h * weight_xyz**twop * (kx2_ky2 + kz**2)
                 invk2 = invfourpi2 / k2
-                x_k2_tmp = ii * invk2 * x[i, j, k]
+                x_k2_tmp = minus_ii * invk2 * x[i, j, k]
                 result[i, j, k, 0] = x_k2_tmp * d1_w_x
                 result[i, j, k, 1] = x_k2_tmp * d1_w_y
                 result[i, j, k, 2] = x_k2_tmp * d1_w_z

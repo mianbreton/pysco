@@ -39,6 +39,7 @@ param = {
     "mass_scheme": "TSC",
     "Courant_factor": 1.0,
     "linear_newton_solver": "multigrid",
+    "gradient_stencil_order": 5,
     "Npre": 2,
     "Npost": 1,
     "epsrel": 1e-2,

@@ -213,6 +213,7 @@ n_reorder = 25  # Re-order particles every n_reorder steps
 Courant_factor = 0.8 # Cell fraction for time stepping (Courant_factor < 1 means more time steps)
 # Newtonian solver
 linear_newton_solver = multigrid # Linear solver for Newton's method: "multigrid", "fft" or "full_fft"
+gradient_stencil_order = 5 # n-point stencil with n = 2, 3, 5 or 7
 # Multigrid
 Npre = 2  # Number of pre-smoothing Gauss-Seidel iterations
 Npost = 1  # Number of post-smoothing Gauss-Seidel iterations
@@ -265,6 +266,7 @@ param = {
     "mass_scheme": "TSC",
     "Courant_factor": 1.0,
     "linear_newton_solver": "multigrid",
+    "gradient_stencil_order": 5,
     "Npre": 2,
     "Npost": 1,
     "epsrel": 1e-2,

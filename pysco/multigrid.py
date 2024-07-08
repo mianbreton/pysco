@@ -58,10 +58,7 @@ def linear(
     >>> # Call the linear multigrid solver
     >>> result = linear(x_initial, rhs, grid_size, parameters)
     """
-    if (
-        param["compute_additional_field"]
-        and "fr".casefold() == param["theory"].casefold()
-    ):
+    if param["compute_additional_field"] and "fr" == param["theory"].casefold():
         tolerance = 1e-20  # For scalaron field do not use any tolerance threshold but rather a convergence of residual
     else:
         if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
@@ -179,10 +176,7 @@ def truncation_error(
     >>> # Call the truncation error estimator
     >>> error_estimate = truncation_error(potential, grid_size, parameters)
     """
-    if (
-        param["compute_additional_field"]
-        and "fr".casefold() == param["theory"].casefold()
-    ):
+    if param["compute_additional_field"] and "fr" == param["theory"].casefold():
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
             return cubic.truncation_error(x, b, h, q)
@@ -355,10 +349,7 @@ def smoothing(
     >>> # Call the function
     >>> smoothing(potential, density, grid_size, smoothing_iterations, parameters)
     """
-    if (
-        param["compute_additional_field"]
-        and "fr".casefold() == param["theory"].casefold()
-    ):
+    if param["compute_additional_field"] and "fr" == param["theory"].casefold():
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
             if len(rhs) == 0:
@@ -430,10 +421,7 @@ def operator(
     >>> param = pd.Series({"compute_additional_field": False})
     >>> operator_result = operator(x, h, param)
     """
-    if (
-        param["compute_additional_field"]
-        and "fr".casefold() == param["theory"].casefold()
-    ):
+    if param["compute_additional_field"] and "fr" == param["theory"].casefold():
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
             return cubic.operator(x, b, h, q)

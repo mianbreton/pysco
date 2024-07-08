@@ -68,32 +68,31 @@ def generate(
     if isinstance(param["initial_conditions"], int):
         i_restart = int(param["initial_conditions"])
         param["initial_conditions"] = i_restart
-        if "parquet".casefold() == param["output_snapshot_format"].casefold():
-            filename = f"{param['base']}/output_{i_restart:05d}/particles_{param['extra']}.parquet"
-            position, velocity = iostream.read_snapshot_particles_parquet(filename)
-            param_filename = f"{param['base']}/output_{i_restart:05d}/param_{param['extra']}_{i_restart:05d}.txt"
-            param_restart = iostream.read_param_file(param_filename)
-            logging.warning(f"Parameter file read at ...{param_filename=}")
-            for key in param_restart.index:
-                if key.casefold() is not "nthreads".casefold():
-                    param[key] = param_restart[key]
-
-        elif "hdf5".casefold() == param["output_snapshot_format"].casefold():
-            import h5py
-
-            filename = (
-                f"{param['base']}/output_{i_restart:05d}/particles_{param['extra']}.h5"
-            )
-            position, velocity = iostream.read_snapshot_particles_hdf5(filename)
-            with h5py.File(filename, "r") as h5r:
-                attrs = h5r.attrs
-                for key in attrs.keys():
+        OUTPUT_SNAPSHOT_FORMAT = param["output_snapshot_format"].casefold()
+        match OUTPUT_SNAPSHOT_FORMAT:
+            case "parquet":
+                filename = f"{param['base']}/output_{i_restart:05d}/particles_{param['extra']}.parquet"
+                position, velocity = iostream.read_snapshot_particles_parquet(filename)
+                param_filename = f"{param['base']}/output_{i_restart:05d}/param_{param['extra']}_{i_restart:05d}.txt"
+                param_restart = iostream.read_param_file(param_filename)
+                logging.warning(f"Parameter file read at ...{param_filename=}")
+                for key in param_restart.index:
                     if key.casefold() is not "nthreads".casefold():
-                        param[key] = attrs[key]
-        else:
-            raise ValueError(
-                f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'"
-            )
+                        param[key] = param_restart[key]
+            case "hdf5":
+                import h5py
+
+                filename = f"{param['base']}/output_{i_restart:05d}/particles_{param['extra']}.h5"
+                position, velocity = iostream.read_snapshot_particles_hdf5(filename)
+                with h5py.File(filename, "r") as h5r:
+                    attrs = h5r.attrs
+                    for key in attrs.keys():
+                        if key.casefold() is not "nthreads".casefold():
+                            param[key] = attrs[key]
+            case _:
+                raise ValueError(
+                    f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'"
+                )
         return position, velocity
     elif param["initial_conditions"][1:4].casefold() == "LPT".casefold():
         a_start = 1.0 / (1 + param["z_start"])
@@ -103,21 +102,12 @@ def generate(
         mpc_to_km = 1e3 * pc.value
         Hz *= param["unit_t"] / mpc_to_km  # km/s/Mpc to BU
         # density_initial = generate_density(param)
-        # force = mesh.derivative(solver.fft(density_initial, param))
+        # force = mesh.derivative(solver.fft(density_initial, param), param["gradient_stencil_order"])
         psi_1lpt = generate_force(param)
         # 1LPT
         dplus_1_z0 = tables[3](0)
         dplus_1 = np.float32(tables[3](lna_start) / dplus_1_z0)
         f1 = tables[4](lna_start)
-        """ f1 = (
-            param["Om_m"]
-            * a_start ** (-3)
-            / (
-                param["Om_m"] * a_start ** (-3)
-                + param["Om_r"] * a_start ** (-4)
-                + param["Om_lambda"]
-            )
-        ) * 0.55 """
         fH_1 = np.float32(f1 * Hz)
         position, velocity = initialise_1LPT(psi_1lpt, dplus_1, fH_1)
         if param["initial_conditions"].casefold() == "1LPT".casefold():
@@ -130,8 +120,6 @@ def generate(
         f2 = tables[6](lna_start)
         fH_2 = np.float32(f2 * Hz)
         rhs_2ndorder = compute_rhs_2ndorder(psi_1lpt)
-        # potential_2ndorder = solver.fft(rhs_2ndorder, param)
-        # force_2ndorder = mesh.derivative(potential_2ndorder)
         param["MAS_index"] = 0
         psi_2lpt = solver.fft_force(rhs_2ndorder, param)
         rhs_2ndorder = 0
@@ -245,15 +233,23 @@ def finalise_initial_conditions(
 
     utils.periodic_wrap(position)
     utils.reorder_particles(position, velocity)
-    if "parquet".casefold() == param["output_snapshot_format"].casefold():
-        snap_name = f"{param['base']}/output_00000/particles_{param['extra']}.parquet"
-        iostream.write_snapshot_particles_parquet(snap_name, position, velocity)
-        param.to_csv(f"{param['base']}/output_00000/param.txt", sep="=", header=False)
-    elif "hdf5".casefold() == param["output_snapshot_format"].casefold():
-        snap_name = f"{param['base']}/output_00000/particles_{param['extra']}.h5"
-        iostream.write_snapshot_particles_hdf5(snap_name, position, velocity, param)
-    else:
-        raise ValueError(f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'")
+    OUTPUT_SNAPSHOT_FORMAT = param["output_snapshot_format"].casefold()
+    match OUTPUT_SNAPSHOT_FORMAT:
+        case "parquet":
+            snap_name = (
+                f"{param['base']}/output_00000/particles_{param['extra']}.parquet"
+            )
+            iostream.write_snapshot_particles_parquet(snap_name, position, velocity)
+            param.to_csv(
+                f"{param['base']}/output_00000/param.txt", sep="=", header=False
+            )
+        case "hdf5":
+            snap_name = f"{param['base']}/output_00000/particles_{param['extra']}.h5"
+            iostream.write_snapshot_particles_hdf5(snap_name, position, velocity, param)
+        case _:
+            raise ValueError(
+                f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'"
+            )
     logging.warning(f"Write initial snapshot...{snap_name=} {param['aexp']=}")
 
 
@@ -1209,12 +1205,12 @@ def add_2LPT(
                 psix = psi_2lpt[i, j, k, 0]
                 psiy = psi_2lpt[i, j, k, 1]
                 psiz = psi_2lpt[i, j, k, 2]
-                position[i, j, k, 0] += dplus_2 * psix
-                position[i, j, k, 1] += dplus_2 * psiy
-                position[i, j, k, 2] += dplus_2 * psiz
-                velocity[i, j, k, 0] += dfH_2 * psix
-                velocity[i, j, k, 1] += dfH_2 * psiy
-                velocity[i, j, k, 2] += dfH_2 * psiz
+                position[i, j, k, 0] -= dplus_2 * psix
+                position[i, j, k, 1] -= dplus_2 * psiy
+                position[i, j, k, 2] -= dplus_2 * psiz
+                velocity[i, j, k, 0] -= dfH_2 * psix
+                velocity[i, j, k, 1] -= dfH_2 * psiy
+                velocity[i, j, k, 2] -= dfH_2 * psiz
 
 
 @utils.time_me

@@ -171,21 +171,25 @@ def write_snapshot_particles(
     >>> parameters = pd.Series({"snapshot_format": "hdf5", "base": f"{this_dir}/../examples/", "i_snap": 0, "extra": "extra_info", "aexp": 1.0})
     >>> write_snapshot_particles(position, velocity, parameters)
     """
-    if "parquet".casefold() == param["output_snapshot_format"].casefold():
-        filename = f"{param['base']}/output_{param['i_snap']:05d}/particles_{param['extra']}.parquet"
-        write_snapshot_particles_parquet(filename, position, velocity)
-        param_filename = f"{param['base']}/output_{param['i_snap']:05d}/param_{param['extra']}_{param['i_snap']:05d}.txt"
-        param.to_csv(
-            param_filename,
-            sep="=",
-            header=False,
-        )
-        logging.warning(f"Parameter file written at ...{param_filename=}")
-    elif "hdf5".casefold() == param["output_snapshot_format"].casefold():
-        filename = f"{param['base']}/output_{param['i_snap']:05d}/particles_{param['extra']}.h5"
-        write_snapshot_particles_hdf5(filename, position, velocity, param)
-    else:
-        raise ValueError(f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'")
+    OUTPUT_SNAPSHOT_FORMAT = param["output_snapshot_format"].casefold()
+    match OUTPUT_SNAPSHOT_FORMAT:
+        case "parquet":
+            filename = f"{param['base']}/output_{param['i_snap']:05d}/particles_{param['extra']}.parquet"
+            write_snapshot_particles_parquet(filename, position, velocity)
+            param_filename = f"{param['base']}/output_{param['i_snap']:05d}/param_{param['extra']}_{param['i_snap']:05d}.txt"
+            param.to_csv(
+                param_filename,
+                sep="=",
+                header=False,
+            )
+            logging.warning(f"Parameter file written at ...{param_filename=}")
+        case "hdf5":
+            filename = f"{param['base']}/output_{param['i_snap']:05d}/particles_{param['extra']}.h5"
+            write_snapshot_particles_hdf5(filename, position, velocity, param)
+        case _:
+            raise ValueError(
+                f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'"
+            )
 
     logging.warning(f"Snapshot written at ...{filename=} {param['aexp']=}")
 
