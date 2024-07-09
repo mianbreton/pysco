@@ -277,3 +277,44 @@ def write_snapshot_particles_hdf5(
         h5f.create_dataset("velocity", data=velocity)
         for key, item in param.items():
             h5f.attrs[key] = item
+
+
+def write_power_spectrum_to_ascii_file(
+    k: npt.NDArray[np.float32],
+    Pk: npt.NDArray[np.float32],
+    Nmodes: npt.NDArray[np.float32],
+    param: pd.Series,
+) -> None:
+    """Write P(k) to ascii file
+
+    Parameters
+    ----------
+    k : npt.NDArray[np.float32]
+        Wavelenght
+    Pk : npt.NDArray[np.float32]
+        Power spectrum
+    Nmodes : npt.NDArray[np.float32]
+        Number of Fourier modes
+    param : pd.Series
+        Parameter container
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.iostream import write_power_spectrum_to_ascii_file
+    >>> import os
+    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
+    >>> k = np.random.rand(32**3, 3).astype(np.float32)
+    >>> Pk = np.random.rand(32**3, 3).astype(np.float32)
+    >>> Nmodes = np.random.rand(32**3, 3).astype(np.float32)
+    >>> param = pd.Series({"aexp": 0.0, "boxlen": 300.0, 'npart': 128, 'extra':"", 'base':".", "nsteps": 20})
+    >>> write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
+    """
+    output_pk = f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
+    logging.warning(f"Write P(k) in {output_pk}")
+    np.savetxt(
+        f"{output_pk}",
+        np.c_[k, Pk, Nmodes],
+        header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
+    )

@@ -1205,12 +1205,12 @@ def add_2LPT(
                 psix = psi_2lpt[i, j, k, 0]
                 psiy = psi_2lpt[i, j, k, 1]
                 psiz = psi_2lpt[i, j, k, 2]
-                position[i, j, k, 0] -= dplus_2 * psix
-                position[i, j, k, 1] -= dplus_2 * psiy
-                position[i, j, k, 2] -= dplus_2 * psiz
-                velocity[i, j, k, 0] -= dfH_2 * psix
-                velocity[i, j, k, 1] -= dfH_2 * psiy
-                velocity[i, j, k, 2] -= dfH_2 * psiz
+                position[i, j, k, 0] += dplus_2 * psix
+                position[i, j, k, 1] += dplus_2 * psiy
+                position[i, j, k, 2] += dplus_2 * psiz
+                velocity[i, j, k, 0] += dfH_2 * psix
+                velocity[i, j, k, 1] += dfH_2 * psiy
+                velocity[i, j, k, 2] += dfH_2 * psiz
 
 
 @utils.time_me

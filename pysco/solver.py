@@ -20,6 +20,7 @@ import quartic
 import logging
 import fourier
 import mond
+import iostream
 
 
 # @utils.profile_me
@@ -64,6 +65,8 @@ def pm(
     h = np.float32(1.0 / ncells_1d)
 
     MASS_SCHEME = param["mass_scheme"].casefold()
+    THEORY = param["theory"].casefold()
+
     match MASS_SCHEME:
         case "cic":
             param["MAS_index"] = 2
@@ -77,43 +80,33 @@ def pm(
         case _:
             raise ValueError(f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'")
 
-    if ncells_1d**3 != param["npart"]:
-        conversion = np.float32(ncells_1d**3 / param["npart"])
-        if "parametrized" == param["theory"].casefold():
-            evolution_term = param["aexp"] ** (
-                -3 * (1 + param["w0"] + param["wa"])
-            ) * np.exp(-3 * param["wa"] * (1 - param["aexp"]))
-            omega_lambda_z = (
-                param["Om_lambda"]
-                * evolution_term
-                / (
-                    param["Om_m"] * param["aexp"] ** (-3)
-                    + param["Om_lambda"] * evolution_term
-                )
+    if "parametrized" == THEORY:
+        evolution_term = param["aexp"] ** (
+            -3 * (1 + param["w0"] + param["wa"])
+        ) * np.exp(-3 * param["wa"] * (1 - param["aexp"]))
+        omega_lambda_z = (
+            param["Om_lambda"]
+            * evolution_term
+            / (
+                param["Om_m"] * param["aexp"] ** (-3)
+                + param["Om_r"] * param["aexp"] ** (-4)
+                + param["Om_lambda"] * evolution_term
             )
-            conversion *= (
-                1 + param["parametrized_mu0"] * omega_lambda_z / param["Om_lambda"]
-            )
-            utils.prod_vector_scalar_inplace(density, conversion)
-        else:
-            utils.prod_vector_scalar_inplace(density, conversion)
+        )
+        param["parametrized_mu_z"] = np.float32(
+            1 + param["parametrized_mu0"] * omega_lambda_z / param["Om_lambda"]
+        )
     else:
-        if "parametrized" == param["theory"].casefold():
-            evolution_term = param["aexp"] ** (
-                -3 * (1 + param["w0"] + param["wa"])
-            ) * np.exp(-3 * param["wa"] * (1 - param["aexp"]))
-            omega_lambda_z = (
-                param["Om_lambda"]
-                * evolution_term
-                / (
-                    param["Om_m"] * param["aexp"] ** (-3)
-                    + param["Om_lambda"] * evolution_term
-                )
-            )
-            conversion = (
-                1 + param["parametrized_mu0"] * omega_lambda_z / param["Om_lambda"]
-            )
-            utils.prod_vector_scalar_inplace(density, conversion)
+        param["parametrized_mu_z"] = np.float32(1)
+
+    if ncells_1d**3 != param["npart"]:
+        conversion = np.float32(
+            param["parametrized_mu_z"] * ncells_1d**3 / param["npart"]
+        )
+        utils.prod_vector_scalar_inplace(density, conversion)
+    else:
+        if "parametrized" == THEORY:
+            utils.prod_vector_scalar_inplace(density, param["parametrized_mu_z"])
 
     save_pk = False
     if param["save_power_spectrum"].casefold() == "yes".casefold() or (
@@ -124,23 +117,14 @@ def pm(
 
     LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
     if save_pk and "multigrid" == LINEAR_NEWTON_SOLVER:
-        output_pk = (
-            f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
-        )
         density_fourier = fourier.fft_3D_real(density, param["nthreads"])
-        k, Pk, Nmodes = fourier.fourier_grid_to_Pk(density_fourier, 3)
+        k, Pk, Nmodes = fourier.fourier_grid_to_Pk(density_fourier, param["MAS_index"])
         density_fourier = 0
-        Pk *= (param["boxlen"] / len(density) ** 2) ** 3
+        Pk *= (param["boxlen"] / len(density) ** 2) ** 3 / param[
+            "parametrized_mu_z"
+        ] ** 2
         k *= 2 * np.pi / param["boxlen"]
-        output_pk = (
-            f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
-        )
-        logging.warning(f"Write P(k) in {output_pk}")
-        np.savetxt(
-            f"{output_pk}",
-            np.c_[k, Pk, Nmodes],
-            header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
-        )
+        iostream.write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
 
     param["compute_additional_field"] = True
     additional_field = get_additional_field(additional_field, density, h, param, tables)
@@ -375,9 +359,10 @@ def get_additional_field(
             additional_field = initialise_potential(
                 additional_field, density, h, param, tables
             )
-            if param["linear_newton_solver"].casefold() == "multigrid".casefold():
+            LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
+            if LINEAR_NEWTON_SOLVER == "multigrid":
                 additional_field = multigrid.linear(additional_field, density, h, param)
-            elif param["linear_newton_solver"].casefold() == "fft".casefold():
+            elif LINEAR_NEWTON_SOLVER == "fft":
                 additional_field = fft(density, param)
             return additional_field
         case _:
@@ -415,7 +400,7 @@ def rhs_poisson(
     """
     if (
         param["compute_additional_field"] is False
-        and "mond".casefold() == param["theory"].casefold()
+        and "mond" == param["theory"].casefold()
     ):
         g0 = (
             param["mond_g0"]
@@ -428,9 +413,9 @@ def rhs_poisson(
         alpha = param["mond_alpha"]
         force = mesh.derivative2(additional_field)
 
-        mond_function = param["mond_function"].casefold()
+        MOND_FUNCTION = param["mond_function"].casefold()
 
-        match mond_function:
+        match MOND_FUNCTION:
             case "simple":
                 mond.inner_gradient_simple(force, g0)
             case "n":
@@ -443,7 +428,7 @@ def rhs_poisson(
                 mond.inner_gradient_delta(force, g0, delta=alpha)
             case _:
                 raise NotImplementedError(
-                    f"{mond_function=}, should be 'simple', 'n', 'beta', 'gamma' or 'delta'"
+                    f"{MOND_FUNCTION=}, should be 'simple', 'n', 'beta', 'gamma' or 'delta'"
                 )
         mesh.divergence2(force, density)
     else:
@@ -487,19 +472,13 @@ def fft(
     rhs_fourier = fourier.fft_3D_real(rhs, param["nthreads"])
     if save_pk:
         k, Pk, Nmodes = fourier.fourier_grid_to_Pk(rhs_fourier, MAS_index)
-        Pk *= (param["boxlen"] / len(rhs) ** 2) ** 3 / (
-            1.5 * param["aexp"] * param["Om_m"]
-        ) ** 2
+        Pk *= (
+            (param["boxlen"] / len(rhs) ** 2) ** 3
+            / (1.5 * param["aexp"] * param["Om_m"]) ** 2
+            / param["parametrized_mu_z"] ** 2
+        )
         k *= 2 * np.pi / param["boxlen"]
-        output_pk = (
-            f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
-        )
-        logging.warning(f"Write P(k) in {output_pk}")
-        np.savetxt(
-            f"{output_pk}",
-            np.c_[k, Pk, Nmodes],
-            header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
-        )
+        iostream.write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
     if MAS_index == 0:
         fourier.divide_by_minus_k2_fourier(rhs_fourier)
     else:
@@ -553,18 +532,12 @@ def fft_force(
     if save_pk:
         k, Pk, Nmodes = fourier.fourier_grid_to_Pk(rhs_fourier, MAS_index)
         rhs_fourier = 0
-        Pk *= (param["boxlen"] / len(rhs) ** 2) ** 3 / (
-            1.5 * param["aexp"] * param["Om_m"]
-        ) ** 2
+        Pk *= (
+            (param["boxlen"] / len(rhs) ** 2) ** 3
+            / (1.5 * param["aexp"] * param["Om_m"]) ** 2
+            / param["parametrized_mu_z"] ** 2
+        )
         k *= 2 * np.pi / param["boxlen"]
-        output_pk = (
-            f"{param['base']}/power/pk_{param['extra']}_{param['nsteps']:05d}.dat"
-        )
-        logging.warning(f"Write P(k) in {output_pk}")
-        np.savetxt(
-            f"{output_pk}",
-            np.c_[k, Pk, Nmodes],
-            header=f"aexp = {param['aexp']}\nboxlen = {param['boxlen']} Mpc/h \nnpart = {param['npart']} \nk [h/Mpc] P(k) [Mpc/h]^3 Nmodes",
-        )
+        iostream.write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
     rhs_fourier = 0
     return fourier.ifft_3D_real_grad(force, param["nthreads"])
