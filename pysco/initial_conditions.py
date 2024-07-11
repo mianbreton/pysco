@@ -101,8 +101,13 @@ def generate(
         Hz = tables[2](a_start)
         mpc_to_km = 1e3 * pc.value
         Hz *= param["unit_t"] / mpc_to_km  # km/s/Mpc to BU
-        # density_initial = generate_density(param)
-        # force = mesh.derivative(solver.fft(density_initial, param), param["gradient_stencil_order"])
+        """ density_initial = generate_density(param)
+        from pysco import mesh
+
+        param["MAS_index"] = 0
+        psi_1lpt = mesh.derivative(
+            solver.fft(density_initial, param), param["gradient_stencil_order"]
+        ) """
         psi_1lpt = generate_force(param)
         # 1LPT
         dplus_1_z0 = tables[3](0)
@@ -691,18 +696,18 @@ def white_noise_fourier_force(
                 imaginary = amplitude * math.sin(phase)
                 result_lower = real - ii * imaginary
                 result_upper = real + ii * imaginary
-                force[im, jm, km, 0] = -ii * invtwopi * result_lower * kx * invk2
-                force[i, j, k, 0] = ii * invtwopi * result_upper * kx * invk2
-                force[im, jm, km, 1] = -ii * invtwopi * result_lower * ky * invk2
-                force[i, j, k, 1] = ii * invtwopi * result_upper * ky * invk2
-                force[im, jm, km, 2] = -ii * invtwopi * result_lower * kz * invk2
-                force[i, j, k, 2] = ii * invtwopi * result_upper * kz * invk2
+                force[im, jm, km, 0] = ii * invtwopi * result_lower * kx * invk2
+                force[i, j, k, 0] = -ii * invtwopi * result_upper * kx * invk2
+                force[im, jm, km, 1] = ii * invtwopi * result_lower * ky * invk2
+                force[i, j, k, 1] = -ii * invtwopi * result_upper * ky * invk2
+                force[im, jm, km, 2] = ii * invtwopi * result_lower * kz * invk2
+                force[i, j, k, 2] = -ii * invtwopi * result_upper * kz * invk2
     rng_phases = 0
     rng_amplitudes = 0
     # Fix edges
     inv2 = np.float32(0.5)
     inv3 = np.float32(1.0 / 3)
-    invkmiddle = np.float32((twopi * middle) ** (-1))
+    invkmiddle = -np.float32((twopi * middle) ** (-1))
 
     force[0, 0, 0, 0] = force[0, 0, 0, 1] = force[0, 0, 0, 2] = 0
 
@@ -801,17 +806,17 @@ def white_noise_fourier_fixed_force(
                 imaginary = math.sin(phase)
                 result_lower = real - ii * imaginary
                 result_upper = real + ii * imaginary
-                force[im, jm, km, 0] = -ii * invtwopi * result_lower * kx * invk2
-                force[i, j, k, 0] = ii * invtwopi * result_upper * kx * invk2
-                force[im, jm, km, 1] = -ii * invtwopi * result_lower * ky * invk2
-                force[i, j, k, 1] = ii * invtwopi * result_upper * ky * invk2
-                force[im, jm, km, 2] = -ii * invtwopi * result_lower * kz * invk2
-                force[i, j, k, 2] = ii * invtwopi * result_upper * kz * invk2
+                force[im, jm, km, 0] = ii * invtwopi * result_lower * kx * invk2
+                force[i, j, k, 0] = -ii * invtwopi * result_upper * kx * invk2
+                force[im, jm, km, 1] = ii * invtwopi * result_lower * ky * invk2
+                force[i, j, k, 1] = -ii * invtwopi * result_upper * ky * invk2
+                force[im, jm, km, 2] = ii * invtwopi * result_lower * kz * invk2
+                force[i, j, k, 2] = -ii * invtwopi * result_upper * kz * invk2
     rng_phases = 0
     # Fix edges
     inv2 = np.float32(0.5)
     inv3 = np.float32(1.0 / 3)
-    invkmiddle = np.float32((twopi * middle) ** (-1))
+    invkmiddle = -np.float32((twopi * middle) ** (-1))
 
     force[0, 0, 0, 0] = force[0, 0, 0, 1] = force[0, 0, 0, 2] = 0
     force[0, middle, 0, 0] = force[0, 0, middle, 0] = force[middle, 0, 0, 0] = force[
