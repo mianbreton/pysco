@@ -20,6 +20,8 @@ from astropy.constants import pc
 import logging
 import iostream
 import fourier
+import multigrid
+import mesh
 
 
 def generate(
@@ -101,14 +103,34 @@ def generate(
         Hz = tables[2](a_start)
         mpc_to_km = 1e3 * pc.value
         Hz *= param["unit_t"] / mpc_to_km  # km/s/Mpc to BU
-        """ density_initial = generate_density(param)
-        from pysco import mesh
+
+        density_initial = generate_density(param)
 
         param["MAS_index"] = 0
-        psi_1lpt = mesh.derivative(
-            solver.fft(density_initial, param), param["gradient_stencil_order"]
-        ) """
-        psi_1lpt = generate_force(param)
+        LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
+        match LINEAR_NEWTON_SOLVER:
+            case "multigrid":
+                h = np.float32(1.0 / math.cbrt(param["npart"]))
+                potential = np.empty(0, dtype=np.float32)
+                param["compute_additional_field"] = False
+                potential = solver.initialise_potential(
+                    potential, density_initial, h, param, tables
+                )
+                psi_1lpt = mesh.derivative(
+                    multigrid.linear(potential, density_initial, h, param),
+                    param["gradient_stencil_order"],
+                )
+                potential = 0
+            case "fft" | "fft_7pt":
+                psi_1lpt = mesh.derivative(
+                    solver.fft(density_initial, param), param["gradient_stencil_order"]
+                )
+            case "full_fft":
+                psi_1lpt = solver.fft_force(density_initial, param)
+            case _:
+                raise ValueError(f"Unsupported {LINEAR_NEWTON_SOLVER=}")
+        density_initial = 0
+
         # 1LPT
         dplus_1_z0 = tables[3](0)
         dplus_1 = np.float32(tables[3](lna_start) / dplus_1_z0)
@@ -124,7 +146,7 @@ def generate(
         dplus_2 = np.float32(tables[5](lna_start) / dplus_1_z0**2)
         f2 = tables[6](lna_start)
         fH_2 = np.float32(f2 * Hz)
-        rhs_2ndorder = compute_rhs_2ndorder(psi_1lpt)
+        rhs_2ndorder = compute_rhs_2ndorder(psi_1lpt, param["gradient_stencil_order"])
         param["MAS_index"] = 0
         psi_2lpt = solver.fft_force(rhs_2ndorder, param)
         rhs_2ndorder = 0
@@ -150,7 +172,9 @@ def generate(
                 rhs_Ax_3c,
                 rhs_Ay_3c,
                 rhs_Az_3c,
-            ) = compute_rhs_3rdorder(psi_1lpt, psi_2lpt)
+            ) = compute_rhs_3rdorder(
+                psi_1lpt, psi_2lpt, param["gradient_stencil_order"]
+            )
             psi_1lpt = 0
             psi_2lpt = 0
             psi_3lpt_a = solver.fft_force(rhs_3a, param, 0)
@@ -856,15 +880,15 @@ def white_noise_fourier_fixed_force(
     cache=True,
     parallel=True,
 )
-def compute_rhs_2ndorder(
-    force: npt.NDArray[np.float32],
+def compute_rhs_2ndorder_d2(
+    psi_1lpt: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
     """Compute 2nd-order right-hand side of Potential field [Scoccimarro 1998 Appendix B.2]
 
     Parameters
     ----------
-    force : npt.NDArray[np.float32]
-        First-order force field [N, N, N, 3]
+    psi_1lpt : npt.NDArray[np.float32]
+        First-order displacement field [N, N, N, 3]
 
     Returns
     -------
@@ -875,10 +899,120 @@ def compute_rhs_2ndorder(
     -------
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_rhs_2ndorder
-    >>> force_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
-    >>> compute_rhs_2ndorder(force_1storder)
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_2ndorder(psi_1lpt)
     """
-    ncells_1d = force.shape[0]
+    ncells_1d = psi_1lpt.shape[0]
+    invh = np.float32(ncells_1d)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(-1, ncells_1d - 1):
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                kp1 = k + 1
+                minus_psix = -psi_1lpt[i, j, k, 0]
+                minus_psiy = -psi_1lpt[i, j, k, 1]
+                minus_psiz = -psi_1lpt[i, j, k, 2]
+                phixz = invh * (minus_psix + psi_1lpt[i, j, kp1, 0])
+                phixy = invh * (minus_psix + psi_1lpt[i, jp1, k, 0])
+                phixx = invh * (minus_psix + psi_1lpt[ip1, j, k, 0])
+                phiyz = invh * (minus_psiy + psi_1lpt[i, j, kp1, 1])
+                phiyy = invh * (minus_psiy + psi_1lpt[i, jp1, k, 1])
+                phizz = invh * (minus_psiz + psi_1lpt[i, j, kp1, 2])
+                result[i, j, k] = (
+                    phixx * (phiyy + phizz)
+                    + phiyy * phizz
+                    - (phixy**2 + phixz**2 + phiyz**2)
+                )
+    return result
+
+
+@utils.time_me
+@njit(
+    ["f4[:,:,::1](f4[:,:,:,::1])"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def compute_rhs_2ndorder_d3(
+    psi_1lpt: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Compute 2nd-order right-hand side of Potential field [Scoccimarro 1998 Appendix B.2]
+
+    Parameters
+    ----------
+    psi_1lpt : npt.NDArray[np.float32]
+        First-order displacement field [N, N, N, 3]
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Second-order right-hand side potential [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_rhs_2ndorder
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_2ndorder(psi_1lpt)
+    """
+    ncells_1d = psi_1lpt.shape[0]
+    inv2h = np.float32(0.5 * ncells_1d)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(-1, ncells_1d - 1):
+        ip1 = i + 1
+        im1 = i - 1
+        for j in prange(-1, ncells_1d - 1):
+            jp1 = j + 1
+            jm1 = j - 1
+            for k in prange(-1, ncells_1d - 1):
+                kp1 = k + 1
+                km1 = k - 1
+                phixz = inv2h * (-psi_1lpt[i, j, km1, 0] + psi_1lpt[i, j, kp1, 0])
+                phixy = inv2h * (-psi_1lpt[i, jm1, k, 0] + psi_1lpt[i, jp1, k, 0])
+                phixx = inv2h * (-psi_1lpt[im1, j, k, 0] + psi_1lpt[ip1, j, k, 0])
+                phiyz = inv2h * (-psi_1lpt[i, j, km1, 1] + psi_1lpt[i, j, kp1, 1])
+                phiyy = inv2h * (-psi_1lpt[i, jm1, k, 1] + psi_1lpt[i, jp1, k, 1])
+                phizz = inv2h * (-psi_1lpt[i, j, km1, 2] + psi_1lpt[i, j, kp1, 2])
+                result[i, j, k] = (
+                    phixx * (phiyy + phizz)
+                    + phiyy * phizz
+                    - (phixy**2 + phixz**2 + phiyz**2)
+                )
+    return result
+
+
+@utils.time_me
+@njit(
+    ["f4[:,:,::1](f4[:,:,:,::1])"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def compute_rhs_2ndorder_d5(
+    psi_1lpt: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Compute 2nd-order right-hand side of Potential field [Scoccimarro 1998 Appendix B.2]
+
+    Parameters
+    ----------
+    psi_1lpt : npt.NDArray[np.float32]
+        First-order displacement field [N, N, N, 3]
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Second-order right-hand side potential [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_rhs_2ndorder
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_2ndorder(psi_1lpt)
+    """
+    ncells_1d = psi_1lpt.shape[0]
     eight = np.float32(8)
     inv12h = np.float32(ncells_1d / 12.0)
     result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
@@ -898,36 +1032,136 @@ def compute_rhs_2ndorder(
                 kp2 = k + 2
                 km2 = k - 2
                 phixz = inv12h * (
-                    eight * (-force[i, j, km1, 0] + force[i, j, kp1, 0])
-                    + force[i, j, km2, 0]
-                    - force[i, j, kp2, 0]
-                )
-                phiyz = inv12h * (
-                    eight * (-force[i, j, km1, 1] + force[i, j, kp1, 1])
-                    + force[i, j, km2, 1]
-                    - force[i, j, kp2, 1]
-                )
-                phizz = inv12h * (
-                    eight * (-force[i, j, km1, 2] + force[i, j, kp1, 2])
-                    + force[i, j, km2, 2]
-                    - force[i, j, kp2, 2]
+                    eight * (-psi_1lpt[i, j, km1, 0] + psi_1lpt[i, j, kp1, 0])
+                    + psi_1lpt[i, j, km2, 0]
+                    - psi_1lpt[i, j, kp2, 0]
                 )
                 phixy = inv12h * (
-                    eight * (-force[i, jm1, k, 0] + force[i, jp1, k, 0])
-                    + force[i, jm2, k, 0]
-                    - force[i, jp2, k, 0]
-                )
-
-                phiyy = inv12h * (
-                    eight * (-force[i, jm1, k, 1] + force[i, jp1, k, 1])
-                    + force[i, jm2, k, 1]
-                    - force[i, jp2, k, 1]
+                    eight * (-psi_1lpt[i, jm1, k, 0] + psi_1lpt[i, jp1, k, 0])
+                    + psi_1lpt[i, jm2, k, 0]
+                    - psi_1lpt[i, jp2, k, 0]
                 )
                 phixx = inv12h * (
-                    eight * (-force[im1, j, k, 0] + force[ip1, j, k, 0])
-                    + force[im2, j, k, 0]
-                    - force[ip2, j, k, 0]
+                    eight * (-psi_1lpt[im1, j, k, 0] + psi_1lpt[ip1, j, k, 0])
+                    + psi_1lpt[im2, j, k, 0]
+                    - psi_1lpt[ip2, j, k, 0]
                 )
+                phiyz = inv12h * (
+                    eight * (-psi_1lpt[i, j, km1, 1] + psi_1lpt[i, j, kp1, 1])
+                    + psi_1lpt[i, j, km2, 1]
+                    - psi_1lpt[i, j, kp2, 1]
+                )
+                phiyy = inv12h * (
+                    eight * (-psi_1lpt[i, jm1, k, 1] + psi_1lpt[i, jp1, k, 1])
+                    + psi_1lpt[i, jm2, k, 1]
+                    - psi_1lpt[i, jp2, k, 1]
+                )
+                phizz = inv12h * (
+                    eight * (-psi_1lpt[i, j, km1, 2] + psi_1lpt[i, j, kp1, 2])
+                    + psi_1lpt[i, j, km2, 2]
+                    - psi_1lpt[i, j, kp2, 2]
+                )
+
+                result[i, j, k] = (
+                    phixx * (phiyy + phizz)
+                    + phiyy * phizz
+                    - (phixy**2 + phixz**2 + phiyz**2)
+                )
+    return result
+
+
+@utils.time_me
+@njit(
+    ["f4[:,:,::1](f4[:,:,:,::1])"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def compute_rhs_2ndorder_d7(
+    psi_1lpt: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Compute 2nd-order right-hand side of Potential field [Scoccimarro 1998 Appendix B.2]
+
+    Parameters
+    ----------
+    psi_1lpt : npt.NDArray[np.float32]
+        First-order displacement field [N, N, N, 3]
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Second-order right-hand side potential [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_rhs_2ndorder
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_2ndorder(psi_1lpt)
+    """
+    ncells_1d = psi_1lpt.shape[0]
+    nine = np.float32(9)
+    fortyfive = np.float32(45)
+    inv60h = np.float32(ncells_1d / 60.0)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(-3, ncells_1d - 3):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        ip3 = i + 3
+        im3 = i - 3
+        for j in prange(-3, ncells_1d - 3):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            jp3 = j + 3
+            jm3 = j - 3
+            for k in prange(-3, ncells_1d - 3):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+                kp3 = k + 3
+                km3 = k - 3
+                phixz = inv60h * (
+                    fortyfive * (-psi_1lpt[i, j, km1, 0] + psi_1lpt[i, j, kp1, 0])
+                    + nine * (psi_1lpt[i, j, km2, 0] - psi_1lpt[i, j, kp2, 0])
+                    - psi_1lpt[i, j, km3, 0]
+                    + psi_1lpt[i, j, kp3, 0]
+                )
+                phixy = inv60h * (
+                    fortyfive * (-psi_1lpt[i, jm1, k, 0] + psi_1lpt[i, jp1, k, 0])
+                    + nine * (psi_1lpt[i, jm2, k, 0] - psi_1lpt[i, jp2, k, 0])
+                    - psi_1lpt[i, jm3, k, 0]
+                    + psi_1lpt[i, jp3, k, 0]
+                )
+                phixx = inv60h * (
+                    fortyfive * (-psi_1lpt[im1, j, k, 0] + psi_1lpt[ip1, j, k, 0])
+                    + nine * (psi_1lpt[im2, j, k, 0] - psi_1lpt[ip2, j, k, 0])
+                    - psi_1lpt[im3, j, k, 0]
+                    + psi_1lpt[ip3, j, k, 0]
+                )
+                phiyz = inv60h * (
+                    fortyfive * (-psi_1lpt[i, j, km1, 1] + psi_1lpt[i, j, kp1, 1])
+                    + nine * (psi_1lpt[i, j, km2, 1] - psi_1lpt[i, j, kp2, 1])
+                    - psi_1lpt[i, j, km3, 1]
+                    + psi_1lpt[i, j, kp3, 1]
+                )
+                phiyy = inv60h * (
+                    fortyfive * (-psi_1lpt[i, jm1, k, 1] + psi_1lpt[i, jp1, k, 1])
+                    + nine * (psi_1lpt[i, jm2, k, 1] - psi_1lpt[i, jp2, k, 1])
+                    - psi_1lpt[i, jm3, k, 1]
+                    + psi_1lpt[i, jp3, k, 1]
+                )
+                phizz = inv60h * (
+                    fortyfive * (-psi_1lpt[i, j, km1, 2] + psi_1lpt[i, j, kp1, 2])
+                    + nine * (psi_1lpt[i, j, km2, 2] - psi_1lpt[i, j, kp2, 2])
+                    - psi_1lpt[i, j, km3, 2]
+                    + psi_1lpt[i, j, kp3, 2]
+                )
+
                 result[i, j, k] = (
                     phixx * (phiyy + phizz)
                     + phiyy * phizz
@@ -943,9 +1177,9 @@ def compute_rhs_2ndorder(
     cache=True,
     parallel=True,
 )
-def compute_rhs_3rdorder(
-    force: npt.NDArray[np.float32],
-    force_2ndorder: npt.NDArray[np.float32],
+def compute_rhs_3rdorder_d2(
+    psi_1lpt: npt.NDArray[np.float32],
+    psi_2lpt: npt.NDArray[np.float32],
 ) -> Tuple[
     npt.NDArray[np.float32],
     npt.NDArray[np.float32],
@@ -957,10 +1191,10 @@ def compute_rhs_3rdorder(
 
     Parameters
     ----------
-    force : npt.NDArray[np.float32]
-        First-order force field [N, N, N, 3]
-    force_2ndorder : npt.NDArray[np.float32]
-        Second-order force field [N, N, N, 3]
+    psi_1lpt : npt.NDArray[np.float32]
+        First-order displacement field [N, N, N, 3]
+    psi_2lpt : npt.NDArray[np.float32]
+        Second-order displacement field [N, N, N, 3]
 
     Returns
     -------
@@ -971,102 +1205,43 @@ def compute_rhs_3rdorder(
     -------
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_rhs_3rdorder
-    >>> force_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
-    >>> force_2ndorder = np.random.random((64, 64, 64, 3)).astype(np.float32)
-    >>> compute_rhs_3rdorder(force_1storder, force_2ndorder)
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> psi_2lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_3rdorder(psi_1lpt, psi_2lpt)
     """
-    ncells_1d = force.shape[0]
-    eight = np.float32(8)
+    ncells_1d = psi_1lpt.shape[0]
     two = np.float32(2)
     half = np.float32(0.5)
-    inv12h = np.float32(ncells_1d / 12.0)
+    invh = np.float32(0.5 * ncells_1d)
     result_3a = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
     result_3b = np.empty_like(result_3a)
     result_Ax_3c = np.empty_like(result_3a)
     result_Ay_3c = np.empty_like(result_3a)
     result_Az_3c = np.empty_like(result_3a)
-    for i in prange(-2, ncells_1d - 2):
+    for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
-        im1 = i - 1
-        ip2 = i + 2
-        im2 = i - 2
-        for j in prange(-2, ncells_1d - 2):
+        for j in prange(-1, ncells_1d - 1):
             jp1 = j + 1
-            jm1 = j - 1
-            jp2 = j + 2
-            jm2 = j - 2
-            for k in prange(-2, ncells_1d - 2):
+            for k in prange(-1, ncells_1d - 1):
                 kp1 = k + 1
-                km1 = k - 1
-                kp2 = k + 2
-                km2 = k - 2
-
-                phixz = inv12h * (
-                    eight * (-force[i, j, km1, 0] + force[i, j, kp1, 0])
-                    + force[i, j, km2, 0]
-                    - force[i, j, kp2, 0]
-                )
-                phiyz = inv12h * (
-                    eight * (-force[i, j, km1, 1] + force[i, j, kp1, 1])
-                    + force[i, j, km2, 1]
-                    - force[i, j, kp2, 1]
-                )
-                phizz = inv12h * (
-                    eight * (-force[i, j, km1, 2] + force[i, j, kp1, 2])
-                    + force[i, j, km2, 2]
-                    - force[i, j, kp2, 2]
-                )
-                phixy = inv12h * (
-                    eight * (-force[i, jm1, k, 0] + force[i, jp1, k, 0])
-                    + force[i, jm2, k, 0]
-                    - force[i, jp2, k, 0]
-                )
-                phiyy = inv12h * (
-                    eight * (-force[i, jm1, k, 1] + force[i, jp1, k, 1])
-                    + force[i, jm2, k, 1]
-                    - force[i, jp2, k, 1]
-                )
-                phixx = inv12h * (
-                    eight * (-force[im1, j, k, 0] + force[ip1, j, k, 0])
-                    + force[im2, j, k, 0]
-                    - force[ip2, j, k, 0]
-                )
-                phi_2_xz = inv12h * (
-                    eight
-                    * (-force_2ndorder[i, j, km1, 0] + force_2ndorder[i, j, kp1, 0])
-                    + force_2ndorder[i, j, km2, 0]
-                    - force_2ndorder[i, j, kp2, 0]
-                )
-                phi_2_yz = inv12h * (
-                    eight
-                    * (-force_2ndorder[i, j, km1, 1] + force_2ndorder[i, j, kp1, 1])
-                    + force_2ndorder[i, j, km2, 1]
-                    - force_2ndorder[i, j, kp2, 1]
-                )
-                phi_2_zz = inv12h * (
-                    eight
-                    * (-force_2ndorder[i, j, km1, 2] + force_2ndorder[i, j, kp1, 2])
-                    + force_2ndorder[i, j, km2, 2]
-                    - force_2ndorder[i, j, kp2, 2]
-                )
-                phi_2_xy = inv12h * (
-                    eight
-                    * (-force_2ndorder[i, jm1, k, 0] + force_2ndorder[i, jp1, k, 0])
-                    + force_2ndorder[i, jm2, k, 0]
-                    - force_2ndorder[i, jp2, k, 0]
-                )
-                phi_2_yy = inv12h * (
-                    eight
-                    * (-force_2ndorder[i, jm1, k, 1] + force_2ndorder[i, jp1, k, 1])
-                    + force_2ndorder[i, jm2, k, 1]
-                    - force_2ndorder[i, jp2, k, 1]
-                )
-                phi_2_xx = inv12h * (
-                    eight
-                    * (-force_2ndorder[im1, j, k, 0] + force_2ndorder[ip1, j, k, 0])
-                    + force_2ndorder[im2, j, k, 0]
-                    - force_2ndorder[ip2, j, k, 0]
-                )
+                minus_psix_1 = -psi_1lpt[i, j, k, 0]
+                minus_psiy_1 = -psi_1lpt[i, j, k, 1]
+                minus_psiz_1 = -psi_1lpt[i, j, k, 2]
+                minus_psix_2 = -psi_2lpt[i, j, k, 0]
+                minus_psiy_2 = -psi_2lpt[i, j, k, 1]
+                minus_psiz_2 = -psi_2lpt[i, j, k, 2]
+                phixz = invh * (minus_psix_1 + psi_1lpt[i, j, kp1, 0])
+                phixy = invh * (minus_psix_1 + psi_1lpt[i, jp1, k, 0])
+                phixx = invh * (minus_psix_1 + psi_1lpt[ip1, j, k, 0])
+                phiyz = invh * (minus_psiy_1 + psi_1lpt[i, j, kp1, 1])
+                phiyy = invh * (minus_psiy_1 + psi_1lpt[i, jp1, k, 1])
+                phizz = invh * (minus_psiz_1 + psi_1lpt[i, j, kp1, 2])
+                phi_2_xz = invh * (minus_psix_2 + psi_2lpt[i, j, kp1, 0])
+                phi_2_xy = invh * (minus_psix_2 + psi_2lpt[i, jp1, k, 0])
+                phi_2_xx = invh * (minus_psix_2 + psi_2lpt[ip1, j, k, 0])
+                phi_2_yz = invh * (minus_psiy_2 + psi_2lpt[i, j, kp1, 1])
+                phi_2_yy = invh * (minus_psiy_2 + psi_2lpt[i, jp1, k, 1])
+                phi_2_zz = invh * (minus_psiz_2 + psi_2lpt[i, j, kp1, 2])
                 result_3a[i, j, k] = (
                     phixx * phiyy * phizz
                     + two * phixy * phixz * phiyz
@@ -1105,6 +1280,550 @@ def compute_rhs_3rdorder(
 
 @utils.time_me
 @njit(
+    ["UniTuple(f4[:,:,::1], 5)(f4[:,:,:,::1], f4[:,:,:,::1])"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def compute_rhs_3rdorder_d3(
+    psi_1lpt: npt.NDArray[np.float32],
+    psi_2lpt: npt.NDArray[np.float32],
+) -> Tuple[
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+]:
+    """Compute 3rd-order right-hand side of Potential field [Michaux et al. 2020 Appendix A.2-6]
+
+    Parameters
+    ----------
+    psi_1lpt : npt.NDArray[np.float32]
+        First-order displacement field [N, N, N, 3]
+    psi_2lpt : npt.NDArray[np.float32]
+        Second-order displacement field [N, N, N, 3]
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Third-order right-hand side potentials [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_rhs_3rdorder
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> psi_2lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_3rdorder(psi_1lpt, psi_2lpt)
+    """
+    ncells_1d = psi_1lpt.shape[0]
+    two = np.float32(2)
+    half = np.float32(0.5)
+    inv2h = np.float32(0.5 * ncells_1d)
+    result_3a = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result_3b = np.empty_like(result_3a)
+    result_Ax_3c = np.empty_like(result_3a)
+    result_Ay_3c = np.empty_like(result_3a)
+    result_Az_3c = np.empty_like(result_3a)
+    for i in prange(-1, ncells_1d - 1):
+        ip1 = i + 1
+        im1 = i - 1
+        for j in prange(-1, ncells_1d - 1):
+            jp1 = j + 1
+            jm1 = j - 1
+            for k in prange(-1, ncells_1d - 1):
+                kp1 = k + 1
+                km1 = k - 1
+                phixz = inv2h * (-psi_1lpt[i, j, km1, 0] + psi_1lpt[i, j, kp1, 0])
+                phixy = inv2h * (-psi_1lpt[i, jm1, k, 0] + psi_1lpt[i, jp1, k, 0])
+                phixx = inv2h * (-psi_1lpt[im1, j, k, 0] + psi_1lpt[ip1, j, k, 0])
+                phiyz = inv2h * (-psi_1lpt[i, j, km1, 1] + psi_1lpt[i, j, kp1, 1])
+                phiyy = inv2h * (-psi_1lpt[i, jm1, k, 1] + psi_1lpt[i, jp1, k, 1])
+                phizz = inv2h * (-psi_1lpt[i, j, km1, 2] + psi_1lpt[i, j, kp1, 2])
+                phi_2_xz = inv2h * (-psi_2lpt[i, j, km1, 0] + psi_2lpt[i, j, kp1, 0])
+                phi_2_xy = inv2h * (-psi_2lpt[i, jm1, k, 0] + psi_2lpt[i, jp1, k, 0])
+                phi_2_xx = inv2h * (-psi_2lpt[im1, j, k, 0] + psi_2lpt[ip1, j, k, 0])
+                phi_2_yz = inv2h * (-psi_2lpt[i, j, km1, 1] + psi_2lpt[i, j, kp1, 1])
+                phi_2_yy = inv2h * (-psi_2lpt[i, jm1, k, 1] + psi_2lpt[i, jp1, k, 1])
+                phi_2_zz = inv2h * (-psi_2lpt[i, j, km1, 2] + psi_2lpt[i, j, kp1, 2])
+                result_3a[i, j, k] = (
+                    phixx * phiyy * phizz
+                    + two * phixy * phixz * phiyz
+                    - phiyz**2 * phixx
+                    - phixz**2 * phiyy
+                    - phixy**2 * phizz
+                )
+                result_3b[i, j, k] = (
+                    half * phixx * (phi_2_yy + phi_2_zz)
+                    + half * phiyy * (phi_2_xx + phi_2_zz)
+                    + half * phizz * (phi_2_xx + phi_2_yy)
+                    - phixy * phi_2_xy
+                    - phixz * phi_2_xz
+                    - phiyz * phi_2_yz
+                )
+                result_Ax_3c[i, j, k] = (
+                    phi_2_xy * phixz
+                    - phi_2_xz * phixy
+                    + phiyz * (phi_2_yy - phi_2_zz)
+                    - phi_2_yz * (phiyy - phizz)
+                )
+                result_Ay_3c[i, j, k] = (
+                    phi_2_yz * phixy
+                    - phi_2_xy * phiyz
+                    + phixz * (phi_2_zz - phi_2_xx)
+                    - phi_2_xz * (phizz - phixx)
+                )
+                result_Az_3c[i, j, k] = (
+                    phi_2_xz * phiyz
+                    - phi_2_yz * phixz
+                    + phixy * (phi_2_xx - phi_2_yy)
+                    - phi_2_xy * (phixx - phiyy)
+                )
+    return result_3a, result_3b, result_Ax_3c, result_Ay_3c, result_Az_3c
+
+
+@utils.time_me
+@njit(
+    ["UniTuple(f4[:,:,::1], 5)(f4[:,:,:,::1], f4[:,:,:,::1])"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def compute_rhs_3rdorder_d5(
+    psi_1lpt: npt.NDArray[np.float32],
+    psi_2lpt: npt.NDArray[np.float32],
+) -> Tuple[
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+]:
+    """Compute 3rd-order right-hand side of Potential field [Michaux et al. 2020 Appendix A.2-6]
+
+    Parameters
+    ----------
+    psi_1lpt : npt.NDArray[np.float32]
+        First-order displacement field [N, N, N, 3]
+    psi_2lpt : npt.NDArray[np.float32]
+        Second-order displacement field [N, N, N, 3]
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Third-order right-hand side potentials [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_rhs_3rdorder
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> psi_2lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_3rdorder(psi_1lpt, psi_2lpt)
+    """
+    ncells_1d = psi_1lpt.shape[0]
+    eight = np.float32(8)
+    two = np.float32(2)
+    half = np.float32(0.5)
+    inv12h = np.float32(ncells_1d / 12.0)
+    result_3a = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result_3b = np.empty_like(result_3a)
+    result_Ax_3c = np.empty_like(result_3a)
+    result_Ay_3c = np.empty_like(result_3a)
+    result_Az_3c = np.empty_like(result_3a)
+    for i in prange(-2, ncells_1d - 2):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        for j in prange(-2, ncells_1d - 2):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            for k in prange(-2, ncells_1d - 2):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+
+                phixz = inv12h * (
+                    eight * (-psi_1lpt[i, j, km1, 0] + psi_1lpt[i, j, kp1, 0])
+                    + psi_1lpt[i, j, km2, 0]
+                    - psi_1lpt[i, j, kp2, 0]
+                )
+                phixy = inv12h * (
+                    eight * (-psi_1lpt[i, jm1, k, 0] + psi_1lpt[i, jp1, k, 0])
+                    + psi_1lpt[i, jm2, k, 0]
+                    - psi_1lpt[i, jp2, k, 0]
+                )
+                phixx = inv12h * (
+                    eight * (-psi_1lpt[im1, j, k, 0] + psi_1lpt[ip1, j, k, 0])
+                    + psi_1lpt[im2, j, k, 0]
+                    - psi_1lpt[ip2, j, k, 0]
+                )
+                phiyz = inv12h * (
+                    eight * (-psi_1lpt[i, j, km1, 1] + psi_1lpt[i, j, kp1, 1])
+                    + psi_1lpt[i, j, km2, 1]
+                    - psi_1lpt[i, j, kp2, 1]
+                )
+                phiyy = inv12h * (
+                    eight * (-psi_1lpt[i, jm1, k, 1] + psi_1lpt[i, jp1, k, 1])
+                    + psi_1lpt[i, jm2, k, 1]
+                    - psi_1lpt[i, jp2, k, 1]
+                )
+                phizz = inv12h * (
+                    eight * (-psi_1lpt[i, j, km1, 2] + psi_1lpt[i, j, kp1, 2])
+                    + psi_1lpt[i, j, km2, 2]
+                    - psi_1lpt[i, j, kp2, 2]
+                )
+
+                phi_2_xz = inv12h * (
+                    eight * (-psi_2lpt[i, j, km1, 0] + psi_2lpt[i, j, kp1, 0])
+                    + psi_2lpt[i, j, km2, 0]
+                    - psi_2lpt[i, j, kp2, 0]
+                )
+                phi_2_xy = inv12h * (
+                    eight * (-psi_2lpt[i, jm1, k, 0] + psi_2lpt[i, jp1, k, 0])
+                    + psi_2lpt[i, jm2, k, 0]
+                    - psi_2lpt[i, jp2, k, 0]
+                )
+                phi_2_xx = inv12h * (
+                    eight * (-psi_2lpt[im1, j, k, 0] + psi_2lpt[ip1, j, k, 0])
+                    + psi_2lpt[im2, j, k, 0]
+                    - psi_2lpt[ip2, j, k, 0]
+                )
+                phi_2_yz = inv12h * (
+                    eight * (-psi_2lpt[i, j, km1, 1] + psi_2lpt[i, j, kp1, 1])
+                    + psi_2lpt[i, j, km2, 1]
+                    - psi_2lpt[i, j, kp2, 1]
+                )
+                phi_2_yy = inv12h * (
+                    eight * (-psi_2lpt[i, jm1, k, 1] + psi_2lpt[i, jp1, k, 1])
+                    + psi_2lpt[i, jm2, k, 1]
+                    - psi_2lpt[i, jp2, k, 1]
+                )
+                phi_2_zz = inv12h * (
+                    eight * (-psi_2lpt[i, j, km1, 2] + psi_2lpt[i, j, kp1, 2])
+                    + psi_2lpt[i, j, km2, 2]
+                    - psi_2lpt[i, j, kp2, 2]
+                )
+
+                result_3a[i, j, k] = (
+                    phixx * phiyy * phizz
+                    + two * phixy * phixz * phiyz
+                    - phiyz**2 * phixx
+                    - phixz**2 * phiyy
+                    - phixy**2 * phizz
+                )
+                result_3b[i, j, k] = (
+                    half * phixx * (phi_2_yy + phi_2_zz)
+                    + half * phiyy * (phi_2_xx + phi_2_zz)
+                    + half * phizz * (phi_2_xx + phi_2_yy)
+                    - phixy * phi_2_xy
+                    - phixz * phi_2_xz
+                    - phiyz * phi_2_yz
+                )
+                result_Ax_3c[i, j, k] = (
+                    phi_2_xy * phixz
+                    - phi_2_xz * phixy
+                    + phiyz * (phi_2_yy - phi_2_zz)
+                    - phi_2_yz * (phiyy - phizz)
+                )
+                result_Ay_3c[i, j, k] = (
+                    phi_2_yz * phixy
+                    - phi_2_xy * phiyz
+                    + phixz * (phi_2_zz - phi_2_xx)
+                    - phi_2_xz * (phizz - phixx)
+                )
+                result_Az_3c[i, j, k] = (
+                    phi_2_xz * phiyz
+                    - phi_2_yz * phixz
+                    + phixy * (phi_2_xx - phi_2_yy)
+                    - phi_2_xy * (phixx - phiyy)
+                )
+    return result_3a, result_3b, result_Ax_3c, result_Ay_3c, result_Az_3c
+
+
+@utils.time_me
+@njit(
+    ["UniTuple(f4[:,:,::1], 5)(f4[:,:,:,::1], f4[:,:,:,::1])"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def compute_rhs_3rdorder_d7(
+    psi_1lpt: npt.NDArray[np.float32],
+    psi_2lpt: npt.NDArray[np.float32],
+) -> Tuple[
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+]:
+    """Compute 3rd-order right-hand side of Potential field [Michaux et al. 2020 Appendix A.2-6]
+
+    Parameters
+    ----------
+    psi_1lpt : npt.NDArray[np.float32]
+        First-order displacement field [N, N, N, 3]
+    psi_2lpt : npt.NDArray[np.float32]
+        Second-order displacement field [N, N, N, 3]
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Third-order right-hand side potentials [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_rhs_3rdorder
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> psi_2lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_3rdorder(psi_1lpt, psi_2lpt)
+    """
+    ncells_1d = psi_1lpt.shape[0]
+    nine = np.float32(9)
+    fortyfive = np.float32(45)
+    two = np.float32(2)
+    half = np.float32(0.5)
+    inv60h = np.float32(ncells_1d / 60.0)
+    result_3a = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result_3b = np.empty_like(result_3a)
+    result_Ax_3c = np.empty_like(result_3a)
+    result_Ay_3c = np.empty_like(result_3a)
+    result_Az_3c = np.empty_like(result_3a)
+    for i in prange(-3, ncells_1d - 3):
+        ip1 = i + 1
+        im1 = i - 1
+        ip2 = i + 2
+        im2 = i - 2
+        ip3 = i + 3
+        im3 = i - 3
+        for j in prange(-3, ncells_1d - 3):
+            jp1 = j + 1
+            jm1 = j - 1
+            jp2 = j + 2
+            jm2 = j - 2
+            jp3 = j + 3
+            jm3 = j - 3
+            for k in prange(-3, ncells_1d - 3):
+                kp1 = k + 1
+                km1 = k - 1
+                kp2 = k + 2
+                km2 = k - 2
+                kp3 = k + 3
+                km3 = k - 3
+
+                phixz = inv60h * (
+                    fortyfive * (-psi_1lpt[i, j, km1, 0] + psi_1lpt[i, j, kp1, 0])
+                    + nine * (psi_1lpt[i, j, km2, 0] - psi_1lpt[i, j, kp2, 0])
+                    - psi_1lpt[i, j, km3, 0]
+                    + psi_1lpt[i, j, kp3, 0]
+                )
+                phixy = inv60h * (
+                    fortyfive * (-psi_1lpt[i, jm1, k, 0] + psi_1lpt[i, jp1, k, 0])
+                    + nine * (psi_1lpt[i, jm2, k, 0] - psi_1lpt[i, jp2, k, 0])
+                    - psi_1lpt[i, jm3, k, 0]
+                    + psi_1lpt[i, jp3, k, 0]
+                )
+                phixx = inv60h * (
+                    fortyfive * (-psi_1lpt[im1, j, k, 0] + psi_1lpt[ip1, j, k, 0])
+                    + nine * (psi_1lpt[im2, j, k, 0] - psi_1lpt[ip2, j, k, 0])
+                    - psi_1lpt[im3, j, k, 0]
+                    + psi_1lpt[ip3, j, k, 0]
+                )
+                phiyz = inv60h * (
+                    fortyfive * (-psi_1lpt[i, j, km1, 1] + psi_1lpt[i, j, kp1, 1])
+                    + nine * (psi_1lpt[i, j, km2, 1] - psi_1lpt[i, j, kp2, 1])
+                    - psi_1lpt[i, j, km3, 1]
+                    + psi_1lpt[i, j, kp3, 1]
+                )
+                phiyy = inv60h * (
+                    fortyfive * (-psi_1lpt[i, jm1, k, 1] + psi_1lpt[i, jp1, k, 1])
+                    + nine * (psi_1lpt[i, jm2, k, 1] - psi_1lpt[i, jp2, k, 1])
+                    - psi_1lpt[i, jm3, k, 1]
+                    + psi_1lpt[i, jp3, k, 1]
+                )
+                phizz = inv60h * (
+                    fortyfive * (-psi_1lpt[i, j, km1, 2] + psi_1lpt[i, j, kp1, 2])
+                    + nine * (psi_1lpt[i, j, km2, 2] - psi_1lpt[i, j, kp2, 2])
+                    - psi_1lpt[i, j, km3, 2]
+                    + psi_1lpt[i, j, kp3, 2]
+                )
+
+                phi_2_xz = inv60h * (
+                    fortyfive * (-psi_2lpt[i, j, km1, 0] + psi_2lpt[i, j, kp1, 0])
+                    + nine * (psi_2lpt[i, j, km2, 0] - psi_2lpt[i, j, kp2, 0])
+                    - psi_2lpt[i, j, km3, 0]
+                    + psi_2lpt[i, j, kp3, 0]
+                )
+                phi_2_xy = inv60h * (
+                    fortyfive * (-psi_2lpt[i, jm1, k, 0] + psi_2lpt[i, jp1, k, 0])
+                    + nine * (psi_2lpt[i, jm2, k, 0] - psi_2lpt[i, jp2, k, 0])
+                    - psi_2lpt[i, jm3, k, 0]
+                    + psi_2lpt[i, jp3, k, 0]
+                )
+                phi_2_xx = inv60h * (
+                    fortyfive * (-psi_2lpt[im1, j, k, 0] + psi_2lpt[ip1, j, k, 0])
+                    + nine * (psi_2lpt[im2, j, k, 0] - psi_2lpt[ip2, j, k, 0])
+                    - psi_2lpt[im3, j, k, 0]
+                    + psi_2lpt[ip3, j, k, 0]
+                )
+                phi_2_yz = inv60h * (
+                    fortyfive * (-psi_2lpt[i, j, km1, 1] + psi_2lpt[i, j, kp1, 1])
+                    + nine * (psi_2lpt[i, j, km2, 1] - psi_2lpt[i, j, kp2, 1])
+                    - psi_2lpt[i, j, km3, 1]
+                    + psi_2lpt[i, j, kp3, 1]
+                )
+                phi_2_yy = inv60h * (
+                    fortyfive * (-psi_2lpt[i, jm1, k, 1] + psi_2lpt[i, jp1, k, 1])
+                    + nine * (psi_2lpt[i, jm2, k, 1] - psi_2lpt[i, jp2, k, 1])
+                    - psi_2lpt[i, jm3, k, 1]
+                    + psi_2lpt[i, jp3, k, 1]
+                )
+                phi_2_zz = inv60h * (
+                    fortyfive * (-psi_2lpt[i, j, km1, 2] + psi_2lpt[i, j, kp1, 2])
+                    + nine * (psi_2lpt[i, j, km2, 2] - psi_2lpt[i, j, kp2, 2])
+                    - psi_2lpt[i, j, km3, 2]
+                    + psi_2lpt[i, j, kp3, 2]
+                )
+
+                result_3a[i, j, k] = (
+                    phixx * phiyy * phizz
+                    + two * phixy * phixz * phiyz
+                    - phiyz**2 * phixx
+                    - phixz**2 * phiyy
+                    - phixy**2 * phizz
+                )
+                result_3b[i, j, k] = (
+                    half * phixx * (phi_2_yy + phi_2_zz)
+                    + half * phiyy * (phi_2_xx + phi_2_zz)
+                    + half * phizz * (phi_2_xx + phi_2_yy)
+                    - phixy * phi_2_xy
+                    - phixz * phi_2_xz
+                    - phiyz * phi_2_yz
+                )
+                result_Ax_3c[i, j, k] = (
+                    phi_2_xy * phixz
+                    - phi_2_xz * phixy
+                    + phiyz * (phi_2_yy - phi_2_zz)
+                    - phi_2_yz * (phiyy - phizz)
+                )
+                result_Ay_3c[i, j, k] = (
+                    phi_2_yz * phixy
+                    - phi_2_xy * phiyz
+                    + phixz * (phi_2_zz - phi_2_xx)
+                    - phi_2_xz * (phizz - phixx)
+                )
+                result_Az_3c[i, j, k] = (
+                    phi_2_xz * phiyz
+                    - phi_2_yz * phixz
+                    + phixy * (phi_2_xx - phi_2_yy)
+                    - phi_2_xy * (phixx - phiyy)
+                )
+    return result_3a, result_3b, result_Ax_3c, result_Ay_3c, result_Az_3c
+
+
+def compute_rhs_2ndorder(
+    psi_1lpt: npt.NDArray[np.float32], gradient_order: int
+) -> Tuple[
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+]:
+    """Compute 2nd-order right-hand side of Potential field [Scoccimarro 1998 Appendix B.2]
+
+    Parameters
+    ----------
+    psi_1lpt : npt.NDArray[np.float32]
+        First-order displacement field [N, N, N, 3]
+    gradient_order : int
+        Gradient order
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Second-order right-hand side potential [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_rhs_2ndorder
+    >>> gradient_stencil = 5
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> psi_2lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_2ndorder(psi_1lpt, gradient_stencil)
+    """
+    match gradient_order:
+        case 2:
+            return compute_rhs_2ndorder_d2(psi_1lpt)
+        case 3:
+            return compute_rhs_2ndorder_d3(psi_1lpt)
+        case 5:
+            return compute_rhs_2ndorder_d5(psi_1lpt)
+        case 7:
+            return compute_rhs_2ndorder_d7(psi_1lpt)
+        case _:
+            raise ValueError(f"Unsupported: {gradient_order=}")
+
+
+def compute_rhs_3rdorder(
+    psi_1lpt: npt.NDArray[np.float32],
+    psi_2lpt: npt.NDArray[np.float32],
+    gradient_order: int,
+) -> Tuple[
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+]:
+    """Compute 3rd-order right-hand side of Potential field [Michaux et al. 2020 Appendix A.2-6]
+
+    Parameters
+    ----------
+    psi_1lpt : npt.NDArray[np.float32]
+        First-order displacement field [N, N, N, 3]
+    psi_2lpt : npt.NDArray[np.float32]
+        Second-order displacement field [N, N, N, 3]
+    gradient_order : int
+        Gradient order
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Third-order right-hand side potentials [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_rhs_3rdorder
+    >>> gradient_stencil = 5
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> psi_2lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> compute_rhs_3rdorder(psi_1lpt, psi_2lpt, gradient_stencil)
+    """
+    match gradient_order:
+        case 2:
+            return compute_rhs_3rdorder_d2(psi_1lpt, psi_2lpt)
+        case 3:
+            return compute_rhs_3rdorder_d3(psi_1lpt, psi_2lpt)
+        case 5:
+            return compute_rhs_3rdorder_d5(psi_1lpt, psi_2lpt)
+        case 7:
+            return compute_rhs_3rdorder_d7(psi_1lpt, psi_2lpt)
+        case _:
+            raise ValueError(f"Unsupported: {gradient_order=}")
+
+
+@utils.time_me
+@njit(
     ["UniTuple(f4[:,:,:,::1], 2)(f4[:,:,:,::1], f4, f4)"],
     fastmath=True,
     cache=True,
@@ -1133,10 +1852,10 @@ def initialise_1LPT(
     -------
     >>> import numpy as np
     >>> from pysco.initial_conditions import initialise_1LPT
-    >>> force_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
     >>> dplus_1 = 0.1
     >>> fH = 0.1
-    >>> initialise_1LPT(force_1storder, dplus_1, fH)
+    >>> initialise_1LPT(psi_1lpt, dplus_1, fH)
     """
     ncells_1d = psi_1lpt.shape[0]
     h = np.float32(1.0 / ncells_1d)

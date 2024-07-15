@@ -135,19 +135,19 @@ def pm(
     rhs = density
     del density
 
-    potential = initialise_potential(potential, rhs, h, param, tables)
     match LINEAR_NEWTON_SOLVER:
         case "multigrid":
+            potential = initialise_potential(potential, rhs, h, param, tables)
             potential = multigrid.linear(potential, rhs, h, param)
             rhs = 0
-        case "fft":
+        case "fft" | "fft_7pt":
             potential = fft(rhs, param, save_pk)
             rhs = 0
-        case "full_fft" | "fdk_fft" | "ham_fft":
+        case "full_fft":
             pass
         case _:
             raise ValueError(
-                f"{param['linear_newton_solver']=}, should be multigrid, fft, fdk_fft, ham_fft or full_fft"
+                f"{param['linear_newton_solver']=}, should be multigrid, fft, fft_7pt or full_fft"
             )
 
     if "fr" == param["theory"].casefold():
@@ -164,32 +164,30 @@ def pm(
             * (c.value * 1e-3 * param["unit_t"] / (param["unit_l"] * param["aexp"]))
             ** 2
         )  # m -> km -> BU
-        match LINEAR_NEWTON_SOLVER:
-            case "full_fft" | "fdk_fft" | "ham_fft":
-                force = fft_force(rhs, param, save_pk)
-                rhs = 0
-                mesh.add_derivative_fR(
-                    force,
-                    additional_field,
-                    half_c2,
-                    param["fR_n"],
-                    param["gradient_stencil_order"],
-                )
-            case _:
-                force = mesh.derivative_fR(
-                    potential,
-                    additional_field,
-                    half_c2,
-                    param["fR_n"],
-                    param["gradient_stencil_order"],
-                )
+        if LINEAR_NEWTON_SOLVER == "full_fft":
+            force = fft_force(rhs, param, save_pk)
+            rhs = 0
+            mesh.add_derivative_fR(
+                force,
+                additional_field,
+                half_c2,
+                param["fR_n"],
+                param["gradient_stencil_order"],
+            )
+        else:
+            force = mesh.derivative_fR(
+                potential,
+                additional_field,
+                half_c2,
+                param["fR_n"],
+                param["gradient_stencil_order"],
+            )
     else:
-        match LINEAR_NEWTON_SOLVER:
-            case "full_fft" | "fdk_fft" | "ham_fft":
-                force = fft_force(rhs, param, save_pk)
-                rhs = 0
-            case _:
-                force = mesh.derivative(potential, param["gradient_stencil_order"])
+        if LINEAR_NEWTON_SOLVER == "full_fft":
+            force = fft_force(rhs, param, save_pk)
+            rhs = 0
+        else:
+            force = mesh.derivative(potential, param["gradient_stencil_order"])
 
     match MASS_SCHEME:
         case "cic":
@@ -470,6 +468,7 @@ def fft(
     """
     MAS_index = param["MAS_index"]
     rhs_fourier = fourier.fft_3D_real(rhs, param["nthreads"])
+    LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
     if save_pk:
         k, Pk, Nmodes = fourier.fourier_grid_to_Pk(rhs_fourier, MAS_index)
         Pk *= (
@@ -479,10 +478,18 @@ def fft(
         )
         k *= 2 * np.pi / param["boxlen"]
         iostream.write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
-    if MAS_index == 0:
-        fourier.divide_by_minus_k2_fourier(rhs_fourier)
-    else:
-        fourier.divide_by_minus_k2_fourier_compensated(rhs_fourier, MAS_index)
+
+    match LINEAR_NEWTON_SOLVER:
+        case "fft":
+            if MAS_index == 0:
+                fourier.laplacian(rhs_fourier)
+            else:
+                fourier.laplacian_compensated(rhs_fourier, MAS_index)
+        case "fft_7pt":
+            fourier.laplacian_7pt(rhs_fourier)
+        case _:
+            raise ValueError(f"{LINEAR_NEWTON_SOLVER=}, should be 'fft' or 'fft_7pt'")
+
     return fourier.ifft_3D_real(rhs_fourier, param["nthreads"])
 
 
@@ -519,16 +526,12 @@ def fft_force(
     """
     MAS_index = param["MAS_index"]
     rhs_fourier = fourier.fft_3D_real(rhs, param["nthreads"])
-    LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
-    match LINEAR_NEWTON_SOLVER:
-        case "fdk_fft":
-            force = fourier.gradient_laplacian_fourier_fdk(rhs_fourier)
-        case "ham_fft":
-            force = fourier.gradient_laplacian_fourier_hammings(rhs_fourier, MAS_index)
-        case _:
-            force = fourier.gradient_laplacian_fourier_compensated(
-                rhs_fourier, MAS_index
-            )
+
+    if MAS_index == 0:
+        force = fourier.gradient_laplacian(rhs_fourier)
+    else:
+        force = fourier.gradient_laplacian_compensated(rhs_fourier, MAS_index)
+
     if save_pk:
         k, Pk, Nmodes = fourier.fourier_grid_to_Pk(rhs_fourier, MAS_index)
         rhs_fourier = 0

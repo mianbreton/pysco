@@ -435,7 +435,7 @@ def ifft_3D_grad(
 @njit(
     ["void(c8[:,:,::1])"], fastmath=True, cache=True, parallel=True, error_model="numpy"
 )
-def divide_by_minus_k2_fourier(x: npt.NDArray[np.complex64]) -> None:
+def laplacian(x: npt.NDArray[np.complex64]) -> None:
     """Inplace divide complex Fourier-space field by -k^2
 
     Parameters
@@ -446,9 +446,9 @@ def divide_by_minus_k2_fourier(x: npt.NDArray[np.complex64]) -> None:
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.fourier import divide_by_minus_k2_fourier
+    >>> from pysco.fourier import laplacian
     >>> complex_grid = np.random.rand(16, 16, 9).astype(np.complex64)
-    >>> divide_by_minus_k2_fourier(complex_grid)
+    >>> laplacian(complex_grid)
     """
     minus_inv_fourpi2 = np.float32(-0.25 / np.pi**2)
     ncells_1d = len(x)
@@ -476,9 +476,7 @@ def divide_by_minus_k2_fourier(x: npt.NDArray[np.complex64]) -> None:
     parallel=True,
     error_model="numpy",
 )
-def divide_by_minus_k2_fourier_compensated(
-    x: npt.NDArray[np.complex64], p: int
-) -> None:
+def laplacian_compensated(x: npt.NDArray[np.complex64], p: int) -> None:
     """Inplace divide complex Fourier-space field by -k^2 with compensated Kernel (Jing 2005)
 
     Parameters
@@ -491,10 +489,10 @@ def divide_by_minus_k2_fourier_compensated(
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.fourier import divide_by_minus_k2_fourier_compensated
+    >>> from pysco.fourier import laplacian_compensated
     >>> complex_grid = np.random.rand(16, 16, 9).astype(np.complex64)
     >>> p_val = 2
-    >>> divide_by_minus_k2_fourier_compensated(complex_grid, p_val)
+    >>> laplacian_compensated(complex_grid, p_val)
     """
     minus_inv_fourpi2 = np.float32(-0.25 / np.pi**2)
     ncells_1d = len(x)
@@ -524,13 +522,67 @@ def divide_by_minus_k2_fourier_compensated(
 
 
 @njit(
+    ["void(c8[:,:,::1])"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+    error_model="numpy",
+)
+def laplacian_7pt(
+    x: npt.NDArray[np.complex64],
+) -> None:
+    """Compute Laplacian in Fourier-space with discrete 7-point stencil (Feng et al. 2016)
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.complex64]
+        Fourier-space field [N, N, N//2 + 1]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.fourier import laplacian_7pt
+    >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
+    >>> laplacian_7pt(complex_field)
+    """
+    invpi = np.float32(0.5 / np.pi)
+    twopi = np.float32(2 * np.pi)
+    ncells_1d = len(x)
+    h = np.float32(1.0 / ncells_1d)
+    minus_h2 = -(h**2)
+    middle = ncells_1d // 2
+    for i in prange(ncells_1d):
+        if i > middle:
+            kx = -np.float32(ncells_1d - i)
+        else:
+            kx = np.float32(i)
+        w_x = twopi * kx * h
+        f_x = (w_x * np.sinc(invpi * w_x)) ** 2
+        for j in prange(ncells_1d):
+            if j > middle:
+                ky = -np.float32(ncells_1d - j)
+            else:
+                ky = np.float32(j)
+            w_y = twopi * ky * h
+            f_y = (w_y * np.sinc(invpi * w_y)) ** 2
+            f_xy = f_x + f_y
+            for k in prange(middle + 1):
+                kz = np.float32(k)
+                w_z = twopi * kz * h
+                f_z = (w_z * np.sinc(invpi * w_z)) ** 2
+                inv_f_xyz = minus_h2 / (f_xy + f_z)
+                x[i, j, k] *= inv_f_xyz
+    x[0, 0, 0] = 0
+
+
+@njit(
     ["c8[:,:,:,::1](c8[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
     error_model="numpy",
 )
-def gradient_laplacian_fourier_exact(
+def gradient_laplacian(
     x: npt.NDArray[np.complex64],
 ) -> npt.NDArray[np.complex64]:
     """Compute gradient of Laplacian in Fourier-space
@@ -548,9 +600,9 @@ def gradient_laplacian_fourier_exact(
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.fourier import gradient_laplacian_fourier_exact
+    >>> from pysco.fourier import gradient_laplacian
     >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
-    >>> result = gradient_laplacian_fourier_exact(complex_field)
+    >>> result = gradient_laplacian(complex_field)
     """
     minus_ii = np.complex64(-1j)
     invtwopi = np.float32(0.5 / np.pi)
@@ -587,7 +639,7 @@ def gradient_laplacian_fourier_exact(
     parallel=True,
     error_model="numpy",
 )
-def gradient_laplacian_fourier_compensated(
+def gradient_laplacian_compensated(
     x: npt.NDArray[np.complex64], p: int
 ) -> npt.NDArray[np.complex64]:
     """Compute gradient of Laplacian in Fourier-space with compensated Kernel (Jing 2005)
@@ -607,10 +659,10 @@ def gradient_laplacian_fourier_compensated(
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.fourier import gradient_laplacian_fourier_compensated
+    >>> from pysco.fourier import gradient_laplacian_compensated
     >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
     >>> p_val = 2
-    >>> result = gradient_laplacian_fourier_compensated(complex_field, p_val)
+    >>> result = gradient_laplacian_compensated(complex_field, p_val)
     """
     minus_ii = np.complex64(-1j)
     invtwopi = np.float32(0.5 / np.pi)
@@ -641,162 +693,5 @@ def gradient_laplacian_fourier_compensated(
                 result[i, j, k, 0] = x_k2_tmp * kx
                 result[i, j, k, 1] = x_k2_tmp * ky
                 result[i, j, k, 2] = x_k2_tmp * kz
-    result[0, 0, 0, :] = 0
-    return result
-
-
-@njit(
-    ["c8[:,:,:,::1](c8[:,:,::1])"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-    error_model="numpy",
-)
-def gradient_laplacian_fourier_fdk(
-    x: npt.NDArray[np.complex64],
-) -> npt.NDArray[np.complex64]:
-    """Compute gradient of Laplacian in Fourier-space with discrete derivative kernels (Feng et al. 2016)
-
-    Parameters
-    ----------
-    x : npt.NDArray[np.complex64]
-        Fourier-space field [N, N, N//2 + 1]
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Gradient of Laplacian [N, N, N//2 + 1, 3]
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from pysco.fourier import gradient_laplacian_fourier_fdk
-    >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
-    >>> result = gradient_laplacian_fourier_fdk(complex_field)
-    """
-    minus_ii = np.complex64(-1j)
-    invpi = np.float32(0.5 / np.pi)
-    twopi = np.float32(2 * np.pi)
-    ncells_1d = len(x)
-    h = np.float32(1.0 / ncells_1d)
-    invsix = np.float32(1.0 / 6)
-    eight = np.float32(8)
-    two = np.float32(2)
-    middle = ncells_1d // 2
-    result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
-    for i in prange(ncells_1d):
-        if i > middle:
-            kx = -np.float32(ncells_1d - i)
-        else:
-            kx = np.float32(i)
-        w_x = twopi * kx * h
-        sin_w_x = np.sin(w_x)
-        sin_2w_x = np.sin(two * w_x)
-        d1_w_x = invsix * (eight * sin_w_x - sin_2w_x)
-        f_x = (w_x * np.sinc(invpi * w_x)) ** 2
-        for j in prange(ncells_1d):
-            if j > middle:
-                ky = -np.float32(ncells_1d - j)
-            else:
-                ky = np.float32(j)
-            w_y = twopi * ky * h
-            sin_w_y = np.sin(w_y)
-            sin_2w_y = np.sin(two * w_y)
-            d1_w_y = invsix * (eight * sin_w_y - sin_2w_y)
-            f_y = (w_y * np.sinc(invpi * w_y)) ** 2
-            f_xy = f_x + f_y
-            for k in prange(middle + 1):
-                kz = np.float32(k)
-                w_z = twopi * kz * h
-                sin_w_z = np.sin(w_z)
-                sin_2w_z = np.sin(two * w_z)
-                d1_w_z = invsix * (eight * sin_w_z - sin_2w_z)
-                f_z = (w_z * np.sinc(invpi * w_z)) ** 2
-                inv_f_xyz = h / (f_xy + f_z)
-                x_k2_tmp = minus_ii * x[i, j, k] * inv_f_xyz
-                result[i, j, k, 0] = x_k2_tmp * d1_w_x
-                result[i, j, k, 1] = x_k2_tmp * d1_w_y
-                result[i, j, k, 2] = x_k2_tmp * d1_w_z
-    result[0, 0, 0, :] = 0
-    return result
-
-
-@njit(
-    ["c8[:,:,:,::1](c8[:,:,::1], i8)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-    error_model="numpy",
-)
-def gradient_laplacian_fourier_hammings(
-    x: npt.NDArray[np.complex64], p: int
-) -> npt.NDArray[np.complex64]:
-    """Compute gradient of Laplacian in Fourier-space with Hammings kernel (Hammings 1989, Springel 2005)
-
-    Parameters
-    ----------
-    x : npt.NDArray[np.complex64]
-        Fourier-space field [N, N, N//2 + 1]
-    p : int
-        Compensation order (NGP = 1, CIC = 2, TSC = 3)
-
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Gradient of Laplacian [N, N, N//2 + 1, 3]
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from pysco.fourier import gradient_laplacian_fourier_hammings
-    >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
-    >>> p_val = 2
-    >>> result = gradient_laplacian_fourier_hammings(complex_field, p_val)
-    """
-    minus_ii = np.complex64(-1j)
-    invfourpi2 = np.float32(0.25 / np.pi**2)
-    twopi = np.float32(2 * np.pi)
-    two = np.float32(2)
-    eight = np.float32(8)
-    invsix = np.float32(1.0 / 6)
-    ncells_1d = len(x)
-    h = np.float32(1.0 / ncells_1d)
-    twop = 2 * p
-    middle = ncells_1d // 2
-    result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
-    for i in prange(ncells_1d):
-        if i > middle:
-            kx = -np.float32(ncells_1d - i)
-        else:
-            kx = np.float32(i)
-        kx2 = kx**2
-        w_x = twopi * kx * h
-        weight_x = np.sinc(kx * h)
-        sin_w_x = np.sin(w_x)
-        sin_2w_x = np.sin(two * w_x)
-        d1_w_x = invsix * (eight * sin_w_x - sin_2w_x)
-        for j in prange(ncells_1d):
-            if j > middle:
-                ky = -np.float32(ncells_1d - j)
-            else:
-                ky = np.float32(j)
-            kx2_ky2 = kx2 + ky**2
-            w_y = twopi * ky * h
-            weight_xy = weight_x * np.sinc(ky * h)
-            sin_w_y = np.sin(w_y)
-            sin_2w_y = np.sin(two * w_y)
-            d1_w_y = invsix * (eight * sin_w_y - sin_2w_y)
-            for k in prange(middle + 1):
-                kz = np.float32(k)
-                w_z = twopi * kz * h
-                weight_xyz = weight_xy * np.sinc(kz * h)
-                sin_w_z = np.sin(w_z)
-                sin_2w_z = np.sin(two * w_z)
-                d1_w_z = invsix * (eight * sin_w_z - sin_2w_z)
-                k2 = h * weight_xyz**twop * (kx2_ky2 + kz**2)
-                invk2 = invfourpi2 / k2
-                x_k2_tmp = minus_ii * invk2 * x[i, j, k]
-                result[i, j, k, 0] = x_k2_tmp * d1_w_x
-                result[i, j, k, 1] = x_k2_tmp * d1_w_y
-                result[i, j, k, 2] = x_k2_tmp * d1_w_z
     result[0, 0, 0, :] = 0
     return result
