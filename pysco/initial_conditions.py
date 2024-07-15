@@ -2024,32 +2024,32 @@ def add_3LPT(
                 fx_3b = psi_3lpt_b[i, j, k, 0]
                 fy_3b = psi_3lpt_b[i, j, k, 1]
                 fz_3b = psi_3lpt_b[i, j, k, 2]
-                position[i, j, k, 0] += (
+                position[i, j, k, 0] -= (
                     dplus_3a * fx_3a
                     + dplus_3b * fx_3b
                     + dplus_3c * (psi_Az_3c[i, j, k, 0] - psi_Ay_3c[i, j, k, 0])
                 )
-                position[i, j, k, 1] += (
+                position[i, j, k, 1] -= (
                     dplus_3a * fy_3a
                     + dplus_3b * fy_3b
                     + dplus_3c * (psi_Ax_3c[i, j, k, 1] - psi_Az_3c[i, j, k, 1])
                 )
-                position[i, j, k, 2] += (
+                position[i, j, k, 2] -= (
                     dplus_3a * fz_3a
                     + dplus_3b * fz_3b
                     + dplus_3c * (psi_Ay_3c[i, j, k, 2] - psi_Ax_3c[i, j, k, 2])
                 )
-                velocity[i, j, k, 0] += (
+                velocity[i, j, k, 0] -= (
                     dfH_3a * fx_3a
                     + dfH_3b * fx_3b
                     + dfH_3c * (psi_Az_3c[i, j, k, 0] - psi_Ay_3c[i, j, k, 0])
                 )
-                velocity[i, j, k, 1] += (
+                velocity[i, j, k, 1] -= (
                     dfH_3a * fy_3a
                     + dfH_3b * fy_3b
                     + dfH_3c * (psi_Ax_3c[i, j, k, 1] - psi_Az_3c[i, j, k, 1])
                 )
-                velocity[i, j, k, 2] += (
+                velocity[i, j, k, 2] -= (
                     dfH_3a * fz_3a
                     + dfH_3b * fz_3b
                     + dfH_3c * (psi_Ay_3c[i, j, k, 2] - psi_Ax_3c[i, j, k, 2])
