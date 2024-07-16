@@ -21,6 +21,7 @@ import logging
 import fourier
 import mond
 import iostream
+import math
 
 
 # @utils.profile_me
@@ -544,3 +545,54 @@ def fft_force(
         iostream.write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
     rhs_fourier = 0
     return fourier.ifft_3D_real_grad(force, param["nthreads"])
+
+
+def force_3d(
+    rhs: npt.NDArray[np.float32],
+    param: pd.Series,
+) -> npt.NDArray[np.float32]:
+    """Solves the Newtonian linear Poisson equation and outputs Force
+
+    Parameters
+    ----------
+    rhs : npt.NDArray[np.float32]
+        Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
+    param : pd.Series
+        Parameter container
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Force [3, N_cells_1d, N_cells_1d,N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pandas as pd
+    >>> from pysco.solver import force_3d
+    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> param = pd.Series({"nthreads": 4, "boxlen": 100.0, "npart": 1000000, "aexp": 1.0, "Om_m": 0.3})
+    >>> result = force_3d(rhs, param)
+    """
+
+    param["MAS_index"] = 0
+    LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
+    match LINEAR_NEWTON_SOLVER:
+        case "multigrid":
+            h = np.float32(1.0 / math.cbrt(param["npart"]))
+            potential = np.empty(0, dtype=np.float32)
+            table = []
+            param["compute_additional_field"] = False
+            potential = initialise_potential(potential, rhs, h, param, table)
+            force = mesh.derivative(
+                multigrid.linear(potential, rhs, h, param),
+                param["gradient_stencil_order"],
+            )
+            potential = 0
+        case "fft" | "fft_7pt":
+            force = mesh.derivative(fft(rhs, param, 0), param["gradient_stencil_order"])
+        case "full_fft":
+            force = fft_force(rhs, param, 0)
+        case _:
+            raise ValueError(f"Unsupported {LINEAR_NEWTON_SOLVER=}")
+    return force

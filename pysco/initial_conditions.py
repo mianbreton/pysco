@@ -34,7 +34,7 @@ def generate(
     param : pd.Series
         Parameter container
 
-    tables : List[interp1]
+    tables : List[interp1d]
         Interpolated functions [a(t), t(a), H(a), Dplus1(a), f1(a), Dplus2(a), f2(a), Dplus3a(a), f3a(a), Dplus3b(a), f3b(a), Dplus3c(a), f3c(a)]
 
     Returns
@@ -105,30 +105,7 @@ def generate(
         Hz *= param["unit_t"] / mpc_to_km  # km/s/Mpc to BU
 
         density_initial = generate_density(param)
-
-        param["MAS_index"] = 0
-        LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
-        match LINEAR_NEWTON_SOLVER:
-            case "multigrid":
-                h = np.float32(1.0 / math.cbrt(param["npart"]))
-                potential = np.empty(0, dtype=np.float32)
-                param["compute_additional_field"] = False
-                potential = solver.initialise_potential(
-                    potential, density_initial, h, param, tables
-                )
-                psi_1lpt = mesh.derivative(
-                    multigrid.linear(potential, density_initial, h, param),
-                    param["gradient_stencil_order"],
-                )
-                potential = 0
-            case "fft" | "fft_7pt":
-                psi_1lpt = mesh.derivative(
-                    solver.fft(density_initial, param), param["gradient_stencil_order"]
-                )
-            case "full_fft":
-                psi_1lpt = solver.fft_force(density_initial, param)
-            case _:
-                raise ValueError(f"Unsupported {LINEAR_NEWTON_SOLVER=}")
+        psi_1lpt = solver.force_3d(density_initial, param)
         density_initial = 0
 
         # 1LPT
@@ -148,7 +125,7 @@ def generate(
         fH_2 = np.float32(f2 * Hz)
         rhs_2ndorder = compute_rhs_2ndorder(psi_1lpt, param["gradient_stencil_order"])
         param["MAS_index"] = 0
-        psi_2lpt = solver.fft_force(rhs_2ndorder, param)
+        psi_2lpt = solver.force_3d(rhs_2ndorder, param)
         rhs_2ndorder = 0
         add_2LPT(position, velocity, psi_2lpt, dplus_2, fH_2)
         if param["initial_conditions"].casefold() == "2LPT".casefold():
@@ -177,15 +154,15 @@ def generate(
             )
             psi_1lpt = 0
             psi_2lpt = 0
-            psi_3lpt_a = solver.fft_force(rhs_3a, param, 0)
+            psi_3lpt_a = solver.force_3d(rhs_3a, param)
             rhs_3a = 0
-            psi_3lpt_b = solver.fft_force(rhs_3b, param, 0)
+            psi_3lpt_b = solver.force_3d(rhs_3b, param)
             rhs_3b = 0
-            psi_Ax_3c = solver.fft_force(rhs_Ax_3c, param, 0)
+            psi_Ax_3c = solver.force_3d(rhs_Ax_3c, param)
             rhs_Ax_3c = 0
-            psi_Ay_3c = solver.fft_force(rhs_Ay_3c, param, 0)
+            psi_Ay_3c = solver.force_3d(rhs_Ay_3c, param)
             rhs_Ay_3c = 0
-            psi_Az_3c = solver.fft_force(rhs_Az_3c, param, 0)
+            psi_Az_3c = solver.force_3d(rhs_Az_3c, param)
             rhs_Az_3c = 0
             add_3LPT(
                 position,
@@ -1730,13 +1707,7 @@ def compute_rhs_3rdorder_d7(
 
 def compute_rhs_2ndorder(
     psi_1lpt: npt.NDArray[np.float32], gradient_order: int
-) -> Tuple[
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-]:
+) -> npt.NDArray[np.float32]:
     """Compute 2nd-order right-hand side of Potential field [Scoccimarro 1998 Appendix B.2]
 
     Parameters
@@ -1758,7 +1729,7 @@ def compute_rhs_2ndorder(
     >>> gradient_stencil = 5
     >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
     >>> psi_2lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
-    >>> compute_rhs_2ndorder(psi_1lpt, gradient_stencil)
+    >>> rhs_2ndorder = compute_rhs_2ndorder(psi_1lpt, gradient_stencil)
     """
     match gradient_order:
         case 2:
