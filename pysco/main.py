@@ -5,7 +5,7 @@ Main executable module to run cosmological N-body simulations
 Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
-__version__ = "0.5.1"
+__version__ = "0.5.2"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -104,13 +104,13 @@ def run(param) -> None:
         param["nsteps"] = 0
     logging.warning(f"\n[bold blue]----- Initial conditions -----[/bold blue]\n")
     position, velocity = initial_conditions.generate(param, tables)
-    param["t"] = tables[1](param["aexp"])
+    param["t"] = tables[1](np.log(param["aexp"]))
     logging.warning(f"{param['aexp']=} {param['t']=}")
     logging.warning(f"\n[bold blue]----- Run N-body -----[/bold blue]\n")
     acceleration, potential, additional_field = solver.pm(position, param)
     aexp_out = 1.0 / (np.array(z_out) + 1)
     aexp_out.sort()
-    t_out = tables[1](aexp_out)
+    t_out = tables[1](np.log(aexp_out))
     logging.info(f"{aexp_out=}")
     logging.info(f"{t_out}")
     if not "i_snap" in param.index:

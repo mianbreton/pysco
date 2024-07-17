@@ -35,7 +35,7 @@ def generate(
         Parameter container
 
     tables : List[interp1d]
-        Interpolated functions [a(t), t(a), H(a), Dplus1(a), f1(a), Dplus2(a), f2(a), Dplus3a(a), f3a(a), Dplus3b(a), f3b(a), Dplus3c(a), f3c(a)]
+        Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
 
     Returns
     -------
@@ -100,13 +100,50 @@ def generate(
         a_start = 1.0 / (1 + param["z_start"])
         lna_start = np.log(a_start)
         logging.warning(f"{param['z_start']=}")
-        Hz = tables[2](a_start)
+        Hz = tables[2](lna_start)
         mpc_to_km = 1e3 * pc.value
         Hz *= param["unit_t"] / mpc_to_km  # km/s/Mpc to BU
 
         density_initial = generate_density(param)
         psi_1lpt = solver.force_3d(density_initial, param)
         density_initial = 0
+        # psi_1lpt = generate_force(param)
+        """ import matplotlib.pyplot as plt
+
+        data = np.loadtxt(
+            "/home/mabreton/data/PySCo/Initial_conditions/pk_lcdm_pysco.dat"
+        )
+
+        vx_k = fourier.fft_3D_real(psi_1lpt[:, :, :, 0], 1)
+        vy_k = fourier.fft_3D_real(psi_1lpt[:, :, :, 1], 1)
+        vz_k = fourier.fft_3D_real(psi_1lpt[:, :, :, 2], 1)
+        MAS = 0  # Mass assignment scheme. # None = 0, NGP = 1, CIC = 2, TSC = 3
+        k, pkx, modes = fourier.fourier_grid_to_Pk(vx_k, MAS)
+        k, pky, modes = fourier.fourier_grid_to_Pk(vy_k, MAS)
+        k, pkz, modes = fourier.fourier_grid_to_Pk(vz_k, MAS)
+        plt.loglog(
+            k * 2 * np.pi / param["boxlen"],
+            (pkx + pky + pkz) / 3 * (param["boxlen"] / len(psi_1lpt) ** 2) ** 3,
+            label="vabs",
+        )
+        plt.loglog(
+            k * 2 * np.pi / param["boxlen"],
+            pkx * (param["boxlen"] / len(psi_1lpt) ** 2) ** 3,
+            label="vx",
+        )
+        plt.loglog(
+            k * 2 * np.pi / param["boxlen"],
+            pky * (param["boxlen"] / len(psi_1lpt) ** 2) ** 3,
+            label="vy",
+        )
+        plt.loglog(
+            k * 2 * np.pi / param["boxlen"],
+            pkz * (param["boxlen"] / len(psi_1lpt) ** 2) ** 3,
+            label="vz",
+        )
+        plt.loglog(data[:, 0], data[:, 1] / data[:, 0] ** 2 * 1.35e-6, "k")
+        plt.legend()
+        plt.show() """
 
         # 1LPT
         dplus_1_z0 = tables[3](0)
@@ -399,8 +436,10 @@ def generate_density(param: pd.Series) -> npt.NDArray[np.float32]:
 
     utils.prod_vector_vector_inplace(density_k, transfer_grid)
     transfer_grid = 0
+    density = fourier.ifft_3D(density_k, param["nthreads"])
+    density_k = 0
     # .real method makes the data not C contiguous
-    return np.ascontiguousarray(fourier.ifft_3D(density_k, param["nthreads"]).real)
+    return np.ascontiguousarray(density.real)
 
 
 @utils.time_me
@@ -697,12 +736,14 @@ def white_noise_fourier_force(
                 imaginary = amplitude * math.sin(phase)
                 result_lower = real - ii * imaginary
                 result_upper = real + ii * imaginary
-                force[im, jm, km, 0] = ii * invtwopi * result_lower * kx * invk2
-                force[i, j, k, 0] = -ii * invtwopi * result_upper * kx * invk2
-                force[im, jm, km, 1] = ii * invtwopi * result_lower * ky * invk2
-                force[i, j, k, 1] = -ii * invtwopi * result_upper * ky * invk2
-                force[im, jm, km, 2] = ii * invtwopi * result_lower * kz * invk2
-                force[i, j, k, 2] = -ii * invtwopi * result_upper * kz * invk2
+                i_phi_lower = ii * invtwopi * result_lower * invk2
+                i_phi_upper = ii * invtwopi * result_upper * invk2
+                force[im, jm, km, 0] = kx * i_phi_lower
+                force[im, jm, km, 1] = ky * i_phi_lower
+                force[im, jm, km, 2] = kz * i_phi_lower
+                force[i, j, k, 0] = -kx * i_phi_upper
+                force[i, j, k, 1] = -ky * i_phi_upper
+                force[i, j, k, 2] = -kz * i_phi_upper
     rng_phases = 0
     rng_amplitudes = 0
     # Fix edges
@@ -807,12 +848,14 @@ def white_noise_fourier_fixed_force(
                 imaginary = math.sin(phase)
                 result_lower = real - ii * imaginary
                 result_upper = real + ii * imaginary
-                force[im, jm, km, 0] = ii * invtwopi * result_lower * kx * invk2
-                force[i, j, k, 0] = -ii * invtwopi * result_upper * kx * invk2
-                force[im, jm, km, 1] = ii * invtwopi * result_lower * ky * invk2
-                force[i, j, k, 1] = -ii * invtwopi * result_upper * ky * invk2
-                force[im, jm, km, 2] = ii * invtwopi * result_lower * kz * invk2
-                force[i, j, k, 2] = -ii * invtwopi * result_upper * kz * invk2
+                i_phi_lower = ii * invtwopi * result_lower * invk2
+                i_phi_upper = ii * invtwopi * result_upper * invk2
+                force[im, jm, km, 0] = kx * i_phi_lower
+                force[im, jm, km, 1] = ky * i_phi_lower
+                force[im, jm, km, 2] = kz * i_phi_lower
+                force[i, j, k, 0] = -kx * i_phi_upper
+                force[i, j, k, 1] = -ky * i_phi_upper
+                force[i, j, k, 2] = -kz * i_phi_upper
     rng_phases = 0
     # Fix edges
     inv2 = np.float32(0.5)

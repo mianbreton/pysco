@@ -46,7 +46,7 @@ def pm(
     additional_field : npt.NDArray[np.float32], optional
         Additional potential [N_cells_1d, N_cells_1d,N_cells_1d], by default np.empty(0, dtype=np.float32)
     tables : List[interp1d], optional
-        Interpolated functions [a(t), t(a), H(a), Dplus1(a), f1(a), Dplus2(a), f2(a), Dplus3a(a), f3a(a), Dplus3b(a), f3b(a), Dplus3c(a), f3c(a)], by default []
+        Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
 
     Returns
     -------
@@ -223,7 +223,7 @@ def initialise_potential(
     param : pd.Series
         Parameter container
     tables : List[interp1d], optional
-        Interpolated functions [a(t), t(a), H(a), Dplus1(a), f1(a), Dplus2(a), f2(a), Dplus3a(a), f3a(a), Dplus3b(a), f3b(a), Dplus3c(a), f3c(a)], by default []
+        Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
     
     Returns
     -------
@@ -265,8 +265,8 @@ def initialise_potential(
         if not param["compute_additional_field"]:
             scaling = (
                 param["aexp"]
-                * tables[3](param["aexp"])
-                / (param["aexp_old"] * tables[3](param["aexp_old"]))
+                * tables[3](np.log(param["aexp"]))
+                / (param["aexp_old"] * tables[3](np.log(param["aexp_old"])))
             )
             utils.prod_vector_scalar_inplace(potential, scaling)
 
@@ -295,7 +295,7 @@ def get_additional_field(
     param : pd.Series
         Parameter container
     tables : List[interp1d], optional
-        Interpolated functions [a(t), t(a), Dplus(a), H(a)], by default []
+        Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
 
     Returns
     -------
@@ -584,13 +584,13 @@ def force_3d(
             table = []
             param["compute_additional_field"] = False
             potential = initialise_potential(potential, rhs, h, param, table)
-            force = mesh.derivative(
-                multigrid.linear(potential, rhs, h, param),
-                param["gradient_stencil_order"],
-            )
+            potential = multigrid.linear(potential, rhs, h, param)
+            force = mesh.derivative(potential, param["gradient_stencil_order"])
             potential = 0
         case "fft" | "fft_7pt":
-            force = mesh.derivative(fft(rhs, param, 0), param["gradient_stencil_order"])
+            potential = fft(rhs, param, 0)
+            force = mesh.derivative(potential, param["gradient_stencil_order"])
+            potential = 0
         case "full_fft":
             force = fft_force(rhs, param, 0)
         case _:

@@ -113,9 +113,9 @@ def generate(param: pd.Series) -> List[interp1d]:
         header="aexp, H/H0, t_supercomoving, dplus1, f1, dplus2, f2, dplus3a, f3a, dplus3b, f3b, dplus3c, f3c",
     )
     return [
-        interp1d(t_supercomoving, a, fill_value="extrapolate"),
-        interp1d(a, t_supercomoving, fill_value="extrapolate"),
-        interp1d(a, param["H0"] * E_array, fill_value="extrapolate"),
+        interp1d(t_supercomoving, lna, fill_value="extrapolate"),
+        interp1d(lna, t_supercomoving, fill_value="extrapolate"),
+        interp1d(lna, param["H0"] * E_array, fill_value="extrapolate"),
         interp1d(lnaexp_growth, d1, fill_value="extrapolate"),
         interp1d(lnaexp_growth, f1, fill_value="extrapolate"),
         interp1d(lnaexp_growth, d2, fill_value="extrapolate"),

@@ -45,7 +45,7 @@ def integrate(
     additional_field : npt.NDArray[np.float32]
         Additional potential [N_cells_1d, N_cells_1d, N_cells_1d]
     tables : List[interp1d]
-        Interpolated functions [a(t), t(a), H(a), Dplus1(a), f1(a), Dplus2(a), f2(a), Dplus3a(a), f3a(a), Dplus3b(a), f3b(a), Dplus3c(a), f3c(a)]
+        Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
     param : pd.Series
         Parameter container
     t_snap_next : np.float32
@@ -151,7 +151,7 @@ def euler(
     dt : np.float32
         Time step
     tables : List[interp1d]
-        Interpolated functions [a(t), t(a), Dplus(a), H(a)]
+        Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
     param : pd.Series
         Parameter container
 
@@ -179,7 +179,7 @@ def euler(
     utils.add_vector_scalar_inplace(position, velocity, dt)
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
-    param["aexp"] = tables[0](param["t"])
+    param["aexp"] = np.exp(tables[0](param["t"]))
     utils.set_units(param)
     utils.periodic_wrap(position)
     utils.add_vector_scalar_inplace(velocity, acceleration, -dt)
@@ -222,7 +222,7 @@ def leapfrog(
     dt : np.float32
         Time step
     tables : List[interp1d]
-        Interpolated functions [a(t), t(a), Dplus(a), H(a)]
+        Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
     param : pd.Series
         Parameter container
 
@@ -252,7 +252,7 @@ def leapfrog(
     utils.add_vector_scalar_inplace(position, velocity, dt)
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
-    param["aexp"] = tables[0](param["t"])
+    param["aexp"] = np.exp(tables[0](param["t"]))
     logging.info(f"{param['t']=} {param['aexp']=}")
     utils.set_units(param)
     utils.periodic_wrap(position)
@@ -352,4 +352,6 @@ def dt_weak_variation(
     >>> param = pd.Series({"aexp": 0.5})
     >>> dt = dt_weak_variation(func_t_a, param)
     """
-    return np.float32(func_t_a(1.1 * param["aexp"]) - func_t_a(param["aexp"]))
+    return np.float32(
+        func_t_a(np.log(1.1 * param["aexp"])) - func_t_a(np.log(param["aexp"]))
+    )
