@@ -67,8 +67,9 @@ def generate(
     >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.rand(100)) for _ in range(13)]
     >>> position, velocity = generate(param, tables)
     """
-    if isinstance(param["initial_conditions"], int):
-        i_restart = int(param["initial_conditions"])
+    INITIAL_CONDITIONS = param["initial_conditions"]
+    if isinstance(INITIAL_CONDITIONS, int):
+        i_restart = int(INITIAL_CONDITIONS)
         param["initial_conditions"] = i_restart
         OUTPUT_SNAPSHOT_FORMAT = param["output_snapshot_format"].casefold()
         match OUTPUT_SNAPSHOT_FORMAT:
@@ -96,7 +97,7 @@ def generate(
                     f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'"
                 )
         return position, velocity
-    elif param["initial_conditions"][1:4].casefold() == "LPT".casefold():
+    elif "LPT".casefold() in INITIAL_CONDITIONS.casefold():
         a_start = 1.0 / (1 + param["z_start"])
         lna_start = np.log(a_start)
         logging.warning(f"{param['z_start']=}")
@@ -108,42 +109,6 @@ def generate(
         psi_1lpt = solver.force_3d(density_initial, param)
         density_initial = 0
         # psi_1lpt = generate_force(param)
-        """ import matplotlib.pyplot as plt
-
-        data = np.loadtxt(
-            "/home/mabreton/data/PySCo/Initial_conditions/pk_lcdm_pysco.dat"
-        )
-
-        vx_k = fourier.fft_3D_real(psi_1lpt[:, :, :, 0], 1)
-        vy_k = fourier.fft_3D_real(psi_1lpt[:, :, :, 1], 1)
-        vz_k = fourier.fft_3D_real(psi_1lpt[:, :, :, 2], 1)
-        MAS = 0  # Mass assignment scheme. # None = 0, NGP = 1, CIC = 2, TSC = 3
-        k, pkx, modes = fourier.fourier_grid_to_Pk(vx_k, MAS)
-        k, pky, modes = fourier.fourier_grid_to_Pk(vy_k, MAS)
-        k, pkz, modes = fourier.fourier_grid_to_Pk(vz_k, MAS)
-        plt.loglog(
-            k * 2 * np.pi / param["boxlen"],
-            (pkx + pky + pkz) / 3 * (param["boxlen"] / len(psi_1lpt) ** 2) ** 3,
-            label="vabs",
-        )
-        plt.loglog(
-            k * 2 * np.pi / param["boxlen"],
-            pkx * (param["boxlen"] / len(psi_1lpt) ** 2) ** 3,
-            label="vx",
-        )
-        plt.loglog(
-            k * 2 * np.pi / param["boxlen"],
-            pky * (param["boxlen"] / len(psi_1lpt) ** 2) ** 3,
-            label="vy",
-        )
-        plt.loglog(
-            k * 2 * np.pi / param["boxlen"],
-            pkz * (param["boxlen"] / len(psi_1lpt) ** 2) ** 3,
-            label="vz",
-        )
-        plt.loglog(data[:, 0], data[:, 1] / data[:, 0] ** 2 * 1.35e-6, "k")
-        plt.legend()
-        plt.show() """
 
         # 1LPT
         dplus_1_z0 = tables[3](0)
@@ -151,7 +116,7 @@ def generate(
         f1 = tables[4](lna_start)
         fH_1 = np.float32(f1 * Hz)
         position, velocity = initialise_1LPT(psi_1lpt, dplus_1, fH_1)
-        if param["initial_conditions"].casefold() == "1LPT".casefold():
+        if INITIAL_CONDITIONS.casefold() == "1LPT".casefold():
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
             finalise_initial_conditions(position, velocity, param)
@@ -165,12 +130,12 @@ def generate(
         psi_2lpt = solver.force_3d(rhs_2ndorder, param)
         rhs_2ndorder = 0
         add_2LPT(position, velocity, psi_2lpt, dplus_2, fH_2)
-        if param["initial_conditions"].casefold() == "2LPT".casefold():
+        if INITIAL_CONDITIONS.casefold() == "2LPT".casefold():
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
             finalise_initial_conditions(position, velocity, param)
             return position, velocity
-        elif param["initial_conditions"].casefold() == "3LPT".casefold():
+        elif INITIAL_CONDITIONS.casefold() == "3LPT".casefold():
             dplus_3a = np.float32(tables[7](lna_start) / dplus_1_z0**3)
             f3a = tables[8](lna_start)
             fH_3a = np.float32(f3a * Hz)
@@ -229,7 +194,7 @@ def generate(
             raise ValueError(
                 f"Initial conditions shoule be 1LPT, 2LPT, 3LPT or *.h5. Currently {param['initial_conditions']=}"
             )
-    elif param["initial_conditions"][-3:].casefold() == ".h5".casefold():
+    elif INITIAL_CONDITIONS[-3:].casefold() == ".h5".casefold():
         position, velocity = read_hdf5(param)
         finalise_initial_conditions(position, velocity, param)
         return position, velocity

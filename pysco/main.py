@@ -5,7 +5,7 @@ Main executable module to run cosmological N-body simulations
 Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
-__version__ = "0.5.2"
+__version__ = "0.5.3"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -34,7 +34,6 @@ def run(param) -> None:
     param : dict or pd.Series
         Parameter container
     """
-    t_start = perf_counter()
     # Ideally it would have been error/info/debug, but the latter triggers extensive Numba verbose
     if param["verbose"] == 0:
         logging_level = logging.ERROR
@@ -138,7 +137,7 @@ def run(param) -> None:
         )  # Put None instead of potential if you do not want to use previous step
 
         if (param["nsteps"] % param["n_reorder"]) == 0:
-            logging.warning("Reordering particles")
+            logging.info("Reordering particles")
             utils.reorder_particles(position, velocity, acceleration)
         if param["write_snapshot"]:
             iostream.write_snapshot_particles(position, velocity, param)
@@ -146,8 +145,6 @@ def run(param) -> None:
         logging.warning(
             f"{param['nsteps']=} {param['aexp']=} z = {1.0 / param['aexp'] - 1}"
         )
-    t_end = perf_counter()
-    print(f"Simulation run time: {t_end - t_start} seconds.")
 
 
 def main():
@@ -159,7 +156,10 @@ def main():
     args = parser.parse_args()
     param = iostream.read_param_file(args.config_file)
     print(param)
+    t_start = perf_counter()
     run(param)
+    t_end = perf_counter()
+    print(f"Simulation run time: {t_end - t_start} seconds.")
 
 
 if __name__ == "__main__":

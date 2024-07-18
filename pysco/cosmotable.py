@@ -77,18 +77,9 @@ def generate(param: pd.Series) -> List[interp1d]:
     t_supercomoving -= t_supercomoving[-1]
     growth_functions = compute_growth_functions(cosmo, param)
     mask = growth_functions[0] > lna[0]
-    growth_functions = growth_functions[:, mask]
-    lnaexp_growth = growth_functions[0]
-    d1 = growth_functions[1]
-    f1 = growth_functions[2]
-    d2 = growth_functions[3]
-    f2 = growth_functions[4]
-    d3a = growth_functions[5]
-    f3a = growth_functions[6]
-    d3b = growth_functions[7]
-    f3b = growth_functions[8]
-    d3c = growth_functions[9]
-    f3c = growth_functions[10]
+    lnaexp_growth, d1, f1, d2, f2, d3a, f3a, d3b, f3b, d3c, f3c = growth_functions[
+        :, mask
+    ]
 
     logging.warning(
         f"Write table in: {param['base']}/evolution_table_pysco_{param['extra']}.txt"
@@ -161,11 +152,9 @@ def compute_growth_functions(
     dplus3a_ini = -1.0 / 3.0 * dplus1_ini**3
     dplus3b_ini = 10.0 / 21.0 * dplus1_ini**3
     dplus3c_ini = -1.0 / 7.0 * dplus1_ini**3
-    d_dplus1_dlnaexp_ini = 0
-    d_dplus2_dlnaexp_ini = 0
-    d_dplus3a_dlnaexp_ini = 0
-    d_dplus3b_dlnaexp_ini = 0
-    d_dplus3c_dlnaexp_ini = 0
+    d_dplus1_dlnaexp_ini = d_dplus2_dlnaexp_ini = d_dplus3a_dlnaexp_ini = (
+        d_dplus3b_dlnaexp_ini
+    ) = d_dplus3c_dlnaexp_ini = 0
 
     y0 = [
         dplus1_ini,

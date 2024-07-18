@@ -243,7 +243,7 @@ def initialise_potential(
     >>> potential = initialise_potential(potential, rhs, h, param, tables)
     """
     if len(potential) == 0:
-        logging.warning("Assign potential from density field")
+        logging.info("Assign potential from density field")
         if (
             param["compute_additional_field"]
             and "fr".casefold() == param["theory"].casefold()
@@ -261,7 +261,7 @@ def initialise_potential(
             minus_one_sixth_h2 = np.float32(-(h**2) / 6)
             potential = utils.prod_vector_scalar(rhs, minus_one_sixth_h2)
     else:
-        logging.warning("Rescale potential from previous step for Newtonian potential")
+        logging.info("Rescale potential from previous step for Newtonian potential")
         if not param["compute_additional_field"]:
             scaling = (
                 param["aexp"]
@@ -341,7 +341,6 @@ def get_additional_field(
 
             q = np.float32(-param["aexp"] ** 4 * Rbar / (18 * c2)) / (-fR_a)
             param["fR_q"] = q
-            logging.warning(f"initialise")
             additional_field = initialise_potential(
                 additional_field, dens_term, h, param, tables
             )

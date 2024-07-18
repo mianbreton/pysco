@@ -87,7 +87,7 @@ def integrate(
     else:
         param["write_snapshot"] = False
 
-    logging.warning(
+    logging.info(
         f"Conditions: velocity {dt1=}, acceleration {dt2=}, scale factor {dt3=}"
     )
     INTEGRATOR = param["integrator"].casefold()
