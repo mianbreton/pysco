@@ -694,7 +694,7 @@ def periodic_wrap(position: npt.NDArray[np.float32]) -> None:
     zero = np.float32(0)
     one = np.float32(1)
     eps = -(0.5**25)  # Limit of float32 precision
-    eps -= 1e-6 * eps  # Buffer to avoid unwanted numerical rounding
+    eps += 1e-6 * eps  # Buffer to avoid unwanted numerical rounding
     position_ravelled = position.ravel()
     for i in prange(position_ravelled.shape[0]):
         tmp = position_ravelled[i]

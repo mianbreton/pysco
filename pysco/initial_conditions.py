@@ -20,8 +20,6 @@ from astropy.constants import pc
 import logging
 import iostream
 import fourier
-import multigrid
-import mesh
 
 
 def generate(
@@ -249,7 +247,9 @@ def finalise_initial_conditions(
             )
             iostream.write_snapshot_particles_parquet(snap_name, position, velocity)
             param.to_csv(
-                f"{param['base']}/output_00000/param.txt", sep="=", header=False
+                f"{param['base']}/output_00000/param_{param['extra']}.txt",
+                sep="=",
+                header=False,
             )
         case "hdf5":
             snap_name = f"{param['base']}/output_00000/particles_{param['extra']}.h5"
