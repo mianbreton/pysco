@@ -578,7 +578,7 @@ def force_3d(
     LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
     match LINEAR_NEWTON_SOLVER:
         case "multigrid":
-            h = np.float32(1.0 / math.cbrt(param["npart"]))
+            h = np.float32(0.5 ** param["ncoarse"])
             potential = np.empty(0, dtype=np.float32)
             table = []
             param["compute_additional_field"] = False

@@ -103,10 +103,10 @@ def generate(
         mpc_to_km = 1e3 * pc.value
         Hz *= param["unit_t"] / mpc_to_km  # km/s/Mpc to BU
 
-        density_initial = generate_density(param)
-        psi_1lpt = solver.force_3d(density_initial, param)
-        density_initial = 0
-        # psi_1lpt = generate_force(param)
+        # density_initial = generate_density(param)
+        # psi_1lpt = solver.force_3d(density_initial, param)
+        # density_initial = 0
+        psi_1lpt = generate_force(param)
 
         # 1LPT
         dplus_1_z0 = tables[3](0)
@@ -125,7 +125,7 @@ def generate(
         fH_2 = np.float32(f2 * Hz)
         rhs_2ndorder = compute_rhs_2ndorder(psi_1lpt, param["gradient_stencil_order"])
         param["MAS_index"] = 0
-        psi_2lpt = solver.force_3d(rhs_2ndorder, param)
+        psi_2lpt = solver.fft_force(rhs_2ndorder, param, 0)
         rhs_2ndorder = 0
         add_2LPT(position, velocity, psi_2lpt, dplus_2, fH_2)
         if INITIAL_CONDITIONS.casefold() == "2LPT".casefold():
@@ -154,15 +154,15 @@ def generate(
             )
             psi_1lpt = 0
             psi_2lpt = 0
-            psi_3lpt_a = solver.force_3d(rhs_3a, param)
+            psi_3lpt_a = solver.fft_force(rhs_3a, param, 0)
             rhs_3a = 0
-            psi_3lpt_b = solver.force_3d(rhs_3b, param)
+            psi_3lpt_b = solver.fft_force(rhs_3b, param, 0)
             rhs_3b = 0
-            psi_Ax_3c = solver.force_3d(rhs_Ax_3c, param)
+            psi_Ax_3c = solver.fft_force(rhs_Ax_3c, param, 0)
             rhs_Ax_3c = 0
-            psi_Ay_3c = solver.force_3d(rhs_Ay_3c, param)
+            psi_Ay_3c = solver.fft_force(rhs_Ay_3c, param, 0)
             rhs_Ay_3c = 0
-            psi_Az_3c = solver.force_3d(rhs_Az_3c, param)
+            psi_Az_3c = solver.fft_force(rhs_Az_3c, param, 0)
             rhs_Az_3c = 0
             add_3LPT(
                 position,

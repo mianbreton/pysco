@@ -62,13 +62,7 @@ The goal is to develop a Python-based N-body code that is user-friendly and effi
 
 ### Prerequisites
 
-The only package that needs to be installed by hand is pyFFTW (which is currently not available for Python 3.12)
-
-```sh
-python -m pip install pyfftw
-```
-
-Then, all dependencies will be automatically installed when using pip install (see [Installation](#installation)) so you can skip the remainder of this section.
+All dependencies will be automatically installed when using pip install (see [Installation](#installation)) so you can skip the remainder of this section.
 
 However, if you prefer to install each of them by hand, then you will need the following libraries (the _conda_ installation is shown, but the same result can be achieved with _pip_).
 
@@ -124,6 +118,12 @@ However, if you prefer to install each of them by hand, then you will need the f
 
   ```sh
   conda install -c anaconda h5py
+  ```
+
+- PyFFTW (pip install works better than conda)
+
+  ```sh
+  python -m pip install pyfftw
   ```
 
   <p align="right">(<a href="#top">back to top</a>)</p>
