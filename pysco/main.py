@@ -5,7 +5,7 @@ Main executable module to run cosmological N-body simulations
 Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
-__version__ = "0.5.6"
+__version__ = "0.5.7"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -24,6 +24,7 @@ import logging
 from rich.logging import RichHandler
 import iostream
 from time import perf_counter
+import sys
 
 
 def run(param) -> None:
@@ -71,6 +72,11 @@ def run(param) -> None:
     else:
         param["nthreads"] = numba.get_num_threads()
     logging.warning(f"{param['nthreads']=}")
+
+    if "pyfftw" in sys.modules:
+        logging.warning("\n[bold green]FFT module: PyFFTW[/bold green]")
+    else:
+        logging.warning("\n[bold green]FFT module: NumPy[/bold green]")
 
     extra = param["theory"].casefold()
     if extra.casefold() == "fr".casefold():
