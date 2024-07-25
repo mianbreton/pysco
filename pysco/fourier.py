@@ -96,6 +96,7 @@ def fourier_grid_to_Pk(
     )
 
 
+@utils.time_me
 def fft_3D_real(x: npt.NDArray[np.float32], threads: int) -> npt.NDArray[np.complex64]:
     """Fast Fourier Transform with real inputs
 
@@ -142,6 +143,7 @@ def fft_3D_real(x: npt.NDArray[np.float32], threads: int) -> npt.NDArray[np.comp
     return x_out
 
 
+@utils.time_me
 def fft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.complex64]:
     """Fast Fourier Transform with real and imaginary inputs
 
@@ -186,6 +188,7 @@ def fft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.complex
     return x_out
 
 
+@utils.time_me
 def fft_3D_grad(
     x: npt.NDArray[np.complex64], threads: int
 ) -> npt.NDArray[np.complex64]:
@@ -219,24 +222,28 @@ def fft_3D_grad(
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
     x_in = pyfftw.empty_aligned(
-        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="complex64"
+        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
     )
     x_out = pyfftw.empty_aligned(
-        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="complex64"
+        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
     )
     fftw_plan = pyfftw.FFTW(
         x_in,
         x_out,
-        axes=(0, 1, 2),
+        axes=(1, 2, 3),
         flags=("FFTW_ESTIMATE",),
         direction="FFTW_FORWARD",
         threads=threads,
     )
-    x_in[:] = x
+
+    x_in[:] = np.transpose(x, (3, 0, 1, 2))
     fftw_plan(x_in, x_out)
-    return x_out
+    x_in = 0
+    x_out = np.transpose(x_out, (1, 2, 3, 0))
+    return np.ascontiguousarray(x_out)
 
 
+@utils.time_me
 def ifft_3D_real(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.float32]:
     """Inverse Fast Fourier Transform with real outputs
 
@@ -283,6 +290,7 @@ def ifft_3D_real(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.f
     return x_out
 
 
+@utils.time_me
 def ifft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.complex64]:
     """Inverse Fast Fourier Transform with real and imaginary inputs
 
@@ -327,6 +335,7 @@ def ifft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.comple
     return x_out
 
 
+@utils.time_me
 def ifft_3D_real_grad(
     x: npt.NDArray[np.complex64], threads: int
 ) -> npt.NDArray[np.float32]:
@@ -360,24 +369,28 @@ def ifft_3D_real_grad(
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
     x_in = pyfftw.empty_aligned(
-        (ncells_1d, ncells_1d, ncells_1d // 2 + 1, ndim), dtype="complex64"
+        (ndim, ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64"
     )
     x_out = pyfftw.empty_aligned(
-        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="float32"
+        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="float32"
     )
     fftw_plan = pyfftw.FFTW(
         x_in,
         x_out,
-        axes=(0, 1, 2),
+        axes=(1, 2, 3),
         flags=("FFTW_ESTIMATE",),
         direction="FFTW_BACKWARD",
         threads=threads,
     )
-    x_in[:] = x
+
+    x_in[:] = np.transpose(x, (3, 0, 1, 2))
     fftw_plan(x_in, x_out)
-    return x_out
+    x_in = 0
+    x_out = np.transpose(x_out, (1, 2, 3, 0))
+    return np.ascontiguousarray(x_out)
 
 
+@utils.time_me
 def ifft_3D_grad(
     x: npt.NDArray[np.complex64], threads: int
 ) -> npt.NDArray[np.complex64]:
@@ -413,25 +426,28 @@ def ifft_3D_grad(
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
     x_in = pyfftw.empty_aligned(
-        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="complex64"
+        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
     )
     x_out = pyfftw.empty_aligned(
-        (ncells_1d, ncells_1d, ncells_1d, ndim), dtype="complex64"
+        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
     )
     fftw_plan = pyfftw.FFTW(
         x_in,
         x_out,
-        axes=(0, 1, 2),
+        axes=(1, 2, 3),
         flags=("FFTW_ESTIMATE",),
         direction="FFTW_BACKWARD",
         threads=threads,
     )
-    x_in[:] = x
+
+    x_in[:] = np.transpose(x, (3, 0, 1, 2))
     fftw_plan(x_in, x_out)
-    return x_out
+    x_in = 0
+    x_out = np.transpose(x_out, (1, 2, 3, 0))
+    return np.ascontiguousarray(x_out)
 
 
-# @utils.time_me
+@utils.time_me
 @njit(
     ["void(c8[:,:,::1])"], fastmath=True, cache=True, parallel=True, error_model="numpy"
 )
@@ -469,6 +485,7 @@ def laplacian(x: npt.NDArray[np.complex64]) -> None:
     x[0, 0, 0] = 0
 
 
+@utils.time_me
 @njit(
     ["void(c8[:,:,::1], i8)"],
     fastmath=True,
@@ -521,6 +538,7 @@ def laplacian_compensated(x: npt.NDArray[np.complex64], p: int) -> None:
     x[0, 0, 0] = 0
 
 
+@utils.time_me
 @njit(
     ["void(c8[:,:,::1])"],
     fastmath=True,
@@ -575,6 +593,7 @@ def laplacian_7pt(
     x[0, 0, 0] = 0
 
 
+@utils.time_me
 @njit(
     ["c8[:,:,:,::1](c8[:,:,::1])"],
     fastmath=True,
@@ -632,6 +651,7 @@ def gradient_laplacian(
     return result
 
 
+@utils.time_me
 @njit(
     ["c8[:,:,:,::1](c8[:,:,::1], i8)"],
     fastmath=True,
