@@ -112,24 +112,26 @@ def generate(
         fourier.inverse_laplacian(density_fourier)
         potential_1_fourier = density_fourier
         del density_fourier
-        force = fourier.gradient(potential_1_fourier)
-        psi_1lpt = fourier.ifft_3D_real_grad(force, param["nthreads"])
+        psi_1lpt_fourier = fourier.gradient(potential_1_fourier)
+        psi_1lpt = fourier.ifft_3D_real_grad(psi_1lpt_fourier, param["nthreads"])
+        psi_1lpt_fourier = 0
         # 1LPT
         dplus_1_z0 = tables[3](0)
         dplus_1 = np.float32(tables[3](lna_start) / dplus_1_z0)
         f1 = tables[4](lna_start)
         fH_1 = np.float32(f1 * Hz)
         position, velocity = initialise_1LPT(psi_1lpt, dplus_1, fH_1)
+        psi_1lpt = 0
         if INITIAL_CONDITIONS.casefold() == "1LPT".casefold():
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
             finalise_initial_conditions(position, velocity, param)
             return position, velocity
         # 2LPT
-        # param["MAS_index"] = 0
-        """ rhs_2ndorder = compute_rhs_2ndorder(psi_1lpt, param["gradient_stencil_order"])
+        """ param["MAS_index"] = 0
+        rhs_2ndorder = compute_rhs_2ndorder(psi_1lpt, param["gradient_stencil_order"])
         param["MAS_index"] = 0
-        psi_2lpt = solver.fft_force(rhs_2ndorder, param, 0) 
+        psi_2lpt = solver.fft_force(rhs_2ndorder, param, 0)
         rhs_2ndorder = 0 """
 
         density_2 = compute_2ndorder_rhs(potential_1_fourier, param["nthreads"])
@@ -140,11 +142,12 @@ def generate(
         del density_2_fourier
         psi_2lpt_fourier = fourier.gradient(potential_2_fourier)
         psi_2lpt = fourier.ifft_3D_real_grad(psi_2lpt_fourier, param["nthreads"])
-
+        psi_2lpt_fourier = 0
         dplus_2 = np.float32(tables[5](lna_start) / dplus_1_z0**2)
         f2 = tables[6](lna_start)
         fH_2 = np.float32(f2 * Hz)
         add_nLPT(position, velocity, psi_2lpt, dplus_2, fH_2)
+        # psi_2lpt = 0
         if INITIAL_CONDITIONS.casefold() == "2LPT".casefold():
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
@@ -180,8 +183,8 @@ def generate(
             psi_Ay_3c = solver.fft_force(rhs_Ay_3c, param, 0)
             rhs_Ay_3c = 0
             psi_Az_3c = solver.fft_force(rhs_Az_3c, param, 0)
-            rhs_Az_3c = 0 """
-
+            rhs_Az_3c = 0
+            add_3LPT(position, velocity, psi_3lpt_a, psi_3lpt_b, psi_Ax_3c, psi_Ay_3c, psi_Az_3c, dplus_3a, fH_3a, dplus_3b, fH_3b, dplus_3c, fH_3c) """
             psi_3lpt_a = compute_3a_displacement(potential_1_fourier, param["nthreads"])
             add_nLPT(position, velocity, psi_3lpt_a, dplus_3a, fH_3a)
             psi_3lpt_a = 0
@@ -203,6 +206,8 @@ def generate(
             psi_3lpt_c_Az = compute_3c_Az_displacement(
                 potential_1_fourier, potential_2_fourier, param["nthreads"]
             )
+            potential_1_fourier = 0
+            potential_2_fourier = 0
             add_nLPT(position, velocity, psi_3lpt_c_Az, dplus_3c, fH_3c)
             psi_3lpt_c_Az = 0
             position = position.reshape(param["npart"], 3)
@@ -538,7 +543,7 @@ def get_transfer_grid(param: pd.Series) -> npt.NDArray[np.float32]:
     sqrtPk = (np.sqrt(Pk / param["boxlen"] ** 3) * ncells_1d**3).astype(np.float32)
     k_1d = np.fft.fftfreq(ncells_1d, 1 / ncells_1d)
     k_grid = np.sqrt(
-        k_1d[np.newaxis, np.newaxis, :] ** 2
+        k_1d[np.newaxis, np.newaxis, : ncells_1d // 2 + 1] ** 2
         + k_1d[:, np.newaxis, np.newaxis] ** 2
         + k_1d[np.newaxis, :, np.newaxis] ** 2
     )
@@ -581,16 +586,13 @@ def white_noise_fourier(
     ii = np.complex64(1j)
     one = np.float32(1)
     middle = ncells_1d // 2
-    density = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.complex64)
+    density = np.empty((ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
     # Must compute random before parallel loop to ensure reproductability
-    rng_amplitudes = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
-    rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
-    for i in prange(middle + 1):
-        im = -np.int32(i)  # By default i is uint64
+    rng_amplitudes = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
+    rng_phases = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
+    for i in prange(ncells_1d):
         for j in prange(ncells_1d):
-            jm = -j
-            for k in prange(ncells_1d):
-                km = -k
+            for k in prange(middle + 1):
                 phase = twopi * rng_phases[i, j, k]
                 amplitude = math.sqrt(
                     -math.log(
@@ -599,10 +601,8 @@ def white_noise_fourier(
                 )  # Rayleigh sampling
                 real = amplitude * math.cos(phase)
                 imaginary = amplitude * math.sin(phase)
-                result_lower = real - ii * imaginary
-                result_upper = real + ii * imaginary
-                density[im, jm, km] = result_lower
-                density[i, j, k] = result_upper
+                result = real + ii * imaginary
+                density[i, j, k] = result
     rng_phases = 0
     rng_amplitudes = 0
     # Fix corners
@@ -657,21 +657,16 @@ def white_noise_fourier_fixed(
         shift = np.float32(math.pi)
     else:
         shift = np.float32(0)
-    density = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.complex64)
-    rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
-    for i in prange(middle + 1):
-        im = -np.int32(i)  # By default i is uint64
+    density = np.empty((ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
+    rng_phases = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
+    for i in prange(ncells_1d):
         for j in prange(ncells_1d):
-            jm = -j
-            for k in prange(ncells_1d):
-                km = -k
+            for k in prange(middle + 1):
                 phase = twopi * rng_phases[i, j, k] + shift
                 real = math.cos(phase)
                 imaginary = math.sin(phase)
-                result_lower = real - ii * imaginary
-                result_upper = real + ii * imaginary
-                density[im, jm, km] = result_lower
-                density[i, j, k] = result_upper
+                result = real + ii * imaginary
+                density[i, j, k] = result
     rng_phases = 0
     density[0, 0, 0] = 0
     density[middle, 0, 0] = density[0, middle, 0] = density[0, 0, middle] = density[
@@ -721,27 +716,24 @@ def white_noise_fourier_force(
     twopi = np.float32(2 * np.pi)
     ii = np.complex64(1j)
     middle = ncells_1d // 2
-    force = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.complex64)
+    force = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     # Must compute random before parallel loop to ensure reproductability
-    rng_amplitudes = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
-    rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
-    for i in prange(middle + 1):
-        im = -np.int32(i)  # By default i is uint64
-        kx = np.float32(i)
+    rng_amplitudes = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
+    rng_phases = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
+    for i in prange(ncells_1d):
+        if i > middle:
+            kx = -np.float32(ncells_1d - i)
+        else:
+            kx = np.float32(i)
         kx2 = kx**2
         for j in prange(ncells_1d):
-            jm = -j
             if j > middle:
                 ky = -np.float32(ncells_1d - j)
             else:
                 ky = np.float32(j)
             kx2_ky2 = kx2 + ky**2
-            for k in prange(ncells_1d):
-                km = -k
-                if k > middle:
-                    kz = -np.float32(ncells_1d - k)
-                else:
-                    kz = np.float32(k)
+            for k in prange(middle + 1):
+                kz = np.float32(k)
                 invk2 = one / (kx2_ky2 + kz**2)
                 phase = twopi * rng_phases[i, j, k]
                 amplitude = math.sqrt(
@@ -751,16 +743,11 @@ def white_noise_fourier_force(
                 )  # Rayleigh sampling
                 real = amplitude * math.cos(phase)
                 imaginary = amplitude * math.sin(phase)
-                result_lower = real - ii * imaginary
-                result_upper = real + ii * imaginary
-                i_phi_lower = ii * invtwopi * result_lower * invk2
-                i_phi_upper = ii * invtwopi * result_upper * invk2
-                force[im, jm, km, 0] = kx * i_phi_lower
-                force[im, jm, km, 1] = ky * i_phi_lower
-                force[im, jm, km, 2] = kz * i_phi_lower
-                force[i, j, k, 0] = -kx * i_phi_upper
-                force[i, j, k, 1] = -ky * i_phi_upper
-                force[i, j, k, 2] = -kz * i_phi_upper
+                result = real + ii * imaginary
+                i_phi = ii * invtwopi * result * invk2
+                force[i, j, k, 0] = -kx * i_phi
+                force[i, j, k, 1] = -ky * i_phi
+                force[i, j, k, 2] = -kz * i_phi
     rng_phases = 0
     rng_amplitudes = 0
     # Fix edges
@@ -840,39 +827,31 @@ def white_noise_fourier_fixed_force(
         shift = np.float32(math.pi)
     else:
         shift = np.float32(0)
-    force = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.complex64)
-    rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
-    for i in prange(middle + 1):
-        im = -np.int32(i)  # By default i is uint64
-        kx = np.float32(i)
+    force = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
+    rng_phases = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
+    for i in prange(ncells_1d):
+        if i > middle:
+            kx = -np.float32(ncells_1d - i)
+        else:
+            kx = np.float32(i)
         kx2 = kx**2
         for j in prange(ncells_1d):
-            jm = -j
             if j > middle:
                 ky = -np.float32(ncells_1d - j)
             else:
                 ky = np.float32(j)
             kx2_ky2 = kx2 + ky**2
-            for k in prange(ncells_1d):
-                km = -k
-                if k > middle:
-                    kz = -np.float32(ncells_1d - k)
-                else:
-                    kz = np.float32(k)
+            for k in prange(middle + 1):
+                kz = np.float32(k)
                 invk2 = one / (kx2_ky2 + kz**2)
                 phase = twopi * rng_phases[i, j, k] + shift
                 real = math.cos(phase)
                 imaginary = math.sin(phase)
-                result_lower = real - ii * imaginary
-                result_upper = real + ii * imaginary
-                i_phi_lower = ii * invtwopi * result_lower * invk2
-                i_phi_upper = ii * invtwopi * result_upper * invk2
-                force[im, jm, km, 0] = kx * i_phi_lower
-                force[im, jm, km, 1] = ky * i_phi_lower
-                force[im, jm, km, 2] = kz * i_phi_lower
-                force[i, j, k, 0] = -kx * i_phi_upper
-                force[i, j, k, 1] = -ky * i_phi_upper
-                force[i, j, k, 2] = -kz * i_phi_upper
+                result = real + ii * imaginary
+                i_phi = ii * invtwopi * result * invk2
+                force[i, j, k, 0] = -kx * i_phi
+                force[i, j, k, 1] = -ky * i_phi
+                force[i, j, k, 2] = -kz * i_phi
     rng_phases = 0
     # Fix edges
     inv2 = np.float32(0.5)
