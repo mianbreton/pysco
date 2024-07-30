@@ -146,6 +146,9 @@ def compute_growth_functions(
     lnaexp_end = np.log(aexp_end)
     aexp_equality = (cosmo.Ogamma0 + cosmo.Onu0) / cosmo.Om0
 
+    if (cosmo.Ogamma0 + cosmo.Onu0) == 0:
+        aexp_equality = 2e-7
+
     # Works in a matter-domianted era (Rampf & Bucher 2012) #TODO: Add Om(z) dependence?
     dplus1_ini = 3.0 / 5 * aexp_equality
     dplus2_ini = -3.0 / 7 * dplus1_ini**2

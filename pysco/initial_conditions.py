@@ -103,11 +103,17 @@ def generate(
         mpc_to_km = 1e3 * pc.value
         Hz *= param["unit_t"] / mpc_to_km  # km/s/Mpc to BU
 
-        # density_initial = generate_density(param)
-        # psi_1lpt = solver.force_3d(density_initial, param)
-        # density_initial = 0
-        psi_1lpt = generate_force(param)
+        """ density_initial = generate_density(param)
+        psi_1lpt = solver.force_3d(density_initial, param)
+        density_initial = 0 """
+        # psi_1lpt = generate_force(param)
 
+        density_fourier = generate_density_fourier(param)
+        fourier.inverse_laplacian(density_fourier)
+        potential_1_fourier = density_fourier
+        del density_fourier
+        force = fourier.gradient(potential_1_fourier)
+        psi_1lpt = fourier.ifft_3D_real_grad(force, param["nthreads"])
         # 1LPT
         dplus_1_z0 = tables[3](0)
         dplus_1 = np.float32(tables[3](lna_start) / dplus_1_z0)
@@ -120,14 +126,25 @@ def generate(
             finalise_initial_conditions(position, velocity, param)
             return position, velocity
         # 2LPT
+        # param["MAS_index"] = 0
+        """ rhs_2ndorder = compute_rhs_2ndorder(psi_1lpt, param["gradient_stencil_order"])
+        param["MAS_index"] = 0
+        psi_2lpt = solver.fft_force(rhs_2ndorder, param, 0) 
+        rhs_2ndorder = 0 """
+
+        density_2 = compute_2ndorder_rhs(potential_1_fourier, param["nthreads"])
+        density_2_fourier = fourier.fft_3D_real(density_2, param["nthreads"])
+        density_2 = 0
+        fourier.inverse_laplacian(density_2_fourier)
+        potential_2_fourier = density_2_fourier
+        del density_2_fourier
+        psi_2lpt_fourier = fourier.gradient(potential_2_fourier)
+        psi_2lpt = fourier.ifft_3D_real_grad(psi_2lpt_fourier, param["nthreads"])
+
         dplus_2 = np.float32(tables[5](lna_start) / dplus_1_z0**2)
         f2 = tables[6](lna_start)
         fH_2 = np.float32(f2 * Hz)
-        rhs_2ndorder = compute_rhs_2ndorder(psi_1lpt, param["gradient_stencil_order"])
-        param["MAS_index"] = 0
-        psi_2lpt = solver.fft_force(rhs_2ndorder, param, 0)
-        rhs_2ndorder = 0
-        add_2LPT(position, velocity, psi_2lpt, dplus_2, fH_2)
+        add_nLPT(position, velocity, psi_2lpt, dplus_2, fH_2)
         if INITIAL_CONDITIONS.casefold() == "2LPT".casefold():
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
@@ -143,7 +160,7 @@ def generate(
             dplus_3c = np.float32(tables[11](lna_start) / dplus_1_z0**3)
             f3c = tables[12](lna_start)
             fH_3c = np.float32(f3c * Hz)
-            (
+            """ (
                 rhs_3a,
                 rhs_3b,
                 rhs_Ax_3c,
@@ -163,27 +180,31 @@ def generate(
             psi_Ay_3c = solver.fft_force(rhs_Ay_3c, param, 0)
             rhs_Ay_3c = 0
             psi_Az_3c = solver.fft_force(rhs_Az_3c, param, 0)
-            rhs_Az_3c = 0
-            add_3LPT(
-                position,
-                velocity,
-                psi_3lpt_a,
-                psi_3lpt_b,
-                psi_Ax_3c,
-                psi_Ay_3c,
-                psi_Az_3c,
-                dplus_3a,
-                fH_3a,
-                dplus_3b,
-                fH_3b,
-                dplus_3c,
-                fH_3c,
-            )
+            rhs_Az_3c = 0 """
+
+            psi_3lpt_a = compute_3a_displacement(potential_1_fourier, param["nthreads"])
+            add_nLPT(position, velocity, psi_3lpt_a, dplus_3a, fH_3a)
             psi_3lpt_a = 0
+            psi_3lpt_b = compute_3b_displacement(
+                potential_1_fourier, potential_2_fourier, param["nthreads"]
+            )
+            add_nLPT(position, velocity, psi_3lpt_b, dplus_3b, fH_3b)
             psi_3lpt_b = 0
-            psi_Ax_3c = 0
-            psi_Ay_3c = 0
-            psi_Az_3c = 0
+            psi_3lpt_c_Ax = compute_3c_Ax_displacement(
+                potential_1_fourier, potential_2_fourier, param["nthreads"]
+            )
+            add_nLPT(position, velocity, psi_3lpt_c_Ax, dplus_3c, fH_3c)
+            psi_3lpt_c_Ax = 0
+            psi_3lpt_c_Ay = compute_3c_Ay_displacement(
+                potential_1_fourier, potential_2_fourier, param["nthreads"]
+            )
+            add_nLPT(position, velocity, psi_3lpt_c_Ay, dplus_3c, fH_3c)
+            psi_3lpt_c_Ay = 0
+            psi_3lpt_c_Az = compute_3c_Az_displacement(
+                potential_1_fourier, potential_2_fourier, param["nthreads"]
+            )
+            add_nLPT(position, velocity, psi_3lpt_c_Az, dplus_3c, fH_3c)
+            psi_3lpt_c_Az = 0
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
             finalise_initial_conditions(position, velocity, param)
@@ -364,6 +385,47 @@ def read_gadget(
 
 
 @utils.time_me
+def generate_density_fourier(param: pd.Series) -> npt.NDArray[np.float32]:
+    """Compute density initial conditions from power spectrum
+
+    Parameters
+    ----------
+    param : pd.Series
+        Parameter container
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Initial density field and velocity field (delta, vx, vy, vz)
+
+    Example
+    -------
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import generate_density_fourier
+    >>> param = pd.Series({
+         'power_spectrum_file': 'path/to/power_spectrum.txt',
+         'npart': 64,
+         'seed': 42,
+         'fixed_ICS': False,
+         'paired_ICS': False,
+     })
+    >>> generate_density_fourier(param)
+    """
+    transfer_grid = get_transfer_grid(param)
+
+    ncells_1d = int(math.cbrt(param["npart"]))
+    rng = np.random.default_rng(param["seed"])
+    if param["fixed_ICS"]:
+        density_k = white_noise_fourier_fixed(ncells_1d, rng, param["paired_ICS"])
+    else:
+        density_k = white_noise_fourier(ncells_1d, rng)
+
+    utils.prod_vector_vector_inplace(density_k, transfer_grid)
+    transfer_grid = 0
+    return density_k
+
+
+@utils.time_me
 def generate_density(param: pd.Series) -> npt.NDArray[np.float32]:
     """Compute density initial conditions from power spectrum
 
@@ -390,17 +452,7 @@ def generate_density(param: pd.Series) -> npt.NDArray[np.float32]:
      })
     >>> generate_density(param)
     """
-    transfer_grid = get_transfer_grid(param)
-
-    ncells_1d = int(math.cbrt(param["npart"]))
-    rng = np.random.default_rng(param["seed"])
-    if param["fixed_ICS"]:
-        density_k = white_noise_fourier_fixed(ncells_1d, rng, param["paired_ICS"])
-    else:
-        density_k = white_noise_fourier(ncells_1d, rng)
-
-    utils.prod_vector_vector_inplace(density_k, transfer_grid)
-    transfer_grid = 0
+    density_k = generate_density_fourier(param)
     density = fourier.ifft_3D(density_k, param["nthreads"])
     density_k = 0
     # .real method makes the data not C contiguous
@@ -1752,6 +1804,551 @@ def compute_rhs_2ndorder(
             raise ValueError(f"Unsupported: {gradient_order=}")
 
 
+def compute_2ndorder_rhs(
+    phi_1_fourier: npt.NDArray[np.float32], nthreads
+) -> npt.NDArray[np.float32]:
+    """Compute 2LPT displacement [Scoccimarro 1998 Appendix B.2]
+
+    Parameters
+    ----------
+    phi_1_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    nthreads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        2LPT displacement field [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_2ndorder_rhs
+    >>> phi = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> rhs_2ndorder = compute_2ndorder_rhs(phi, 2)
+    """
+    one = np.float32(1)
+    tmp = fourier.hessian(phi_1_fourier, (0, 0))
+    phi_2 = fourier.ifft_3D_real(tmp, nthreads)
+    tmp = fourier.sum_of_hessian(phi_1_fourier, (1, 1), (2, 2))
+    tmp = fourier.ifft_3D_real(tmp, nthreads)
+    utils.prod_vector_vector_inplace(phi_2, tmp)
+    tmp1 = fourier.hessian(phi_1_fourier, (1, 1))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.hessian(phi_1_fourier, (2, 2))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_2, one, tmp1, tmp2)
+    tmp1 = 0
+    tmp2 = 0
+    tmp = fourier.hessian(phi_1_fourier, (0, 1))
+    tmp = fourier.ifft_3D_real(tmp, nthreads)
+    utils.add_vector_vector_inplace(phi_2, -one, tmp, tmp)
+    tmp = fourier.hessian(phi_1_fourier, (0, 2))
+    tmp = fourier.ifft_3D_real(tmp, nthreads)
+    utils.add_vector_vector_inplace(phi_2, -one, tmp, tmp)
+    tmp = fourier.hessian(phi_1_fourier, (1, 2))
+    tmp = fourier.ifft_3D_real(tmp, nthreads)
+    utils.add_vector_vector_inplace(phi_2, -one, tmp, tmp)
+    tmp = 0
+    return phi_2
+
+
+def compute_3a_rhs(
+    phi_1_fourier: npt.NDArray[np.float32],
+    nthreads,
+) -> npt.NDArray[np.float32]:
+    """Compute 3aLPT displacement [Scoccimarro 1998 Appendix B.2]
+
+    Parameters
+    ----------
+    phi_1_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    nthreads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        2LPT displacement field [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_3a_rhs
+    >>> phi = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> rhs = compute_3a_rhs(phi, 2)
+    """
+    one = np.float32(1)
+    two = np.float32(2)
+    tmp = fourier.hessian(phi_1_fourier, (0, 0))
+    phi_3a = fourier.ifft_3D_real(tmp, nthreads)
+    tmp = fourier.hessian(phi_1_fourier, (1, 1))
+    tmp = fourier.ifft_3D_real(tmp, nthreads)
+    utils.prod_vector_vector_inplace(phi_3a, tmp)
+    tmp = fourier.hessian(phi_1_fourier, (2, 2))
+    tmp = fourier.ifft_3D_real(tmp, nthreads)
+    utils.prod_vector_vector_inplace(phi_3a, tmp)
+
+    tmp1 = fourier.hessian(phi_1_fourier, (0, 1))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.hessian(phi_1_fourier, (0, 2))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    tmp3 = fourier.hessian(phi_1_fourier, (1, 2))
+    tmp3 = fourier.ifft_3D_real(tmp3, nthreads)
+    utils.add_vector_vector_vector_inplace(phi_3a, two, tmp1, tmp2, tmp3)
+    tmp1 = 0
+    tmp2 = 0
+    tmp3 = 0
+
+    tmp1 = fourier.hessian(phi_1_fourier, (1, 2))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.hessian(phi_1_fourier, (0, 0))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_vector_inplace(phi_3a, -one, tmp1, tmp1, tmp2)
+
+    tmp1 = fourier.hessian(phi_1_fourier, (0, 2))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.hessian(phi_1_fourier, (1, 1))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_vector_inplace(phi_3a, -one, tmp1, tmp1, tmp2)
+
+    tmp1 = fourier.hessian(phi_1_fourier, (0, 1))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.hessian(phi_1_fourier, (2, 2))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_vector_inplace(phi_3a, -one, tmp1, tmp1, tmp2)
+
+    return phi_3a
+
+
+def compute_3a_displacement(
+    phi_1_fourier: npt.NDArray[np.float32],
+    nthreads,
+) -> npt.NDArray[np.float32]:
+    """Compute 3aLPT displacement [Scoccimarro 1998 Appendix B.2]
+
+    Parameters
+    ----------
+    phi_1_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    nthreads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        2LPT displacement field [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_3a_displacement
+    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> rhs = compute_3a_displacement(phi_1, phi_2, 2)
+    """
+    density_3a = compute_3a_rhs(phi_1_fourier, nthreads)
+    density_3a_fourier = fourier.fft_3D_real(density_3a, nthreads)
+    psi_3lpt_a_fourier = fourier.gradient_inverse_laplacian(density_3a_fourier)
+    psi_3lpt_a = fourier.ifft_3D_real_grad(psi_3lpt_a_fourier, nthreads)
+
+    return psi_3lpt_a
+
+
+def compute_3b_rhs(
+    phi_1_fourier: npt.NDArray[np.float32],
+    phi_2_fourier: npt.NDArray[np.float32],
+    nthreads,
+) -> npt.NDArray[np.float32]:
+    """Compute 3bLPT displacement
+
+    Parameters
+    ----------
+    phi_1_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    phi_2_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    nthreads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        3bLPT displacement field [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_3b_rhs
+    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> rhs = compute_3b_rhs(phi_1, phi_2, 2)
+    """
+    one = np.float32(1)
+    half = np.float32(0.5)
+
+    tmp = fourier.hessian(phi_1_fourier, (0, 0))
+    phi_3b = fourier.ifft_3D_real(tmp, nthreads)
+    tmp = fourier.sum_of_hessian(phi_2_fourier, (1, 1), (2, 2))
+    tmp = fourier.ifft_3D_real(tmp, nthreads)
+    utils.prod_vector_vector_scalar_inplace(phi_3b, tmp, half)
+    tmp = 0
+
+    tmp1 = fourier.hessian(phi_1_fourier, (1, 1))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.sum_of_hessian(phi_2_fourier, (0, 0), (2, 2))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3b, half, tmp1, tmp2)
+
+    tmp1 = fourier.hessian(phi_1_fourier, (2, 2))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.sum_of_hessian(phi_2_fourier, (0, 0), (1, 1))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3b, half, tmp1, tmp2)
+
+    tmp1 = fourier.hessian(phi_1_fourier, (0, 1))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.hessian(phi_2_fourier, (0, 1))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3b, -one, tmp1, tmp2)
+
+    tmp1 = fourier.hessian(phi_1_fourier, (0, 2))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.hessian(phi_2_fourier, (0, 2))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3b, -one, tmp1, tmp2)
+
+    tmp1 = fourier.hessian(phi_1_fourier, (1, 2))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.hessian(phi_2_fourier, (1, 2))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3b, -one, tmp1, tmp2)
+
+    return phi_3b
+
+
+def compute_3b_displacement(
+    phi_1_fourier: npt.NDArray[np.float32],
+    phi_2_fourier: npt.NDArray[np.float32],
+    nthreads,
+) -> npt.NDArray[np.float32]:
+    """Compute 3bLPT displacement
+
+    Parameters
+    ----------
+    phi_1_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    phi_2_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    nthreads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        3bLPT displacement field [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_3b_displacement
+    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> rhs = compute_3b_displacement(phi_1, phi_2, 2)
+    """
+    density_3b = compute_3b_rhs(phi_1_fourier, phi_2_fourier, nthreads)
+    density_3b_fourier = fourier.fft_3D_real(density_3b, nthreads)
+    psi_3lpt_b_fourier = fourier.gradient_inverse_laplacian(density_3b_fourier)
+    psi_3lpt_b = fourier.ifft_3D_real_grad(psi_3lpt_b_fourier, nthreads)
+    return psi_3lpt_b
+
+
+def compute_3c_Ax_rhs(
+    phi_1_fourier: npt.NDArray[np.float32],
+    phi_2_fourier: npt.NDArray[np.float32],
+    nthreads,
+) -> npt.NDArray[np.float32]:
+    """Compute 3cLPT displacement
+
+    Parameters
+    ----------
+    phi_1_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    phi_2_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    nthreads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        3cLPT displacement field [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_3c_Ax_rhs
+    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> rhs = compute_3c_Ax_rhs(phi_1, phi_2, 2)
+    """
+    one = np.float32(1)
+
+    tmp = fourier.hessian(phi_1_fourier, (0, 2))
+    phi_3c = fourier.ifft_3D_real(tmp, nthreads)
+    tmp = fourier.hessian(phi_2_fourier, (0, 1))
+    tmp = fourier.ifft_3D_real(tmp, nthreads)
+    utils.prod_vector_vector_scalar_inplace(phi_3c, tmp, one)
+    tmp = 0
+
+    tmp1 = fourier.hessian(phi_2_fourier, (0, 2))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.hessian(phi_1_fourier, (0, 1))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3c, -one, tmp1, tmp2)
+
+    tmp1 = fourier.hessian(phi_1_fourier, (1, 2))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.diff_of_hessian(phi_2_fourier, (1, 1), (2, 2))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3c, one, tmp1, tmp2)
+
+    tmp1 = fourier.hessian(phi_2_fourier, (1, 2))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.diff_of_hessian(phi_1_fourier, (1, 1), (2, 2))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3c, -one, tmp1, tmp2)
+
+    return phi_3c
+
+
+def compute_3c_Ax_displacement(
+    phi_1_fourier: npt.NDArray[np.float32],
+    phi_2_fourier: npt.NDArray[np.float32],
+    nthreads,
+) -> npt.NDArray[np.float32]:
+    """Compute 3aLPT displacement
+
+    Parameters
+    ----------
+    phi_1_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    phi_2_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    nthreads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        3bLPT displacement field [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_3c_Ax_displacement
+    >>> phi_1 = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> phi_2 = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> rhs = compute_3c_Ax_displacement(phi_1, phi_2, 2)
+    """
+    density_3c_Ax = compute_3c_Ax_rhs(phi_1_fourier, phi_2_fourier, nthreads)
+    density_3c_Ax_fourier = fourier.fft_3D_real(density_3c_Ax, nthreads)
+    psi_3lpt_c_Ax_fourier = fourier.gradient_inverse_laplacian(density_3c_Ax_fourier)
+    psi_3lpt_c_Ax = fourier.ifft_3D_real_grad(psi_3lpt_c_Ax_fourier, nthreads)
+    return psi_3lpt_c_Ax
+
+
+def compute_3c_Ay_rhs(
+    phi_1_fourier: npt.NDArray[np.float32],
+    phi_2_fourier: npt.NDArray[np.float32],
+    nthreads,
+) -> npt.NDArray[np.float32]:
+    """Compute 3cLPT displacement
+
+    Parameters
+    ----------
+    phi_1_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    phi_2_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    nthreads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        3cLPT displacement field [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_3c_Ay_rhs
+    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> rhs = compute_3c_Ay_rhs(phi_1, phi_2, 2)
+    """
+    one = np.float32(1)
+
+    tmp = fourier.hessian(phi_1_fourier, (0, 1))
+    phi_3c = fourier.ifft_3D_real(tmp, nthreads)
+    tmp = fourier.hessian(phi_2_fourier, (1, 2))
+    tmp = fourier.ifft_3D_real(tmp, nthreads)
+    utils.prod_vector_vector_scalar_inplace(phi_3c, tmp, one)
+    tmp = 0
+
+    tmp1 = fourier.hessian(phi_2_fourier, (0, 1))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.hessian(phi_1_fourier, (1, 2))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3c, -one, tmp1, tmp2)
+
+    tmp1 = fourier.hessian(phi_1_fourier, (0, 2))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.diff_of_hessian(phi_2_fourier, (2, 2), (0, 0))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3c, one, tmp1, tmp2)
+
+    tmp1 = fourier.hessian(phi_2_fourier, (0, 2))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.diff_of_hessian(phi_1_fourier, (2, 2), (0, 0))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3c, -one, tmp1, tmp2)
+
+    return phi_3c
+
+
+def compute_3c_Ay_displacement(
+    phi_1_fourier: npt.NDArray[np.float32],
+    phi_2_fourier: npt.NDArray[np.float32],
+    nthreads,
+) -> npt.NDArray[np.float32]:
+    """Compute 3aLPT displacement
+
+    Parameters
+    ----------
+    phi_1_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    phi_2_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    nthreads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        3bLPT displacement field [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_3c_Ay_displacement
+    >>> phi_1 = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> phi_2 = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> rhs = compute_3c_Ay_displacement(phi_1, phi_2, 2)
+    """
+    density_3c_Ay = compute_3c_Ay_rhs(phi_1_fourier, phi_2_fourier, nthreads)
+    density_3c_Ay_fourier = fourier.fft_3D_real(density_3c_Ay, nthreads)
+    psi_3lpt_c_Ay_fourier = fourier.gradient_inverse_laplacian(density_3c_Ay_fourier)
+    psi_3lpt_c_Ay = fourier.ifft_3D_real_grad(psi_3lpt_c_Ay_fourier, nthreads)
+    return psi_3lpt_c_Ay
+
+
+def compute_3c_Az_rhs(
+    phi_1_fourier: npt.NDArray[np.float32],
+    phi_2_fourier: npt.NDArray[np.float32],
+    nthreads,
+) -> npt.NDArray[np.float32]:
+    """Compute 3cLPT displacement
+
+    Parameters
+    ----------
+    phi_1_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    phi_2_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    nthreads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        3cLPT displacement field [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_3c_Az_rhs
+    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> rhs = compute_3c_Az_rhs(phi_1, phi_2, 2)
+    """
+    one = np.float32(1)
+
+    tmp = fourier.hessian(phi_1_fourier, (1, 2))
+    phi_3c = fourier.ifft_3D_real(tmp, nthreads)
+    tmp = fourier.hessian(phi_2_fourier, (0, 2))
+    tmp = fourier.ifft_3D_real(tmp, nthreads)
+    utils.prod_vector_vector_scalar_inplace(phi_3c, tmp, one)
+    tmp = 0
+
+    tmp1 = fourier.hessian(phi_2_fourier, (1, 2))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.hessian(phi_1_fourier, (0, 2))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3c, -one, tmp1, tmp2)
+
+    tmp1 = fourier.hessian(phi_1_fourier, (0, 1))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.diff_of_hessian(phi_2_fourier, (0, 0), (1, 1))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3c, one, tmp1, tmp2)
+
+    tmp1 = fourier.hessian(phi_2_fourier, (0, 1))
+    tmp1 = fourier.ifft_3D_real(tmp1, nthreads)
+    tmp2 = fourier.diff_of_hessian(phi_1_fourier, (0, 0), (1, 1))
+    tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
+    utils.add_vector_vector_inplace(phi_3c, -one, tmp1, tmp2)
+
+    return phi_3c
+
+
+def compute_3c_Az_displacement(
+    phi_1_fourier: npt.NDArray[np.float32],
+    phi_2_fourier: npt.NDArray[np.float32],
+    nthreads,
+) -> npt.NDArray[np.float32]:
+    """Compute 3aLPT displacement
+
+    Parameters
+    ----------
+    phi_1_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    phi_2_fourier : npt.NDArray[np.float32]
+        First-order Potential [N, N, N]
+    nthreads : int
+        Number of threads
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        3bLPT displacement field [N, N, N]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import compute_3c_Az_displacement
+    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
+    >>> rhs = compute_3c_Az_displacement(phi_1, phi_2, 2)
+    """
+    density_3c_Az = compute_3c_Az_rhs(phi_1_fourier, phi_2_fourier, nthreads)
+    density_3c_Az_fourier = fourier.fft_3D_real(density_3c_Az, nthreads)
+    psi_3lpt_c_Az_fourier = fourier.gradient_inverse_laplacian(density_3c_Az_fourier)
+    psi_3lpt_c_Az = fourier.ifft_3D_real_grad(psi_3lpt_c_Az_fourier, nthreads)
+    return psi_3lpt_c_Az
+
+
 def compute_rhs_3rdorder(
     psi_1lpt: npt.NDArray[np.float32],
     psi_2lpt: npt.NDArray[np.float32],
@@ -1858,62 +2455,6 @@ def initialise_1LPT(
                 velocity[i, j, k, 1] = dfH_1 * psiy
                 velocity[i, j, k, 2] = dfH_1 * psiz
     return position, velocity
-
-
-@utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4, f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
-def add_2LPT(
-    position: npt.NDArray[np.float32],
-    velocity: npt.NDArray[np.float32],
-    psi_2lpt: npt.NDArray[np.float32],
-    dplus_2: np.float32,
-    fH_2: np.float32,
-) -> None:
-    """Initialise particles according to 2LPT displacement field
-
-    Parameters
-    ----------
-    position : npt.NDArray[np.float32]
-        1LPT position [N, N, N, 3]
-    velocity : npt.NDArray[np.float32]
-        1LPT velocity [N, N, N, 3]
-    psi_2lpt : npt.NDArray[np.float32]
-        2LPT displacement field [N, N, N, 3]
-    dplus_2 : np.float32
-        2nd-order growth factor
-    fH_2 : np.float32
-        2nd-order growth rate times Hubble parameter
-
-    Example
-    -------
-    >>> import numpy as np
-    >>> from pysco.initial_conditions import add_2LPT
-    >>> position_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
-    >>> velocity_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
-    >>> psi_2lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
-    >>> dplus_2 = 0.2
-    >>> fH_2 = 0.2
-    >>> add_2LPT(position_1storder, velocity_1storder, psi_2lpt, dplus_2, fH_2)
-    """
-    ncells_1d = psi_2lpt.shape[0]
-    dfH_2 = dplus_2 * fH_2
-    for i in prange(ncells_1d):
-        for j in prange(ncells_1d):
-            for k in prange(ncells_1d):
-                psix = psi_2lpt[i, j, k, 0]
-                psiy = psi_2lpt[i, j, k, 1]
-                psiz = psi_2lpt[i, j, k, 2]
-                position[i, j, k, 0] += dplus_2 * psix
-                position[i, j, k, 1] += dplus_2 * psiy
-                position[i, j, k, 2] += dplus_2 * psiz
-                velocity[i, j, k, 0] += dfH_2 * psix
-                velocity[i, j, k, 1] += dfH_2 * psiy
-                velocity[i, j, k, 2] += dfH_2 * psiz
 
 
 @utils.time_me
@@ -2033,3 +2574,59 @@ def add_3LPT(
                     + dfH_3b * fz_3b
                     + dfH_3c * (psi_Ay_3c[i, j, k, 2] - psi_Ax_3c[i, j, k, 2])
                 )
+
+
+@utils.time_me
+@njit(
+    ["void(f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4, f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def add_nLPT(
+    position: npt.NDArray[np.float32],
+    velocity: npt.NDArray[np.float32],
+    psi_nlpt: npt.NDArray[np.float32],
+    dplus_n: np.float32,
+    fH_n: np.float32,
+) -> None:
+    """Initialise particles according to nLPT displacement field
+
+    Parameters
+    ----------
+    position : npt.NDArray[np.float32]
+        1LPT position [N, N, N, 3]
+    velocity : npt.NDArray[np.float32]
+        1LPT velocity [N, N, N, 3]
+    psi_nlpt : npt.NDArray[np.float32]
+        nLPT displacement field [N, N, N, 3]
+    dplus_n : np.float32
+        nth-order growth factor
+    fH_n : np.float32
+        nth-order growth rate times Hubble parameter
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import add_2LPT
+    >>> position_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> velocity_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> psi_2lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> dplus_2 = 0.2
+    >>> fH_2 = 0.2
+    >>> add_2LPT(position_1storder, velocity_1storder, psi_2lpt, dplus_2, fH_2)
+    """
+    ncells_1d = psi_nlpt.shape[0]
+    dfH_n = dplus_n * fH_n
+    for i in prange(ncells_1d):
+        for j in prange(ncells_1d):
+            for k in prange(ncells_1d):
+                psix = psi_nlpt[i, j, k, 0]
+                psiy = psi_nlpt[i, j, k, 1]
+                psiz = psi_nlpt[i, j, k, 2]
+                position[i, j, k, 0] += dplus_n * psix
+                position[i, j, k, 1] += dplus_n * psiy
+                position[i, j, k, 2] += dplus_n * psiz
+                velocity[i, j, k, 0] += dfH_n * psix
+                velocity[i, j, k, 1] += dfH_n * psiy
+                velocity[i, j, k, 2] += dfH_n * psiz

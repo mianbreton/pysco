@@ -482,11 +482,11 @@ def fft(
     match LINEAR_NEWTON_SOLVER:
         case "fft":
             if MAS_index == 0:
-                fourier.laplacian(rhs_fourier)
+                fourier.inverse_laplacian(rhs_fourier)
             else:
-                fourier.laplacian_compensated(rhs_fourier, MAS_index)
+                fourier.inverse_laplacian_compensated(rhs_fourier, MAS_index)
         case "fft_7pt":
-            fourier.laplacian_7pt(rhs_fourier)
+            fourier.inverse_laplacian_7pt(rhs_fourier)
         case _:
             raise ValueError(f"{LINEAR_NEWTON_SOLVER=}, should be 'fft' or 'fft_7pt'")
 
@@ -528,9 +528,9 @@ def fft_force(
     rhs_fourier = fourier.fft_3D_real(rhs, param["nthreads"])
 
     if MAS_index == 0:
-        force = fourier.gradient_laplacian(rhs_fourier)
+        force = fourier.gradient_inverse_laplacian(rhs_fourier)
     else:
-        force = fourier.gradient_laplacian_compensated(rhs_fourier, MAS_index)
+        force = fourier.gradient_inverse_laplacian_compensated(rhs_fourier, MAS_index)
 
     if save_pk:
         k, Pk, Nmodes = fourier.fourier_grid_to_Pk(rhs_fourier, MAS_index)

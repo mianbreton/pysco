@@ -451,7 +451,7 @@ def ifft_3D_grad(
 @njit(
     ["void(c8[:,:,::1])"], fastmath=True, cache=True, parallel=True, error_model="numpy"
 )
-def laplacian(x: npt.NDArray[np.complex64]) -> None:
+def inverse_laplacian(x: npt.NDArray[np.complex64]) -> None:
     """Inplace divide complex Fourier-space field by -k^2
 
     Parameters
@@ -462,9 +462,9 @@ def laplacian(x: npt.NDArray[np.complex64]) -> None:
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.fourier import laplacian
+    >>> from pysco.fourier import inverse_laplacian
     >>> complex_grid = np.random.rand(16, 16, 9).astype(np.complex64)
-    >>> laplacian(complex_grid)
+    >>> inverse_laplacian(complex_grid)
     """
     minus_inv_fourpi2 = np.float32(-0.25 / np.pi**2)
     ncells_1d = len(x)
@@ -493,7 +493,7 @@ def laplacian(x: npt.NDArray[np.complex64]) -> None:
     parallel=True,
     error_model="numpy",
 )
-def laplacian_compensated(x: npt.NDArray[np.complex64], p: int) -> None:
+def inverse_laplacian_compensated(x: npt.NDArray[np.complex64], p: int) -> None:
     """Inplace divide complex Fourier-space field by -k^2 with compensated Kernel (Jing 2005)
 
     Parameters
@@ -506,10 +506,10 @@ def laplacian_compensated(x: npt.NDArray[np.complex64], p: int) -> None:
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.fourier import laplacian_compensated
+    >>> from pysco.fourier import inverse_laplacian_compensated
     >>> complex_grid = np.random.rand(16, 16, 9).astype(np.complex64)
     >>> p_val = 2
-    >>> laplacian_compensated(complex_grid, p_val)
+    >>> inverse_laplacian_compensated(complex_grid, p_val)
     """
     minus_inv_fourpi2 = np.float32(-0.25 / np.pi**2)
     ncells_1d = len(x)
@@ -546,10 +546,10 @@ def laplacian_compensated(x: npt.NDArray[np.complex64], p: int) -> None:
     parallel=True,
     error_model="numpy",
 )
-def laplacian_7pt(
+def inverse_laplacian_7pt(
     x: npt.NDArray[np.complex64],
 ) -> None:
-    """Compute Laplacian in Fourier-space with discrete 7-point stencil (Feng et al. 2016)
+    """Compute inverse_laplacian in Fourier-space with discrete 7-point stencil (Feng et al. 2016)
 
     Parameters
     ----------
@@ -559,9 +559,9 @@ def laplacian_7pt(
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.fourier import laplacian_7pt
+    >>> from pysco.fourier import inverse_laplacian_7pt
     >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
-    >>> laplacian_7pt(complex_field)
+    >>> inverse_laplacian_7pt(complex_field)
     """
     invpi = np.float32(0.5 / np.pi)
     twopi = np.float32(2 * np.pi)
@@ -601,10 +601,10 @@ def laplacian_7pt(
     parallel=True,
     error_model="numpy",
 )
-def gradient_laplacian(
+def gradient_inverse_laplacian(
     x: npt.NDArray[np.complex64],
 ) -> npt.NDArray[np.complex64]:
-    """Compute gradient of Laplacian in Fourier-space
+    """Compute gradient of inverse_laplacian in Fourier-space
 
     Parameters
     ----------
@@ -614,14 +614,14 @@ def gradient_laplacian(
     Returns
     -------
     npt.NDArray[np.complex64]
-        Gradient of Laplacian [N, N, N//2 + 1, 3]
+        Gradient of inverse_laplacian [N, N, N//2 + 1, 3]
 
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.fourier import gradient_laplacian
+    >>> from pysco.fourier import gradient_inverse_laplacian
     >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
-    >>> result = gradient_laplacian(complex_field)
+    >>> result = gradient_inverse_laplacian(complex_field)
     """
     minus_ii = np.complex64(-1j)
     invtwopi = np.float32(0.5 / np.pi)
@@ -659,10 +659,10 @@ def gradient_laplacian(
     parallel=True,
     error_model="numpy",
 )
-def gradient_laplacian_compensated(
+def gradient_inverse_laplacian_compensated(
     x: npt.NDArray[np.complex64], p: int
 ) -> npt.NDArray[np.complex64]:
-    """Compute gradient of Laplacian in Fourier-space with compensated Kernel (Jing 2005)
+    """Compute gradient of inverse_laplacian in Fourier-space with compensated Kernel (Jing 2005)
 
     Parameters
     ----------
@@ -674,15 +674,15 @@ def gradient_laplacian_compensated(
     Returns
     -------
     npt.NDArray[np.complex64]
-        Gradient of Laplacian [N, N, N//2 + 1, 3]
+        Gradient of inverse_laplacian [N, N, N//2 + 1, 3]
 
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.fourier import gradient_laplacian_compensated
+    >>> from pysco.fourier import gradient_inverse_laplacian_compensated
     >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
     >>> p_val = 2
-    >>> result = gradient_laplacian_compensated(complex_field, p_val)
+    >>> result = gradient_inverse_laplacian_compensated(complex_field, p_val)
     """
     minus_ii = np.complex64(-1j)
     invtwopi = np.float32(0.5 / np.pi)
@@ -714,4 +714,246 @@ def gradient_laplacian_compensated(
                 result[i, j, k, 1] = x_k2_tmp * ky
                 result[i, j, k, 2] = x_k2_tmp * kz
     result[0, 0, 0, :] = 0
+    return result
+
+
+@utils.time_me
+@njit(
+    ["c8[:,:,:,::1](c8[:,:,::1])"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+    error_model="numpy",
+)
+def gradient(
+    x: npt.NDArray[np.complex64],
+) -> npt.NDArray[np.complex64]:
+    """Compute gradient in Fourier-space
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.complex64]
+        Fourier-space field [N, N, N//2 + 1]
+
+    Returns
+    -------
+    npt.NDArray[np.complex64]
+        Gradient [N, N, N//2 + 1, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.fourier import gradient
+    >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
+    >>> result = gradient(complex_field)
+    """
+    ii = np.complex64(1j)
+    twopi = np.float32(2 * np.pi)
+    ncells_1d = len(x)
+    middle = ncells_1d // 2
+    result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
+    for i in prange(ncells_1d):
+        if i > middle:
+            kx = -np.float32(ncells_1d - i)
+        else:
+            kx = np.float32(i)
+        for j in prange(ncells_1d):
+            if j > middle:
+                ky = -np.float32(ncells_1d - j)
+            else:
+                ky = np.float32(j)
+            for k in prange(middle + 1):
+                kz = np.float32(k)
+                x_tmp = ii * twopi * x[i, j, k]
+                result[i, j, k, 0] = x_tmp * kx
+                result[i, j, k, 1] = x_tmp * ky
+                result[i, j, k, 2] = x_tmp * kz
+    return result
+
+
+@utils.time_me
+@njit(
+    ["c8[:,:,::1](c8[:,:,::1], UniTuple(i4,2))"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+    error_model="numpy",
+)
+def hessian(
+    x: npt.NDArray[np.complex64],
+    ij: Tuple[int, int],
+) -> npt.NDArray[np.complex64]:
+    """Compute second-order Potential in Fourier-space
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.complex64]
+        Fourier-space field [N, N, N//2 + 1]
+    ij : Tuple[int, int]
+        Indices for Hessian matrix [i,j]
+
+    Returns
+    -------
+    npt.NDArray[np.complex64]
+        Second-order Potential [N, N, N//2 + 1]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.fourier import hessian
+    >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
+    >>> result = hessian(complex_field, (0,1))
+    """
+    ncells_1d = len(x)
+    fourpi2 = np.float32(4 * np.pi**2)
+    middle = ncells_1d // 2
+    n = ij[0]
+    m = ij[1]
+    result = np.empty((ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
+    for i in prange(ncells_1d):
+        if i > middle:
+            kx = -np.float32(ncells_1d - i)
+        else:
+            kx = np.float32(i)
+        for j in prange(ncells_1d):
+            if j > middle:
+                ky = -np.float32(ncells_1d - j)
+            else:
+                ky = np.float32(j)
+            for k in prange(middle + 1):
+                kz = np.float32(k)
+                k_array = np.array([kx, ky, kz])
+                kn = k_array[n]
+                km = k_array[m]
+                result[i, j, k] = -kn * km * fourpi2 * x[i, j, k]
+    return result
+
+
+@utils.time_me
+@njit(
+    ["c8[:,:,::1](c8[:,:,::1], UniTuple(i4,2), UniTuple(i4,2))"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+    error_model="numpy",
+)
+def sum_of_hessian(
+    x: npt.NDArray[np.complex64],
+    ij1: Tuple[int, int],
+    ij2: Tuple[int, int],
+) -> npt.NDArray[np.complex64]:
+    """Compute second-order Potential in Fourier-space
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.complex64]
+        Fourier-space field [N, N, N//2 + 1]
+    ij1 : Tuple[int, int]
+        Indices for Hessian matrix [i,j]
+    ij2 : Tuple[int, int]
+        Indices for Hessian matrix [i,j]
+
+    Returns
+    -------
+    npt.NDArray[np.complex64]
+        Second-order Potential [N, N, N//2 + 1, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.fourier import sum_of_hessian
+    >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
+    >>> result = sum_of_hessian(complex_field, (0,1), (2,2))
+    """
+    ncells_1d = len(x)
+    fourpi2 = np.float32(4 * np.pi**2)
+    middle = ncells_1d // 2
+    n1 = ij1[0]
+    m1 = ij1[1]
+    n2 = ij2[0]
+    m2 = ij2[1]
+    result = np.empty((ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
+    for i in prange(ncells_1d):
+        if i > middle:
+            kx = -np.float32(ncells_1d - i)
+        else:
+            kx = np.float32(i)
+        for j in prange(ncells_1d):
+            if j > middle:
+                ky = -np.float32(ncells_1d - j)
+            else:
+                ky = np.float32(j)
+            for k in prange(middle + 1):
+                kz = np.float32(k)
+                k_array = np.array([kx, ky, kz])
+                kn1 = k_array[n1]
+                km1 = k_array[m1]
+                kn2 = k_array[n2]
+                km2 = k_array[m2]
+                result[i, j, k] = -(kn1 * km1 + kn2 * km2) * fourpi2 * x[i, j, k]
+    return result
+
+
+@utils.time_me
+@njit(
+    ["c8[:,:,::1](c8[:,:,::1], UniTuple(i4,2), UniTuple(i4,2))"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+    error_model="numpy",
+)
+def diff_of_hessian(
+    x: npt.NDArray[np.complex64],
+    ij1: Tuple[int, int],
+    ij2: Tuple[int, int],
+) -> npt.NDArray[np.complex64]:
+    """Compute second-order Potential in Fourier-space
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.complex64]
+        Fourier-space field [N, N, N//2 + 1]
+    ij1 : Tuple[int, int]
+        Indices for Hessian matrix [i,j]
+    ij2 : Tuple[int, int]
+        Indices for Hessian matrix [i,j]
+
+    Returns
+    -------
+    npt.NDArray[np.complex64]
+        Second-order Potential [N, N, N//2 + 1, 3]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.fourier import diff_of_hessian
+    >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
+    >>> result = diff_of_hessian(complex_field, (0,1), (2,2))
+    """
+    ncells_1d = len(x)
+    fourpi2 = np.float32(4 * np.pi**2)
+    middle = ncells_1d // 2
+    n1 = ij1[0]
+    m1 = ij1[1]
+    n2 = ij2[0]
+    m2 = ij2[1]
+    result = np.empty((ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
+    for i in prange(ncells_1d):
+        if i > middle:
+            kx = -np.float32(ncells_1d - i)
+        else:
+            kx = np.float32(i)
+        for j in prange(ncells_1d):
+            if j > middle:
+                ky = -np.float32(ncells_1d - j)
+            else:
+                ky = np.float32(j)
+            for k in prange(middle + 1):
+                kz = np.float32(k)
+                k_array = np.array([kx, ky, kz])
+                kn1 = k_array[n1]
+                km1 = k_array[m1]
+                kn2 = k_array[n2]
+                km2 = k_array[m2]
+                result[i, j, k] = -(kn1 * km1 - kn2 * km2) * fourpi2 * x[i, j, k]
     return result

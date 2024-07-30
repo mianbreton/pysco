@@ -277,6 +277,115 @@ def add_vector_scalar_inplace(
 
 
 @njit(fastmath=True, cache=True, parallel=True)
+def prod_vector_vector_scalar_inplace(
+    y: npt.NDArray[np.float32], x: npt.NDArray[np.float32], a: np.float32
+) -> None:
+    """prod vector times scalar inplace \\
+    y *= a*x
+
+    Parameters
+    ----------
+    y : npt.NDArray[np.float32]
+        Mutable array
+    x : npt.NDArray[np.float32]
+        Array to multiply (same shape as y)
+    a : np.float32
+        Scalar
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import add_vector_scalar_inplace
+    >>> y_array = np.array([1.0, 2.0, 3.0])
+    >>> x_array = np.array([4.0, 5.0, 6.0])
+    >>> add_vector_scalar_inplace(y_array, x_array, 2.0)
+    """
+    y_ravel = y.ravel()
+    x_ravel = x.ravel()
+    for i in prange(y_ravel.shape[0]):
+        y_ravel[i] *= a * x_ravel[i]
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def add_vector_vector_inplace(
+    y: npt.NDArray[np.float32],
+    f: np.float32,
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+) -> None:
+    """Add vector times scalar inplace \\
+    y += f * a * b
+
+    Parameters
+    ----------
+    y : npt.NDArray[np.float32]
+        Mutable array
+    f : np.float32
+        factor
+    a : npt.NDArray[np.float32]
+        Array to add (same shape as y)
+    b : npt.NDArray[np.float32]
+        Array to add (same shape as y)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import add_vector_scalar_inplace
+    >>> y_array = np.array([1.0, 2.0, 3.0])
+    >>> a_array = np.array([4.0, 5.0, 6.0])
+    >>> b_array = np.array([4.0, 5.0, 6.0])
+    >>> add_vector_scalar_inplace(y_array, a_array, b_array)
+    """
+    y_ravel = y.ravel()
+    a_ravel = a.ravel()
+    b_ravel = b.ravel()
+    for i in prange(y_ravel.shape[0]):
+        y_ravel[i] += f * a_ravel[i] * b_ravel[i]
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def add_vector_vector_vector_inplace(
+    y: npt.NDArray[np.float32],
+    f: np.float32,
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    c: npt.NDArray[np.float32],
+) -> None:
+    """Add vector times scalar inplace \\
+    y += f * a * b * c
+
+    Parameters
+    ----------
+    y : npt.NDArray[np.float32]
+        Mutable array
+    f : np.float32
+        factor
+    a : npt.NDArray[np.float32]
+        Array to add (same shape as y)
+    b : npt.NDArray[np.float32]
+        Array to add (same shape as y)
+    c : npt.NDArray[np.float32]
+        Array to add (same shape as y)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import add_vector_scalar_inplace
+    >>> y_array = np.array([1.0, 2.0, 3.0])
+    >>> a_array = np.array([4.0, 5.0, 6.0])
+    >>> b_array = np.array([4.0, 5.0, 6.0])
+    >>> c_array = np.array([4.0, 5.0, 6.0])
+    >>> add_vector_scalar_inplace(y_array, a_array, b_array, c_array)
+    """
+    y_ravel = y.ravel()
+    a_ravel = a.ravel()
+    b_ravel = b.ravel()
+    c_ravel = c.ravel()
+    for i in prange(y_ravel.shape[0]):
+        y_ravel[i] += f * a_ravel[i] * b_ravel[i] * c_ravel[i]
+
+
+@njit(fastmath=True, cache=True, parallel=True)
 def prod_vector_scalar_inplace(y: npt.NDArray[np.float32], a: np.float32) -> None:
     """Multiply vector by scalar inplace \\
     y *= a
