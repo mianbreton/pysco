@@ -116,6 +116,7 @@ def generate(
         psi_1lpt = fourier.ifft_3D_real_grad(psi_1lpt_fourier, param["nthreads"])
         psi_1lpt_fourier = 0
         # 1LPT
+        logging.warning("Compute 1LPT contribution")
         dplus_1_z0 = tables[3](0)
         dplus_1 = np.float32(tables[3](lna_start) / dplus_1_z0)
         f1 = tables[4](lna_start)
@@ -133,8 +134,8 @@ def generate(
         param["MAS_index"] = 0
         psi_2lpt = solver.fft_force(rhs_2ndorder, param, 0)
         rhs_2ndorder = 0 """
-
-        density_2 = compute_2ndorder_rhs(potential_1_fourier, param["nthreads"])
+        logging.warning("Compute 2LPT contribution")
+        density_2 = compute_2ndorder_rhs(potential_1_fourier, param)
         density_2_fourier = fourier.fft_3D_real(density_2, param["nthreads"])
         density_2 = 0
         fourier.inverse_laplacian(density_2_fourier)
@@ -153,71 +154,75 @@ def generate(
             velocity = velocity.reshape(param["npart"], 3)
             finalise_initial_conditions(position, velocity, param)
             return position, velocity
-        elif INITIAL_CONDITIONS.casefold() == "3LPT".casefold():
-            dplus_3a = np.float32(tables[7](lna_start) / dplus_1_z0**3)
-            f3a = tables[8](lna_start)
-            fH_3a = np.float32(f3a * Hz)
-            dplus_3b = np.float32(tables[9](lna_start) / dplus_1_z0**3)
-            f3b = tables[10](lna_start)
-            fH_3b = np.float32(f3b * Hz)
-            dplus_3c = np.float32(tables[11](lna_start) / dplus_1_z0**3)
-            f3c = tables[12](lna_start)
-            fH_3c = np.float32(f3c * Hz)
-            """ (
-                rhs_3a,
-                rhs_3b,
-                rhs_Ax_3c,
-                rhs_Ay_3c,
-                rhs_Az_3c,
-            ) = compute_rhs_3rdorder(
-                psi_1lpt, psi_2lpt, param["gradient_stencil_order"]
-            )
-            psi_1lpt = 0
-            psi_2lpt = 0
-            psi_3lpt_a = solver.fft_force(rhs_3a, param, 0)
-            rhs_3a = 0
-            psi_3lpt_b = solver.fft_force(rhs_3b, param, 0)
-            rhs_3b = 0
-            psi_Ax_3c = solver.fft_force(rhs_Ax_3c, param, 0)
-            rhs_Ax_3c = 0
-            psi_Ay_3c = solver.fft_force(rhs_Ay_3c, param, 0)
-            rhs_Ay_3c = 0
-            psi_Az_3c = solver.fft_force(rhs_Az_3c, param, 0)
-            rhs_Az_3c = 0
-            add_3LPT(position, velocity, psi_3lpt_a, psi_3lpt_b, psi_Ax_3c, psi_Ay_3c, psi_Az_3c, dplus_3a, fH_3a, dplus_3b, fH_3b, dplus_3c, fH_3c) """
-            psi_3lpt_a = compute_3a_displacement(potential_1_fourier, param["nthreads"])
-            add_nLPT(position, velocity, psi_3lpt_a, dplus_3a, fH_3a)
-            psi_3lpt_a = 0
-            psi_3lpt_b = compute_3b_displacement(
-                potential_1_fourier, potential_2_fourier, param["nthreads"]
-            )
-            add_nLPT(position, velocity, psi_3lpt_b, dplus_3b, fH_3b)
-            psi_3lpt_b = 0
-            psi_3lpt_c_Ax = compute_3c_Ax_displacement(
-                potential_1_fourier, potential_2_fourier, param["nthreads"]
-            )
-            add_nLPT(position, velocity, psi_3lpt_c_Ax, dplus_3c, fH_3c)
-            psi_3lpt_c_Ax = 0
-            psi_3lpt_c_Ay = compute_3c_Ay_displacement(
-                potential_1_fourier, potential_2_fourier, param["nthreads"]
-            )
-            add_nLPT(position, velocity, psi_3lpt_c_Ay, dplus_3c, fH_3c)
-            psi_3lpt_c_Ay = 0
-            psi_3lpt_c_Az = compute_3c_Az_displacement(
-                potential_1_fourier, potential_2_fourier, param["nthreads"]
-            )
-            potential_1_fourier = 0
-            potential_2_fourier = 0
-            add_nLPT(position, velocity, psi_3lpt_c_Az, dplus_3c, fH_3c)
-            psi_3lpt_c_Az = 0
+        # 3LPT
+        dplus_3a = np.float32(tables[7](lna_start) / dplus_1_z0**3)
+        f3a = tables[8](lna_start)
+        fH_3a = np.float32(f3a * Hz)
+        dplus_3b = np.float32(tables[9](lna_start) / dplus_1_z0**3)
+        f3b = tables[10](lna_start)
+        fH_3b = np.float32(f3b * Hz)
+        dplus_3c = np.float32(tables[11](lna_start) / dplus_1_z0**3)
+        f3c = tables[12](lna_start)
+        fH_3c = np.float32(f3c * Hz)
+        """ (
+            rhs_3a,
+            rhs_3b,
+            rhs_Ax_3c,
+            rhs_Ay_3c,
+            rhs_Az_3c,
+        ) = compute_rhs_3rdorder(
+            psi_1lpt, psi_2lpt, param["gradient_stencil_order"]
+        )
+        psi_1lpt = 0
+        psi_2lpt = 0
+        psi_3lpt_a = solver.fft_force(rhs_3a, param, 0)
+        rhs_3a = 0
+        psi_3lpt_b = solver.fft_force(rhs_3b, param, 0)
+        rhs_3b = 0
+        psi_Ax_3c = solver.fft_force(rhs_Ax_3c, param, 0)
+        rhs_Ax_3c = 0
+        psi_Ay_3c = solver.fft_force(rhs_Ay_3c, param, 0)
+        rhs_Ay_3c = 0
+        psi_Az_3c = solver.fft_force(rhs_Az_3c, param, 0)
+        rhs_Az_3c = 0
+        add_3LPT(position, velocity, psi_3lpt_a, psi_3lpt_b, psi_Ax_3c, psi_Ay_3c, psi_Az_3c, dplus_3a, fH_3a, dplus_3b, fH_3b, dplus_3c, fH_3c) """
+        logging.warning("Compute 3LPT a) contribution")
+        psi_3lpt_a = compute_3a_displacement(potential_1_fourier, param)
+        add_nLPT(position, velocity, psi_3lpt_a, dplus_3a, fH_3a)
+        psi_3lpt_a = 0
+        logging.warning("Compute 3LPT b) contribution")
+        psi_3lpt_b = compute_3b_displacement(
+            potential_1_fourier, potential_2_fourier, param
+        )
+        add_nLPT(position, velocity, psi_3lpt_b, dplus_3b, fH_3b)
+        psi_3lpt_b = 0
+        logging.warning("Compute 3LPT c) Ax contribution")
+        psi_3lpt_c_Ax = compute_3c_Ax_displacement(
+            potential_1_fourier, potential_2_fourier, param
+        )
+        add_nLPT(position, velocity, psi_3lpt_c_Ax, dplus_3c, fH_3c)
+        psi_3lpt_c_Ax = 0
+        logging.warning("Compute 3LPT c) Ay contribution")
+        psi_3lpt_c_Ay = compute_3c_Ay_displacement(
+            potential_1_fourier, potential_2_fourier, param
+        )
+        add_nLPT(position, velocity, psi_3lpt_c_Ay, dplus_3c, fH_3c)
+        psi_3lpt_c_Ay = 0
+        logging.warning("Compute 3LPT c) Az contribution")
+        psi_3lpt_c_Az = compute_3c_Az_displacement(
+            potential_1_fourier, potential_2_fourier, param
+        )
+        potential_1_fourier = 0
+        potential_2_fourier = 0
+        add_nLPT(position, velocity, psi_3lpt_c_Az, dplus_3c, fH_3c)
+        psi_3lpt_c_Az = 0
+        if INITIAL_CONDITIONS.casefold() == "3LPT".casefold():
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
             finalise_initial_conditions(position, velocity, param)
             return position, velocity
         else:
-            raise ValueError(
-                f"Initial conditions shoule be 1LPT, 2LPT, 3LPT or *.h5. Currently {param['initial_conditions']=}"
-            )
+            raise ValueError(f"{INITIAL_CONDITIONS=}, should be 1LPT, 2LPT or 3LPT")
     elif INITIAL_CONDITIONS[-3:].casefold() == ".h5".casefold():
         position, velocity = read_hdf5(param)
         finalise_initial_conditions(position, velocity, param)
@@ -458,10 +463,9 @@ def generate_density(param: pd.Series) -> npt.NDArray[np.float32]:
     >>> generate_density(param)
     """
     density_k = generate_density_fourier(param)
-    density = fourier.ifft_3D(density_k, param["nthreads"])
+    density = fourier.ifft_3D_real(density_k, param["nthreads"])
     density_k = 0
-    # .real method makes the data not C contiguous
-    return np.ascontiguousarray(density.real)
+    return density
 
 
 @utils.time_me
@@ -502,9 +506,8 @@ def generate_force(param: pd.Series) -> npt.NDArray[np.float32]:
 
     utils.prod_gradient_vector_inplace(force, transfer_grid)
     transfer_grid = 0
-    force = fourier.ifft_3D_grad(force, param["nthreads"])
-    # .real method makes the data not C contiguous
-    return np.ascontiguousarray(force.real)
+    force = fourier.ifft_3D_real_grad(force, param["nthreads"])
+    return force
 
 
 @utils.time_me
@@ -1784,7 +1787,7 @@ def compute_rhs_2ndorder(
 
 
 def compute_2ndorder_rhs(
-    phi_1_fourier: npt.NDArray[np.float32], nthreads
+    phi_1_fourier: npt.NDArray[np.float32], param: pd.Series
 ) -> npt.NDArray[np.float32]:
     """Compute 2LPT displacement [Scoccimarro 1998 Appendix B.2]
 
@@ -1792,8 +1795,8 @@ def compute_2ndorder_rhs(
     ----------
     phi_1_fourier : npt.NDArray[np.float32]
         First-order Potential [N, N, N]
-    nthreads : int
-        Number of threads
+    param : pd.Series
+        Parameter container
 
     Returns
     -------
@@ -1808,6 +1811,11 @@ def compute_2ndorder_rhs(
     >>> rhs_2ndorder = compute_2ndorder_rhs(phi, 2)
     """
     one = np.float32(1)
+    nthreads = param["nthreads"]
+
+    if param["dealiased_ICS"]:
+        phi_1_fourier = pad(phi_1_fourier)
+
     tmp = fourier.hessian(phi_1_fourier, (0, 0))
     phi_2 = fourier.ifft_3D_real(tmp, nthreads)
     tmp = fourier.sum_of_hessian(phi_1_fourier, (1, 1), (2, 2))
@@ -1830,12 +1838,18 @@ def compute_2ndorder_rhs(
     tmp = fourier.ifft_3D_real(tmp, nthreads)
     utils.add_vector_vector_inplace(phi_2, -one, tmp, tmp)
     tmp = 0
+
+    if param["dealiased_ICS"]:
+        phi_2 = fourier.fft_3D_real(phi_2, nthreads)
+        phi_2 = trim(phi_2)
+        phi_2 = fourier.ifft_3D_real(phi_2, nthreads)
+        utils.prod_vector_scalar_inplace(phi_2, np.float32(1.5**3))
+
     return phi_2
 
 
 def compute_3a_rhs(
-    phi_1_fourier: npt.NDArray[np.float32],
-    nthreads,
+    phi_1_fourier: npt.NDArray[np.float32], param: pd.Series
 ) -> npt.NDArray[np.float32]:
     """Compute 3aLPT displacement [Scoccimarro 1998 Appendix B.2]
 
@@ -1843,8 +1857,8 @@ def compute_3a_rhs(
     ----------
     phi_1_fourier : npt.NDArray[np.float32]
         First-order Potential [N, N, N]
-    nthreads : int
-        Number of threads
+    param : pd.Series
+        Parameter container
 
     Returns
     -------
@@ -1860,6 +1874,11 @@ def compute_3a_rhs(
     """
     one = np.float32(1)
     two = np.float32(2)
+    nthreads = param["nthreads"]
+
+    if param["dealiased_ICS"]:
+        phi_1_fourier = pad(phi_1_fourier)
+
     tmp = fourier.hessian(phi_1_fourier, (0, 0))
     phi_3a = fourier.ifft_3D_real(tmp, nthreads)
     tmp = fourier.hessian(phi_1_fourier, (1, 1))
@@ -1898,12 +1917,22 @@ def compute_3a_rhs(
     tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
     utils.add_vector_vector_vector_inplace(phi_3a, -one, tmp1, tmp1, tmp2)
 
+    if param["dealiased_ICS"]:
+        phi_3a = fourier.fft_3D_real(phi_3a, nthreads)
+        phi_3a = trim(phi_3a)
+        phi_3a = fourier.ifft_3D_real(phi_3a, nthreads)
+        utils.prod_vector_scalar_inplace(phi_3a, np.float32(1.5**6))
+
+    phi_3_fourier = fourier.fft_3D_real(phi_3a, nthreads)
+    k, pk, modes = fourier.fourier_grid_to_Pk(phi_3_fourier, 0)
+    np.savetxt(
+        f"{param['base']}/pk_3a_dealias_{param['dealiased_ICS']}.txt", np.c_[k, pk]
+    )
     return phi_3a
 
 
 def compute_3a_displacement(
-    phi_1_fourier: npt.NDArray[np.float32],
-    nthreads,
+    phi_1_fourier: npt.NDArray[np.float32], param: pd.Series
 ) -> npt.NDArray[np.float32]:
     """Compute 3aLPT displacement [Scoccimarro 1998 Appendix B.2]
 
@@ -1911,8 +1940,8 @@ def compute_3a_displacement(
     ----------
     phi_1_fourier : npt.NDArray[np.float32]
         First-order Potential [N, N, N]
-    nthreads : int
-        Number of threads
+    param : pd.Series
+        Parameter container
 
     Returns
     -------
@@ -1927,10 +1956,10 @@ def compute_3a_displacement(
     >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
     >>> rhs = compute_3a_displacement(phi_1, phi_2, 2)
     """
-    density_3a = compute_3a_rhs(phi_1_fourier, nthreads)
-    density_3a_fourier = fourier.fft_3D_real(density_3a, nthreads)
+    density_3a = compute_3a_rhs(phi_1_fourier, param)
+    density_3a_fourier = fourier.fft_3D_real(density_3a, param["nthreads"])
     psi_3lpt_a_fourier = fourier.gradient_inverse_laplacian(density_3a_fourier)
-    psi_3lpt_a = fourier.ifft_3D_real_grad(psi_3lpt_a_fourier, nthreads)
+    psi_3lpt_a = fourier.ifft_3D_real_grad(psi_3lpt_a_fourier, param["nthreads"])
 
     return psi_3lpt_a
 
@@ -1938,7 +1967,7 @@ def compute_3a_displacement(
 def compute_3b_rhs(
     phi_1_fourier: npt.NDArray[np.float32],
     phi_2_fourier: npt.NDArray[np.float32],
-    nthreads,
+    param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3bLPT displacement
 
@@ -1948,8 +1977,8 @@ def compute_3b_rhs(
         First-order Potential [N, N, N]
     phi_2_fourier : npt.NDArray[np.float32]
         First-order Potential [N, N, N]
-    nthreads : int
-        Number of threads
+    param : pd.Series
+        Parameter container
 
     Returns
     -------
@@ -1966,6 +1995,11 @@ def compute_3b_rhs(
     """
     one = np.float32(1)
     half = np.float32(0.5)
+    nthreads = param["nthreads"]
+
+    if param["dealiased_ICS"]:
+        phi_1_fourier = pad(phi_1_fourier)
+        phi_2_fourier = pad(phi_2_fourier)
 
     tmp = fourier.hessian(phi_1_fourier, (0, 0))
     phi_3b = fourier.ifft_3D_real(tmp, nthreads)
@@ -2004,13 +2038,24 @@ def compute_3b_rhs(
     tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
     utils.add_vector_vector_inplace(phi_3b, -one, tmp1, tmp2)
 
+    if param["dealiased_ICS"]:
+        phi_3b = fourier.fft_3D_real(phi_3b, nthreads)
+        phi_3b = trim(phi_3b)
+        phi_3b = fourier.ifft_3D_real(phi_3b, nthreads)
+        utils.prod_vector_scalar_inplace(phi_3b, np.float32(1.5**3))
+
+    """ phi_3_fourier = fourier.fft_3D_real(phi_3b, nthreads)
+    k, pk, modes = fourier.fourier_grid_to_Pk(phi_3_fourier, 0)
+    np.savetxt(
+        f"{param['base']}/pk_3b_dealias_{param['dealiased_ICS']}.txt", np.c_[k, pk]
+    ) """
     return phi_3b
 
 
 def compute_3b_displacement(
     phi_1_fourier: npt.NDArray[np.float32],
     phi_2_fourier: npt.NDArray[np.float32],
-    nthreads,
+    param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3bLPT displacement
 
@@ -2020,8 +2065,8 @@ def compute_3b_displacement(
         First-order Potential [N, N, N]
     phi_2_fourier : npt.NDArray[np.float32]
         First-order Potential [N, N, N]
-    nthreads : int
-        Number of threads
+    param : pd.Series
+        Parameter container
 
     Returns
     -------
@@ -2036,17 +2081,17 @@ def compute_3b_displacement(
     >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
     >>> rhs = compute_3b_displacement(phi_1, phi_2, 2)
     """
-    density_3b = compute_3b_rhs(phi_1_fourier, phi_2_fourier, nthreads)
-    density_3b_fourier = fourier.fft_3D_real(density_3b, nthreads)
+    density_3b = compute_3b_rhs(phi_1_fourier, phi_2_fourier, param)
+    density_3b_fourier = fourier.fft_3D_real(density_3b, param["nthreads"])
     psi_3lpt_b_fourier = fourier.gradient_inverse_laplacian(density_3b_fourier)
-    psi_3lpt_b = fourier.ifft_3D_real_grad(psi_3lpt_b_fourier, nthreads)
+    psi_3lpt_b = fourier.ifft_3D_real_grad(psi_3lpt_b_fourier, param["nthreads"])
     return psi_3lpt_b
 
 
 def compute_3c_Ax_rhs(
     phi_1_fourier: npt.NDArray[np.float32],
     phi_2_fourier: npt.NDArray[np.float32],
-    nthreads,
+    param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3cLPT displacement
 
@@ -2056,8 +2101,8 @@ def compute_3c_Ax_rhs(
         First-order Potential [N, N, N]
     phi_2_fourier : npt.NDArray[np.float32]
         First-order Potential [N, N, N]
-    nthreads : int
-        Number of threads
+    param : pd.Series
+        Parameter container
 
     Returns
     -------
@@ -2073,6 +2118,11 @@ def compute_3c_Ax_rhs(
     >>> rhs = compute_3c_Ax_rhs(phi_1, phi_2, 2)
     """
     one = np.float32(1)
+    nthreads = param["nthreads"]
+
+    if param["dealiased_ICS"]:
+        phi_1_fourier = pad(phi_1_fourier)
+        phi_2_fourier = pad(phi_2_fourier)
 
     tmp = fourier.hessian(phi_1_fourier, (0, 2))
     phi_3c = fourier.ifft_3D_real(tmp, nthreads)
@@ -2099,13 +2149,24 @@ def compute_3c_Ax_rhs(
     tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
     utils.add_vector_vector_inplace(phi_3c, -one, tmp1, tmp2)
 
+    if param["dealiased_ICS"]:
+        phi_3c = fourier.fft_3D_real(phi_3c, nthreads)
+        phi_3c = trim(phi_3c)
+        phi_3c = fourier.ifft_3D_real(phi_3c, nthreads)
+        utils.prod_vector_scalar_inplace(phi_3c, np.float32(1.5**3))
+
+    """ phi_3_fourier = fourier.fft_3D_real(phi_3c, nthreads)
+    k, pk, modes = fourier.fourier_grid_to_Pk(phi_3_fourier, 0)
+    np.savetxt(
+        f"{param['base']}/pk_3cx_dealias_{param['dealiased_ICS']}.txt", np.c_[k, pk]
+    ) """
     return phi_3c
 
 
 def compute_3c_Ax_displacement(
     phi_1_fourier: npt.NDArray[np.float32],
     phi_2_fourier: npt.NDArray[np.float32],
-    nthreads,
+    param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3aLPT displacement
 
@@ -2115,8 +2176,8 @@ def compute_3c_Ax_displacement(
         First-order Potential [N, N, N]
     phi_2_fourier : npt.NDArray[np.float32]
         First-order Potential [N, N, N]
-    nthreads : int
-        Number of threads
+    param : pd.Series
+        Parameter container
 
     Returns
     -------
@@ -2131,17 +2192,17 @@ def compute_3c_Ax_displacement(
     >>> phi_2 = np.random.random((64, 64, 64, 3)).astype(np.float32)
     >>> rhs = compute_3c_Ax_displacement(phi_1, phi_2, 2)
     """
-    density_3c_Ax = compute_3c_Ax_rhs(phi_1_fourier, phi_2_fourier, nthreads)
-    density_3c_Ax_fourier = fourier.fft_3D_real(density_3c_Ax, nthreads)
+    density_3c_Ax = compute_3c_Ax_rhs(phi_1_fourier, phi_2_fourier, param)
+    density_3c_Ax_fourier = fourier.fft_3D_real(density_3c_Ax, param["nthreads"])
     psi_3lpt_c_Ax_fourier = fourier.gradient_inverse_laplacian(density_3c_Ax_fourier)
-    psi_3lpt_c_Ax = fourier.ifft_3D_real_grad(psi_3lpt_c_Ax_fourier, nthreads)
+    psi_3lpt_c_Ax = fourier.ifft_3D_real_grad(psi_3lpt_c_Ax_fourier, param["nthreads"])
     return psi_3lpt_c_Ax
 
 
 def compute_3c_Ay_rhs(
     phi_1_fourier: npt.NDArray[np.float32],
     phi_2_fourier: npt.NDArray[np.float32],
-    nthreads,
+    param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3cLPT displacement
 
@@ -2151,8 +2212,8 @@ def compute_3c_Ay_rhs(
         First-order Potential [N, N, N]
     phi_2_fourier : npt.NDArray[np.float32]
         First-order Potential [N, N, N]
-    nthreads : int
-        Number of threads
+    param : pd.Series
+        Parameter container
 
     Returns
     -------
@@ -2168,6 +2229,11 @@ def compute_3c_Ay_rhs(
     >>> rhs = compute_3c_Ay_rhs(phi_1, phi_2, 2)
     """
     one = np.float32(1)
+    nthreads = param["nthreads"]
+
+    if param["dealiased_ICS"]:
+        phi_1_fourier = pad(phi_1_fourier)
+        phi_2_fourier = pad(phi_2_fourier)
 
     tmp = fourier.hessian(phi_1_fourier, (0, 1))
     phi_3c = fourier.ifft_3D_real(tmp, nthreads)
@@ -2194,13 +2260,24 @@ def compute_3c_Ay_rhs(
     tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
     utils.add_vector_vector_inplace(phi_3c, -one, tmp1, tmp2)
 
+    if param["dealiased_ICS"]:
+        phi_3c = fourier.fft_3D_real(phi_3c, nthreads)
+        phi_3c = trim(phi_3c)
+        phi_3c = fourier.ifft_3D_real(phi_3c, nthreads)
+        utils.prod_vector_scalar_inplace(phi_3c, np.float32(1.5**3))
+
+    """ phi_3_fourier = fourier.fft_3D_real(phi_3c, nthreads)
+    k, pk, modes = fourier.fourier_grid_to_Pk(phi_3_fourier, 0)
+    np.savetxt(
+        f"{param['base']}/pk_3cy_dealias_{param['dealiased_ICS']}.txt", np.c_[k, pk]
+    ) """
     return phi_3c
 
 
 def compute_3c_Ay_displacement(
     phi_1_fourier: npt.NDArray[np.float32],
     phi_2_fourier: npt.NDArray[np.float32],
-    nthreads,
+    param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3aLPT displacement
 
@@ -2210,8 +2287,8 @@ def compute_3c_Ay_displacement(
         First-order Potential [N, N, N]
     phi_2_fourier : npt.NDArray[np.float32]
         First-order Potential [N, N, N]
-    nthreads : int
-        Number of threads
+    param : pd.Series
+        Parameter container
 
     Returns
     -------
@@ -2226,17 +2303,17 @@ def compute_3c_Ay_displacement(
     >>> phi_2 = np.random.random((64, 64, 64, 3)).astype(np.float32)
     >>> rhs = compute_3c_Ay_displacement(phi_1, phi_2, 2)
     """
-    density_3c_Ay = compute_3c_Ay_rhs(phi_1_fourier, phi_2_fourier, nthreads)
-    density_3c_Ay_fourier = fourier.fft_3D_real(density_3c_Ay, nthreads)
+    density_3c_Ay = compute_3c_Ay_rhs(phi_1_fourier, phi_2_fourier, param)
+    density_3c_Ay_fourier = fourier.fft_3D_real(density_3c_Ay, param["nthreads"])
     psi_3lpt_c_Ay_fourier = fourier.gradient_inverse_laplacian(density_3c_Ay_fourier)
-    psi_3lpt_c_Ay = fourier.ifft_3D_real_grad(psi_3lpt_c_Ay_fourier, nthreads)
+    psi_3lpt_c_Ay = fourier.ifft_3D_real_grad(psi_3lpt_c_Ay_fourier, param["nthreads"])
     return psi_3lpt_c_Ay
 
 
 def compute_3c_Az_rhs(
     phi_1_fourier: npt.NDArray[np.float32],
     phi_2_fourier: npt.NDArray[np.float32],
-    nthreads,
+    param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3cLPT displacement
 
@@ -2246,8 +2323,8 @@ def compute_3c_Az_rhs(
         First-order Potential [N, N, N]
     phi_2_fourier : npt.NDArray[np.float32]
         First-order Potential [N, N, N]
-    nthreads : int
-        Number of threads
+    param : pd.Series
+        Parameter container
 
     Returns
     -------
@@ -2263,6 +2340,11 @@ def compute_3c_Az_rhs(
     >>> rhs = compute_3c_Az_rhs(phi_1, phi_2, 2)
     """
     one = np.float32(1)
+    nthreads = param["nthreads"]
+
+    if param["dealiased_ICS"]:
+        phi_1_fourier = pad(phi_1_fourier)
+        phi_2_fourier = pad(phi_2_fourier)
 
     tmp = fourier.hessian(phi_1_fourier, (1, 2))
     phi_3c = fourier.ifft_3D_real(tmp, nthreads)
@@ -2289,13 +2371,24 @@ def compute_3c_Az_rhs(
     tmp2 = fourier.ifft_3D_real(tmp2, nthreads)
     utils.add_vector_vector_inplace(phi_3c, -one, tmp1, tmp2)
 
+    if param["dealiased_ICS"]:
+        phi_3c = fourier.fft_3D_real(phi_3c, nthreads)
+        phi_3c = trim(phi_3c)
+        phi_3c = fourier.ifft_3D_real(phi_3c, nthreads)
+        utils.prod_vector_scalar_inplace(phi_3c, np.float32(1.5**3))
+
+    """ phi_3_fourier = fourier.fft_3D_real(phi_3c, nthreads)
+    k, pk, modes = fourier.fourier_grid_to_Pk(phi_3_fourier, 0)
+    np.savetxt(
+        f"{param['base']}/pk_3cz_dealias_{param['dealiased_ICS']}.txt", np.c_[k, pk]
+    ) """
     return phi_3c
 
 
 def compute_3c_Az_displacement(
     phi_1_fourier: npt.NDArray[np.float32],
     phi_2_fourier: npt.NDArray[np.float32],
-    nthreads,
+    param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3aLPT displacement
 
@@ -2305,8 +2398,8 @@ def compute_3c_Az_displacement(
         First-order Potential [N, N, N]
     phi_2_fourier : npt.NDArray[np.float32]
         First-order Potential [N, N, N]
-    nthreads : int
-        Number of threads
+    param : pd.Series
+        Parameter container
 
     Returns
     -------
@@ -2321,10 +2414,10 @@ def compute_3c_Az_displacement(
     >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
     >>> rhs = compute_3c_Az_displacement(phi_1, phi_2, 2)
     """
-    density_3c_Az = compute_3c_Az_rhs(phi_1_fourier, phi_2_fourier, nthreads)
-    density_3c_Az_fourier = fourier.fft_3D_real(density_3c_Az, nthreads)
+    density_3c_Az = compute_3c_Az_rhs(phi_1_fourier, phi_2_fourier, param)
+    density_3c_Az_fourier = fourier.fft_3D_real(density_3c_Az, param["nthreads"])
     psi_3lpt_c_Az_fourier = fourier.gradient_inverse_laplacian(density_3c_Az_fourier)
-    psi_3lpt_c_Az = fourier.ifft_3D_real_grad(psi_3lpt_c_Az_fourier, nthreads)
+    psi_3lpt_c_Az = fourier.ifft_3D_real_grad(psi_3lpt_c_Az_fourier, param["nthreads"])
     return psi_3lpt_c_Az
 
 
@@ -2609,3 +2702,60 @@ def add_nLPT(
                 velocity[i, j, k, 0] += dfH_n * psix
                 velocity[i, j, k, 1] += dfH_n * psiy
                 velocity[i, j, k, 2] += dfH_n * psiz
+
+
+@utils.time_me
+def pad(input: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+    """Extend dimensions by with a factor 3/2 and padd with zeros
+
+    Parameters
+    ----------
+    input : npt.NDArray[np.float32]
+        Input field [N,N,N]
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Padded field [3N/2, 3N/2, 3N/2]
+    """
+    ncells_1d = len(input)
+    ncells_1d_extended = 3 * ncells_1d // 2
+    middle = ncells_1d // 2
+    output = np.zeros(
+        (ncells_1d_extended, ncells_1d_extended, ncells_1d_extended // 2 + 1),
+        dtype=input.dtype,
+    )
+    output[:middle, :middle, :middle] = input[:middle, :middle, :middle]
+    output[-middle + 1 :, :middle, :middle] = input[-middle + 1 :, :middle, :middle]
+    output[:middle, -middle + 1 :, :middle] = input[:middle, -middle + 1 :, :middle]
+    output[-middle + 1 :, -middle + 1 :, :middle] = input[
+        -middle + 1 :, -middle + 1 :, :middle
+    ]
+    return output
+
+
+@utils.time_me
+def trim(input: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+    """Trim dimensions by with a factor 2/3
+
+    Parameters
+    ----------
+    input : npt.NDArray[np.float32]
+        Input field [3N/2, 3N/2, 3N/2]
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Trimmed field [N,N,N]
+    """
+    ncells_1d_extended = len(input)
+    ncells_1d = 2 * ncells_1d_extended // 3
+    middle = ncells_1d // 2
+    output = np.zeros((ncells_1d, ncells_1d, middle + 1), dtype=input.dtype)
+    output[:middle, :middle, :middle] = input[:middle, :middle, :middle]
+    output[-middle + 1 :, :middle, :middle] = input[-middle + 1 :, :middle, :middle]
+    output[:middle, -middle + 1 :, :middle] = input[:middle, -middle + 1 :, :middle]
+    output[-middle + 1 :, -middle + 1 :, :middle] = input[
+        -middle + 1 :, -middle + 1 :, :middle
+    ]
+    return output

@@ -28,6 +28,7 @@ param = {
     "seed": 42,
     "fixed_ICS": False,
     "paired_ICS": False,
+    "dealiased_ICS": False,
     "power_spectrum_file": "/home/user/pysco/examples/pk_lcdmw7v2.dat",
     "initial_conditions": "3LPT",
     "base": "/home/user/boxlen500_n128_lcdm_00000/",
