@@ -183,7 +183,7 @@ def generate(
         )
         potential_1_fourier = 0
         potential_2_fourier = 0
-        add_nLPT(position, velocity, psi_3lpt_c_Az, dplus_3c, fH_3c)
+        add_nLPT(position, velocity, psi_3lpt_c_Az, -dplus_3c, fH_3c)
         psi_3lpt_c_Az = 0
         if INITIAL_CONDITIONS.casefold() == "3LPT".casefold():
             position = position.reshape(param["npart"], 3)
@@ -393,7 +393,12 @@ def generate_density_fourier(param: pd.Series) -> npt.NDArray[np.float32]:
     transfer_grid = get_transfer_grid(param)
 
     ncells_1d = int(math.cbrt(param["npart"]))
-    rng = np.random.default_rng(param["seed"])
+    seed = param["seed"]
+    if seed < 0:
+        rng = np.random.default_rng()
+    else:
+        rng = np.random.default_rng(param["seed"])
+
     if param["fixed_ICS"]:
         density_k = white_noise_fourier_fixed(ncells_1d, rng, param["paired_ICS"])
     else:
@@ -467,7 +472,12 @@ def generate_force(param: pd.Series) -> npt.NDArray[np.float32]:
     transfer_grid = get_transfer_grid(param)
 
     ncells_1d = int(math.cbrt(param["npart"]))
-    rng = np.random.default_rng(param["seed"])
+    seed = param["seed"]
+    if seed < 0:
+        rng = np.random.default_rng()
+    else:
+        rng = np.random.default_rng(param["seed"])
+
     if param["fixed_ICS"]:
         force = white_noise_fourier_fixed_force(ncells_1d, rng, param["paired_ICS"])
     else:
@@ -579,13 +589,21 @@ def white_noise_fourier(
     rng_amplitudes = 0
     # Fix corners
     density[0, 0, 0] = 0
-    density[0, 0, middle] = math.sqrt(-math.log(rng.random(dtype=np.float32)))
-    density[0, middle, 0] = math.sqrt(-math.log(rng.random(dtype=np.float32)))
-    density[0, middle, middle] = math.sqrt(-math.log(rng.random(dtype=np.float32)))
-    density[middle, 0, 0] = math.sqrt(-math.log(rng.random(dtype=np.float32)))
-    density[middle, 0, middle] = math.sqrt(-math.log(rng.random(dtype=np.float32)))
-    density[middle, middle, 0] = math.sqrt(-math.log(rng.random(dtype=np.float32)))
-    density[middle, middle, middle] = math.sqrt(-math.log(rng.random(dtype=np.float32)))
+    density[0, 0, middle] = math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
+    density[0, middle, 0] = math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
+    density[0, middle, middle] = math.sqrt(
+        -math.log(one - rng.random(dtype=np.float32))
+    )
+    density[middle, 0, 0] = math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
+    density[middle, 0, middle] = math.sqrt(
+        -math.log(one - rng.random(dtype=np.float32))
+    )
+    density[middle, middle, 0] = math.sqrt(
+        -math.log(one - rng.random(dtype=np.float32))
+    )
+    density[middle, middle, middle] = math.sqrt(
+        -math.log(one - rng.random(dtype=np.float32))
+    )
 
     return density
 
@@ -623,6 +641,7 @@ def white_noise_fourier_fixed(
     >>> print(paired_white_noise)
     """
     twopi = np.float32(2 * np.pi)
+    one = np.float32(1)
     ii = np.complex64(1j)
     middle = ncells_1d // 2
     if is_paired:
@@ -641,13 +660,13 @@ def white_noise_fourier_fixed(
                 density[i, j, k] = result
     rng_phases = 0
     density[0, 0, 0] = 0
-    density[middle, 0, 0] = density[0, middle, 0] = density[0, 0, middle] = density[
-        middle, middle, 0
-    ] = density[0, middle, middle] = density[middle, 0, middle] = density[
-        middle, middle, middle
-    ] = np.float32(
-        1
-    )
+    density[0, 0, middle] = one
+    density[0, middle, 0] = one
+    density[0, middle, middle] = one
+    density[middle, 0, 0] = one
+    density[middle, 0, middle] = one
+    density[middle, middle, 0] = one
+    density[middle, middle, middle] = one
     return density
 
 
@@ -693,14 +712,14 @@ def white_noise_fourier_force(
     rng_amplitudes = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
     rng_phases = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
     for i in prange(ncells_1d):
-        if i > middle:
-            kx = -np.float32(ncells_1d - i)
+        if i >= middle:
+            kx = np.float32(i - ncells_1d)
         else:
             kx = np.float32(i)
         kx2 = kx**2
         for j in prange(ncells_1d):
-            if j > middle:
-                ky = -np.float32(ncells_1d - j)
+            if j >= middle:
+                ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
             kx2_ky2 = kx2 + ky**2
@@ -727,31 +746,52 @@ def white_noise_fourier_force(
     inv3 = np.float32(1.0 / 3)
     invkmiddle = -np.float32((twopi * middle) ** (-1))
 
-    force[0, 0, 0, 0] = force[0, 0, 0, 1] = force[0, 0, 0, 2] = 0
-
-    force[0, middle, 0, 0] = force[0, middle, 0, 1] = force[0, middle, 0, 2] = (
-        invkmiddle * math.sqrt(-math.log(rng.random(dtype=np.float32)))
+    force_1_1_0 = (
+        invkmiddle * inv2 * math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
     )
-    force[0, 0, middle, 0] = force[0, 0, middle, 1] = force[0, 0, middle, 2] = (
-        invkmiddle * math.sqrt(-math.log(rng.random(dtype=np.float32)))
+    force_0_1_1 = (
+        invkmiddle * inv2 * math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
     )
-    force[middle, 0, 0, 0] = force[middle, 0, 0, 1] = force[middle, 0, 0, 2] = (
-        invkmiddle * math.sqrt(-math.log(rng.random(dtype=np.float32)))
+    force_1_0_1 = (
+        invkmiddle * inv2 * math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
+    )
+    force_1_1_1 = (
+        invkmiddle * inv3 * math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
     )
 
-    force[0, middle, middle, 0] = force[0, middle, middle, 1] = force[
-        0, middle, middle, 2
-    ] = (invkmiddle * inv2 * math.sqrt(-math.log(rng.random(dtype=np.float32))))
-    force[middle, middle, 0, 0] = force[middle, middle, 0, 1] = force[
-        middle, middle, 0, 2
-    ] = (invkmiddle * inv2 * math.sqrt(-math.log(rng.random(dtype=np.float32))))
-    force[middle, 0, middle, 0] = force[middle, 0, middle, 1] = force[
-        middle, 0, middle, 2
-    ] = (invkmiddle * inv2 * math.sqrt(-math.log(rng.random(dtype=np.float32))))
+    # 0
+    force[0, 0, 0, 0] = 0
+    # 1
+    force[0, middle, 0, 0] = 0
+    force[0, 0, middle, 0] = 0
+    force[0, middle, middle, 0] = 0
+    force[middle, 0, 0, 1] = 0
+    force[0, 0, middle, 1] = 0
+    force[middle, 0, middle, 1] = 0
+    force[middle, 0, 0, 2] = 0
+    force[0, middle, 0, 2] = 0
+    force[middle, middle, 0, 2] = 0
 
-    force[middle, middle, middle, 0] = force[middle, middle, middle, 1] = force[
-        middle, middle, middle, 2
-    ] = (invkmiddle * inv3 * math.sqrt(-math.log(rng.random(dtype=np.float32))))
+    force[middle, 0, 0, 0] = invkmiddle * math.sqrt(
+        -math.log(one - rng.random(dtype=np.float32))
+    )
+    force[0, middle, 0, 1] = invkmiddle * math.sqrt(
+        -math.log(one - rng.random(dtype=np.float32))
+    )
+    force[0, 0, middle, 2] = invkmiddle * math.sqrt(
+        -math.log(one - rng.random(dtype=np.float32))
+    )
+    # 2
+    force[middle, middle, 0, 0] = force_1_1_0
+    force[middle, 0, middle, 0] = force_1_0_1
+    force[middle, middle, 0, 1] = force_1_1_0
+    force[0, middle, middle, 1] = force_0_1_1
+    force[0, middle, middle, 2] = force_0_1_1
+    force[0, middle, middle, 2] = force_0_1_1
+    # 3
+    force[middle, middle, middle, 0] = force_1_1_1
+    force[middle, middle, middle, 1] = force_1_1_1
+    force[middle, middle, middle, 2] = force_1_1_1
     return force
 
 
@@ -802,14 +842,14 @@ def white_noise_fourier_fixed_force(
     force = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     rng_phases = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
     for i in prange(ncells_1d):
-        if i > middle:
-            kx = -np.float32(ncells_1d - i)
+        if i >= middle:
+            kx = np.float32(i - ncells_1d)
         else:
             kx = np.float32(i)
         kx2 = kx**2
         for j in prange(ncells_1d):
-            if j > middle:
-                ky = -np.float32(ncells_1d - j)
+            if j >= middle:
+                ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
             kx2_ky2 = kx2 + ky**2
@@ -829,35 +869,35 @@ def white_noise_fourier_fixed_force(
     inv2 = np.float32(0.5)
     inv3 = np.float32(1.0 / 3)
     invkmiddle = -np.float32((twopi * middle) ** (-1))
+    force_2 = invkmiddle * inv2
+    force_3 = invkmiddle * inv3
+    # 0
+    force[0, 0, 0, 0] = 0
+    # 1
+    force[0, middle, 0, 0] = 0
+    force[0, 0, middle, 0] = 0
+    force[0, middle, middle, 0] = 0
+    force[middle, 0, 0, 1] = 0
+    force[0, 0, middle, 1] = 0
+    force[middle, 0, middle, 1] = 0
+    force[middle, 0, 0, 2] = 0
+    force[0, middle, 0, 2] = 0
+    force[middle, middle, 0, 2] = 0
 
-    force[0, 0, 0, 0] = force[0, 0, 0, 1] = force[0, 0, 0, 2] = 0
-    force[0, middle, 0, 0] = force[0, 0, middle, 0] = force[middle, 0, 0, 0] = force[
-        0, middle, 0, 1
-    ] = force[0, 0, middle, 1] = force[middle, 0, 0, 1] = force[
-        0, middle, 0, 2
-    ] = force[
-        0, 0, middle, 2
-    ] = force[
-        middle, 0, 0, 2
-    ] = invkmiddle
-
-    force[0, middle, middle, 0] = force[middle, 0, middle, 0] = force[
-        middle, middle, 0, 0
-    ] = force[0, middle, middle, 1] = force[middle, 0, middle, 1] = force[
-        middle, middle, 0, 1
-    ] = force[
-        0, middle, middle, 2
-    ] = force[
-        middle, 0, middle, 2
-    ] = force[
-        middle, middle, 0, 2
-    ] = (
-        invkmiddle * inv2
-    )
-
-    force[middle, middle, middle, 0] = force[middle, middle, middle, 1] = force[
-        middle, middle, middle, 2
-    ] = (invkmiddle * inv3)
+    force[middle, 0, 0, 0] = invkmiddle
+    force[0, middle, 0, 1] = invkmiddle
+    force[0, 0, middle, 2] = invkmiddle
+    # 2
+    force[middle, middle, 0, 0] = force_2
+    force[middle, 0, middle, 0] = force_2
+    force[middle, middle, 0, 1] = force_2
+    force[0, middle, middle, 1] = force_2
+    force[0, middle, middle, 2] = force_2
+    force[0, middle, middle, 2] = force_2
+    # 3
+    force[middle, middle, middle, 0] = force_3
+    force[middle, middle, middle, 1] = force_3
+    force[middle, middle, middle, 2] = force_3
     return force
 
 
