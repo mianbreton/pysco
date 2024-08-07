@@ -105,6 +105,15 @@ def generate(
         # psi_1lpt = generate_force(param)
 
         density_fourier = generate_density_fourier(param)
+        """ k, pk, modes = fourier.fourier_grid_to_Pk(density_fourier, 0)
+        pk *= (param["boxlen"] / len(density_fourier) ** 2) ** 3
+        k *= 2 * np.pi / param["boxlen"]
+        data = np.loadtxt(f"{param['power_spectrum_file']}")
+        import matplotlib.pyplot as plt
+
+        plt.loglog(data[:, 0], data[:, 1])
+        plt.loglog(k, pk)
+        plt.show() """
         fourier.inverse_laplacian(density_fourier)
         potential_1_fourier = density_fourier
         del density_fourier
@@ -115,6 +124,7 @@ def generate(
         logging.warning("Compute 1LPT contribution")
         dplus_1_z0 = tables[3](0)
         dplus_1 = np.float32(tables[3](lna_start) / dplus_1_z0)
+        # print(f"{dplus_1=}")
         f1 = tables[4](lna_start)
         fH_1 = np.float32(f1 * Hz)
         position, velocity = initialise_1LPT(psi_1lpt, dplus_1, fH_1)
@@ -490,7 +500,7 @@ def generate_force(param: pd.Series) -> npt.NDArray[np.float32]:
 
 
 @utils.time_me
-def get_transfer_grid(param: pd.Series) -> npt.NDArray[np.float32]:
+def get_transfer_grid_real(param: pd.Series) -> npt.NDArray[np.float32]:
     """Compute transfer 3D grid
 
     Computes sqrt(P(k,z)) on a 3D grid
@@ -535,12 +545,57 @@ def get_transfer_grid(param: pd.Series) -> npt.NDArray[np.float32]:
 
 
 @utils.time_me
+def get_transfer_grid(param: pd.Series) -> npt.NDArray[np.float32]:
+    """Compute transfer 3D grid
+
+    Computes sqrt(P(k,z)) on a 3D grid
+
+    Parameters
+    ----------
+    param : pd.Series
+        Parameter container
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Initial density field and velocity field (delta, vx, vy, vz)
+
+    Example
+    -------
+    >>> import pandas as pd
+    >>> from pysco.initial_conditions import get_transfer_grid
+    >>> param = pd.Series({
+         'power_spectrum_file': 'path/to/power_spectrum.txt',
+         'npart': 64,
+     })
+    >>> get_transfer_grid(param)
+    """
+    k, Pk = np.loadtxt(param["power_spectrum_file"]).T
+
+    ncells_1d = int(math.cbrt(param["npart"]))
+    if param["npart"] != ncells_1d**3:
+        raise ValueError(f"{math.cbrt(param['npart'])=}, should be integer")
+    kf = 2 * np.pi / param["boxlen"]
+    k_dimensionless = k / kf
+    sqrtPk = (np.sqrt(Pk / param["boxlen"] ** 3) * ncells_1d**3).astype(np.float32)
+    k_1d = np.fft.fftfreq(ncells_1d, 1 / ncells_1d)
+    k_grid = np.sqrt(
+        k_1d[np.newaxis, np.newaxis, :] ** 2
+        + k_1d[:, np.newaxis, np.newaxis] ** 2
+        + k_1d[np.newaxis, :, np.newaxis] ** 2
+    )
+    k_1d = 0
+    transfer_grid = np.interp(k_grid, k_dimensionless, sqrtPk)
+    return transfer_grid
+
+
+@utils.time_me
 @njit(
     fastmath=True,
     cache=True,
     parallel=True,
 )
-def white_noise_fourier(
+def white_noise_fourier_real(
     ncells_1d: int, rng: np.random.Generator
 ) -> npt.NDArray[np.complex64]:
     """Generate Fourier-space white noise on a regular 3D grid
@@ -585,6 +640,85 @@ def white_noise_fourier(
                 imaginary = amplitude * math.sin(phase)
                 result = real + ii * imaginary
                 density[i, j, k] = result
+    rng_phases = 0
+    rng_amplitudes = 0
+    # Fix corners
+    density[0, 0, 0] = 0
+    density[0, 0, middle] = math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
+    density[0, middle, 0] = math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
+    density[0, middle, middle] = math.sqrt(
+        -math.log(one - rng.random(dtype=np.float32))
+    )
+    density[middle, 0, 0] = math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
+    density[middle, 0, middle] = math.sqrt(
+        -math.log(one - rng.random(dtype=np.float32))
+    )
+    density[middle, middle, 0] = math.sqrt(
+        -math.log(one - rng.random(dtype=np.float32))
+    )
+    density[middle, middle, middle] = math.sqrt(
+        -math.log(one - rng.random(dtype=np.float32))
+    )
+
+    return density
+
+
+@utils.time_me
+@njit(
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def white_noise_fourier(
+    ncells_1d: int, rng: np.random.Generator
+) -> npt.NDArray[np.complex64]:
+    """Generate Fourier-space white noise on a regular 3D grid
+
+    Parameters
+    ----------
+    ncells_1d : int
+        Number of cells along one direction
+    rng : np.random.Generator
+        Random generator (NumPy)
+
+    Returns
+    -------
+    npt.NDArray[np.complex64]
+        3D white-noise field for density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import white_noise_fourier
+    >>> white_noise = white_noise_fourier(64, np.random.default_rng())
+    >>> print(white_noise)
+    """
+    twopi = np.float32(2 * math.pi)
+    ii = np.complex64(1j)
+    one = np.float32(1)
+    middle = ncells_1d // 2
+    density = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.complex64)
+    # Must compute random before parallel loop to ensure reproductability
+    rng_amplitudes = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
+    rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(middle + 1):
+        im = -np.int32(i)
+        for j in prange(ncells_1d):
+            jm = -j
+            for k in prange(ncells_1d):
+                km = -k
+                phase = twopi * rng_phases[i, j, k]
+                amplitude = math.sqrt(
+                    -math.log(
+                        one - rng_amplitudes[i, j, k]
+                    )  # rng.random in range [0,1), must ensure no NaN
+                )  # Rayleigh sampling
+                real = amplitude * math.cos(phase)
+                imaginary = amplitude * math.sin(phase)
+                result_upper = real + ii * imaginary
+                result_lower = real - ii * imaginary
+                density[i, j, k] = result_upper
+                density[im, jm, km] = result_lower
     rng_phases = 0
     rng_amplitudes = 0
     # Fix corners
@@ -1578,16 +1712,15 @@ def initialise_1LPT(
     """
     ncells_1d = psi_1lpt.shape[0]
     h = np.float32(1.0 / ncells_1d)
-    half_h = np.float32(0.5 / ncells_1d)
     dfH_1 = dplus_1 * fH
     position = np.empty_like(psi_1lpt)
     velocity = np.empty_like(psi_1lpt)
     for i in prange(ncells_1d):
-        x = half_h + i * h
+        x = i * h
         for j in prange(ncells_1d):
-            y = half_h + j * h
+            y = j * h
             for k in prange(ncells_1d):
-                z = half_h + k * h
+                z = k * h
                 psix = -psi_1lpt[i, j, k, 0]
                 psiy = -psi_1lpt[i, j, k, 1]
                 psiz = -psi_1lpt[i, j, k, 2]
