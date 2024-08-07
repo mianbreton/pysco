@@ -788,7 +788,7 @@ def white_noise_fourier_fixed(
         im = -np.int32(i)
         for j in prange(ncells_1d):
             jm = -j
-            for k in prange(middle + 1):
+            for k in prange(ncells_1d):
                 km = -k
                 phase = twopi * rng_phases[i, j, k] + shift
                 real = math.cos(phase)
