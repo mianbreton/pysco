@@ -500,51 +500,6 @@ def generate_force(param: pd.Series) -> npt.NDArray[np.float32]:
 
 
 @utils.time_me
-def get_transfer_grid_real(param: pd.Series) -> npt.NDArray[np.float32]:
-    """Compute transfer 3D grid
-
-    Computes sqrt(P(k,z)) on a 3D grid
-
-    Parameters
-    ----------
-    param : pd.Series
-        Parameter container
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Initial density field and velocity field (delta, vx, vy, vz)
-
-    Example
-    -------
-    >>> import pandas as pd
-    >>> from pysco.initial_conditions import get_transfer_grid
-    >>> param = pd.Series({
-         'power_spectrum_file': 'path/to/power_spectrum.txt',
-         'npart': 64,
-     })
-    >>> get_transfer_grid(param)
-    """
-    k, Pk = np.loadtxt(param["power_spectrum_file"]).T
-
-    ncells_1d = int(math.cbrt(param["npart"]))
-    if param["npart"] != ncells_1d**3:
-        raise ValueError(f"{math.cbrt(param['npart'])=}, should be integer")
-    kf = 2 * np.pi / param["boxlen"]
-    k_dimensionless = k / kf
-    sqrtPk = (np.sqrt(Pk / param["boxlen"] ** 3) * ncells_1d**3).astype(np.float32)
-    k_1d = np.fft.fftfreq(ncells_1d, 1 / ncells_1d)
-    k_grid = np.sqrt(
-        k_1d[np.newaxis, np.newaxis, : ncells_1d // 2 + 1] ** 2
-        + k_1d[:, np.newaxis, np.newaxis] ** 2
-        + k_1d[np.newaxis, :, np.newaxis] ** 2
-    )
-    k_1d = 0
-    transfer_grid = np.interp(k_grid, k_dimensionless, sqrtPk)
-    return transfer_grid
-
-
-@utils.time_me
 def get_transfer_grid(param: pd.Series) -> npt.NDArray[np.float32]:
     """Compute transfer 3D grid
 
@@ -587,80 +542,6 @@ def get_transfer_grid(param: pd.Series) -> npt.NDArray[np.float32]:
     k_1d = 0
     transfer_grid = np.interp(k_grid, k_dimensionless, sqrtPk)
     return transfer_grid
-
-
-@utils.time_me
-@njit(
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
-def white_noise_fourier_real(
-    ncells_1d: int, rng: np.random.Generator
-) -> npt.NDArray[np.complex64]:
-    """Generate Fourier-space white noise on a regular 3D grid
-
-    Parameters
-    ----------
-    ncells_1d : int
-        Number of cells along one direction
-    rng : np.random.Generator
-        Random generator (NumPy)
-
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        3D white-noise field for density [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Example
-    -------
-    >>> import numpy as np
-    >>> from pysco.initial_conditions import white_noise_fourier
-    >>> white_noise = white_noise_fourier(64, np.random.default_rng())
-    >>> print(white_noise)
-    """
-    twopi = np.float32(2 * math.pi)
-    ii = np.complex64(1j)
-    one = np.float32(1)
-    middle = ncells_1d // 2
-    density = np.empty((ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
-    # Must compute random before parallel loop to ensure reproductability
-    rng_amplitudes = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
-    rng_phases = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
-    for i in prange(ncells_1d):
-        for j in prange(ncells_1d):
-            for k in prange(middle + 1):
-                phase = twopi * rng_phases[i, j, k]
-                amplitude = math.sqrt(
-                    -math.log(
-                        one - rng_amplitudes[i, j, k]
-                    )  # rng.random in range [0,1), must ensure no NaN
-                )  # Rayleigh sampling
-                real = amplitude * math.cos(phase)
-                imaginary = amplitude * math.sin(phase)
-                result = real + ii * imaginary
-                density[i, j, k] = result
-    rng_phases = 0
-    rng_amplitudes = 0
-    # Fix corners
-    density[0, 0, 0] = 0
-    density[0, 0, middle] = math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
-    density[0, middle, 0] = math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
-    density[0, middle, middle] = math.sqrt(
-        -math.log(one - rng.random(dtype=np.float32))
-    )
-    density[middle, 0, 0] = math.sqrt(-math.log(one - rng.random(dtype=np.float32)))
-    density[middle, 0, middle] = math.sqrt(
-        -math.log(one - rng.random(dtype=np.float32))
-    )
-    density[middle, middle, 0] = math.sqrt(
-        -math.log(one - rng.random(dtype=np.float32))
-    )
-    density[middle, middle, middle] = math.sqrt(
-        -math.log(one - rng.random(dtype=np.float32))
-    )
-
-    return density
 
 
 @utils.time_me
@@ -814,68 +695,6 @@ def white_noise_fourier_fixed(
     fastmath=True,
     cache=True,
     parallel=True,
-)
-def white_noise_fourier_real_fixed(
-    ncells_1d: int, rng: np.random.Generator, is_paired: bool
-) -> npt.NDArray[np.complex64]:
-    """Generate Fourier-space white noise with fixed amplitude on a regular 3D grid
-
-    Parameters
-    ----------
-    ncells_1d : int
-        Number of cells along one direction
-    rng : np.random.Generator
-        Random generator (NumPy)
-    is_paired : bool
-        If paired, add π to the random phases
-
-    Returns
-    -------
-    Tuple[npt.NDArray[np.complex64], npt.NDArray[np.complex64]]
-        3D white-noise field for density [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Example
-    -------
-    >>> import numpy as np
-    >>> from pysco.initial_conditions import white_noise_fourier_fixed
-    >>> paired_white_noise = white_noise_fourier_fixed(64, np.random.default_rng(), 1)
-    >>> print(paired_white_noise)
-    """
-    twopi = np.float32(2 * np.pi)
-    one = np.float32(1)
-    ii = np.complex64(1j)
-    middle = ncells_1d // 2
-    if is_paired:
-        shift = np.float32(math.pi)
-    else:
-        shift = np.float32(0)
-    density = np.empty((ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
-    rng_phases = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
-    for i in prange(ncells_1d):
-        for j in prange(ncells_1d):
-            for k in prange(middle + 1):
-                phase = twopi * rng_phases[i, j, k] + shift
-                real = math.cos(phase)
-                imaginary = math.sin(phase)
-                result = real + ii * imaginary
-                density[i, j, k] = result
-    rng_phases = 0
-    density[0, 0, 0] = 0
-    density[0, 0, middle] = one
-    density[0, middle, 0] = one
-    density[0, middle, middle] = one
-    density[middle, 0, 0] = one
-    density[middle, 0, middle] = one
-    density[middle, middle, 0] = one
-    density[middle, middle, middle] = one
-    return density
-
-
-@utils.time_me
-@njit(
-    fastmath=True,
-    cache=True,
-    parallel=True,
     error_model="numpy",
 )
 def white_noise_fourier_force(
@@ -908,23 +727,26 @@ def white_noise_fourier_force(
     twopi = np.float32(2 * np.pi)
     ii = np.complex64(1j)
     middle = ncells_1d // 2
-    force = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
+    force = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.complex64)
     # Must compute random before parallel loop to ensure reproductability
-    rng_amplitudes = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
-    rng_phases = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
-    for i in prange(ncells_1d):
+    rng_amplitudes = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
+    rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(middle + 1):
+        im = -np.int32(i)
         if i >= middle:
             kx = np.float32(i - ncells_1d)
         else:
             kx = np.float32(i)
         kx2 = kx**2
         for j in prange(ncells_1d):
+            jm = -j
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
             kx2_ky2 = kx2 + ky**2
-            for k in prange(middle + 1):
+            for k in prange(ncells_1d):
+                km = -k
                 kz = np.float32(k)
                 invk2 = one / (kx2_ky2 + kz**2)
                 phase = twopi * rng_phases[i, j, k]
@@ -934,12 +756,17 @@ def white_noise_fourier_force(
                     )  # rng.random in range [0,1), must ensure no NaN
                 )  # Rayleigh sampling
                 real = amplitude * math.cos(phase)
-                imaginary = amplitude * math.sin(phase)
-                result = real + ii * imaginary
-                i_phi = ii * invtwopi * result * invk2
-                force[i, j, k, 0] = -kx * i_phi
-                force[i, j, k, 1] = -ky * i_phi
-                force[i, j, k, 2] = -kz * i_phi
+                imaginary = ii * amplitude * math.sin(phase)
+                result_upper = real + imaginary
+                result_lower = real - imaginary
+                i_phi_upper = ii * invtwopi * result_upper * invk2
+                i_phi_lower = ii * invtwopi * result_lower * invk2
+                force[i, j, k, 0] = -kx * i_phi_upper
+                force[i, j, k, 1] = -ky * i_phi_upper
+                force[i, j, k, 2] = -kz * i_phi_upper
+                force[im, jm, km, 0] = kx * i_phi_lower
+                force[im, jm, km, 1] = ky * i_phi_lower
+                force[im, jm, km, 2] = kz * i_phi_lower
     rng_phases = 0
     rng_amplitudes = 0
     # Fix edges
@@ -1040,31 +867,39 @@ def white_noise_fourier_fixed_force(
         shift = np.float32(math.pi)
     else:
         shift = np.float32(0)
-    force = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
-    rng_phases = rng.random((ncells_1d, ncells_1d, middle + 1), dtype=np.float32)
-    for i in prange(ncells_1d):
+    force = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.complex64)
+    rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(middle + 1):
+        im = -np.int32(i)
         if i >= middle:
             kx = np.float32(i - ncells_1d)
         else:
             kx = np.float32(i)
         kx2 = kx**2
         for j in prange(ncells_1d):
+            jm = -j
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
             kx2_ky2 = kx2 + ky**2
-            for k in prange(middle + 1):
+            for k in prange(ncells_1d):
+                km = -k
                 kz = np.float32(k)
                 invk2 = one / (kx2_ky2 + kz**2)
                 phase = twopi * rng_phases[i, j, k] + shift
                 real = math.cos(phase)
-                imaginary = math.sin(phase)
-                result = real + ii * imaginary
-                i_phi = ii * invtwopi * result * invk2
-                force[i, j, k, 0] = -kx * i_phi
-                force[i, j, k, 1] = -ky * i_phi
-                force[i, j, k, 2] = -kz * i_phi
+                imaginary = ii * math.sin(phase)
+                result_upper = real + imaginary
+                result_lower = real - imaginary
+                i_phi_upper = ii * invtwopi * result_upper * invk2
+                i_phi_lower = ii * invtwopi * result_lower * invk2
+                force[i, j, k, 0] = -kx * i_phi_upper
+                force[i, j, k, 1] = -ky * i_phi_upper
+                force[i, j, k, 2] = -kz * i_phi_upper
+                force[im, jm, km, 0] = kx * i_phi_lower
+                force[im, jm, km, 1] = ky * i_phi_lower
+                force[im, jm, km, 2] = kz * i_phi_lower
     rng_phases = 0
     # Fix edges
     inv2 = np.float32(0.5)
