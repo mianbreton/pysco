@@ -768,8 +768,6 @@ def gradient(
                 ky = np.float32(j)
             for k in prange(middle + 1):
                 kz = np.float32(k)
-                if k == middle:
-                    kz = -kz
                 x_tmp = ii * twopi * x[i, j, k]
                 result[i, j, k, 0] = x_tmp * kx
                 result[i, j, k, 1] = x_tmp * ky
@@ -828,8 +826,6 @@ def hessian(
                 ky = np.float32(j)
             for k in prange(middle + 1):
                 kz = np.float32(k)
-                if k == middle:
-                    kz = -kz
                 k_array = np.array([kx, ky, kz])
                 kn = k_array[n]
                 km = k_array[m]
@@ -893,8 +889,6 @@ def sum_of_hessian(
                 ky = np.float32(j)
             for k in prange(middle + 1):
                 kz = np.float32(k)
-                if k == middle:
-                    kz = -kz
                 k_array = np.array([kx, ky, kz])
                 kn1 = k_array[n1]
                 km1 = k_array[m1]
@@ -960,8 +954,6 @@ def diff_of_hessian(
                 ky = np.float32(j)
             for k in prange(middle + 1):
                 kz = np.float32(k)
-                if k == middle:
-                    kz = -kz
                 k_array = np.array([kx, ky, kz])
                 kn1 = k_array[n1]
                 km1 = k_array[m1]

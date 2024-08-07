@@ -714,9 +714,9 @@ def white_noise_fourier(
                     )  # rng.random in range [0,1), must ensure no NaN
                 )  # Rayleigh sampling
                 real = amplitude * math.cos(phase)
-                imaginary = amplitude * math.sin(phase)
-                result_upper = real + ii * imaginary
-                result_lower = real - ii * imaginary
+                imaginary = ii * amplitude * math.sin(phase)
+                result_upper = real + imaginary
+                result_lower = real - imaginary
                 density[i, j, k] = result_upper
                 density[im, jm, km] = result_lower
     rng_phases = 0
@@ -749,6 +749,73 @@ def white_noise_fourier(
     parallel=True,
 )
 def white_noise_fourier_fixed(
+    ncells_1d: int, rng: np.random.Generator, is_paired: bool
+) -> npt.NDArray[np.complex64]:
+    """Generate Fourier-space white noise with fixed amplitude on a regular 3D grid
+
+    Parameters
+    ----------
+    ncells_1d : int
+        Number of cells along one direction
+    rng : np.random.Generator
+        Random generator (NumPy)
+    is_paired : bool
+        If paired, add π to the random phases
+
+    Returns
+    -------
+    Tuple[npt.NDArray[np.complex64], npt.NDArray[np.complex64]]
+        3D white-noise field for density [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import white_noise_fourier_fixed
+    >>> paired_white_noise = white_noise_fourier_fixed(64, np.random.default_rng(), 1)
+    >>> print(paired_white_noise)
+    """
+    twopi = np.float32(2 * np.pi)
+    one = np.float32(1)
+    ii = np.complex64(1j)
+    middle = ncells_1d // 2
+    if is_paired:
+        shift = np.float32(math.pi)
+    else:
+        shift = np.float32(0)
+    density = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.complex64)
+    rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(middle + 1):
+        im = -np.int32(i)
+        for j in prange(ncells_1d):
+            jm = -j
+            for k in prange(middle + 1):
+                km = -k
+                phase = twopi * rng_phases[i, j, k] + shift
+                real = math.cos(phase)
+                imaginary = ii * math.sin(phase)
+                result_upper = real + imaginary
+                result_lower = real - imaginary
+                density[i, j, k] = result_upper
+                density[im, jm, km] = result_lower
+    rng_phases = 0
+    density[0, 0, 0] = 0
+    density[0, 0, middle] = one
+    density[0, middle, 0] = one
+    density[0, middle, middle] = one
+    density[middle, 0, 0] = one
+    density[middle, 0, middle] = one
+    density[middle, middle, 0] = one
+    density[middle, middle, middle] = one
+    return density
+
+
+@utils.time_me
+@njit(
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def white_noise_fourier_real_fixed(
     ncells_1d: int, rng: np.random.Generator, is_paired: bool
 ) -> npt.NDArray[np.complex64]:
     """Generate Fourier-space white noise with fixed amplitude on a regular 3D grid
