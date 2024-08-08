@@ -26,6 +26,7 @@ param = {
     "npart": 128**3,
     "z_start": 49,
     "seed": 42,
+    "position_ICS": "edge",
     "fixed_ICS": False,
     "paired_ICS": False,
     "dealiased_ICS": False,

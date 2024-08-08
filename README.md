@@ -197,8 +197,10 @@ npart = 128**3 # Number of particles in the simulation
 # Initial conditions
 z_start = 49 # Starting redshift of the simulation
 seed = 42 # Seed for random number generation (completely random if negative)
+position_ICS = edge # Initial particle position on uniform grid. Put "center" or "edge" to start from cell centers or edges.
 fixed_ICS = False # Use fixed initial conditions (Gaussian Random Field). If True, fixes the amplitude to match exactly the input P(k)
 paired_ICS = False # Use paired initial conditions. If True, add π to the random phases (works only with fixed_ICS = True)
+dealiased_ICS = False # Dealiasing 2LPT and 3LPT components using Orszag 3/2 rule
 power_spectrum_file = /home/user/pysco/examples/pk_lcdmw7v2.dat # File path to the power spectrum data
 initial_conditions = 3LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or .h5 RayGal file, or snapshot number (for restart). Else, assumes Gadget format
 # Outputs
@@ -257,8 +259,10 @@ param = {
     "npart": 128**3,
     "z_start": 49,
     "seed": 42,
-    "fixed_ICS": 0,
-    "paired_ICS": 0,
+    "position_ICS": "edge",
+    "fixed_ICS": False,
+    "paired_ICS": False,
+    "dealiased_ICS": False,
     "power_spectrum_file": "/home/user/pysco/examples/pk_lcdmw7v2.dat",
     "initial_conditions": "3LPT",
     "base": "/home/user/boxlen500_n128_lcdm_00000/",

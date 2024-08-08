@@ -127,7 +127,7 @@ def generate(
         # print(f"{dplus_1=}")
         f1 = tables[4](lna_start)
         fH_1 = np.float32(f1 * Hz)
-        position, velocity = initialise_1LPT(psi_1lpt, dplus_1, fH_1)
+        position, velocity = initialise_1LPT(psi_1lpt, dplus_1, fH_1, param)
         psi_1lpt = 0
         if INITIAL_CONDITIONS.casefold() == "1LPT".casefold():
             position = position.reshape(param["npart"], 3)
@@ -1577,6 +1577,48 @@ def compute_3c_Az_displacement(
     return psi_3lpt_c_Az
 
 
+def initialise_1LPT(
+    psi_1lpt: npt.NDArray[np.float32],
+    dplus_1: np.float32,
+    fH: np.float32,
+    param: pd.Series,
+) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+    """Initialise particles according to 1LPT (Zel'Dovich) displacement field
+
+    Parameters
+    ----------
+    psi_1lpt : npt.NDArray[np.float32]
+        1LPT displacement field [N, N, N, 3]
+    dplus1 : np.float32
+        First-order growth factor
+    fH : np.float32
+        First-order growth rate times Hubble parameter
+    param : pd.Series
+        Parameter container
+
+    Returns
+    -------
+    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+        Position, Velocity [N, N, N, 3]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import initialise_1LPT
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> dplus_1 = 0.1
+    >>> fH = 0.1
+    >>> initialise_1LPT(psi_1lpt, dplus_1, fH)
+    """
+    POSITION = param["position_ICS"].casefold()
+    if POSITION == "center":
+        return initialise_1LPT_center(psi_1lpt, dplus_1, fH)
+    elif POSITION == "edge":
+        return initialise_1LPT_edge(psi_1lpt, dplus_1, fH)
+    else:
+        raise ValueError(f"{POSITION=}, should be 'center' or 'edge'")
+
+
 @utils.time_me
 @njit(
     ["UniTuple(f4[:,:,:,::1], 2)(f4[:,:,:,::1], f4, f4)"],
@@ -1584,10 +1626,12 @@ def compute_3c_Az_displacement(
     cache=True,
     parallel=True,
 )
-def initialise_1LPT(
+def initialise_1LPT_edge(
     psi_1lpt: npt.NDArray[np.float32], dplus_1: np.float32, fH: np.float32
 ) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Initialise particles according to 1LPT (Zel'Dovich) displacement field
+
+    Initialise at cell edges
 
     Parameters
     ----------
@@ -1606,11 +1650,11 @@ def initialise_1LPT(
     Example
     -------
     >>> import numpy as np
-    >>> from pysco.initial_conditions import initialise_1LPT
+    >>> from pysco.initial_conditions import initialise_1LPT_edge
     >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
     >>> dplus_1 = 0.1
     >>> fH = 0.1
-    >>> initialise_1LPT(psi_1lpt, dplus_1, fH)
+    >>> initialise_1LPT_edge(psi_1lpt, dplus_1, fH)
     """
     ncells_1d = psi_1lpt.shape[0]
     h = np.float32(1.0 / ncells_1d)
@@ -1623,6 +1667,67 @@ def initialise_1LPT(
             y = j * h
             for k in prange(ncells_1d):
                 z = k * h
+                psix = -psi_1lpt[i, j, k, 0]
+                psiy = -psi_1lpt[i, j, k, 1]
+                psiz = -psi_1lpt[i, j, k, 2]
+                position[i, j, k, 0] = x + dplus_1 * psix
+                position[i, j, k, 1] = y + dplus_1 * psiy
+                position[i, j, k, 2] = z + dplus_1 * psiz
+                velocity[i, j, k, 0] = dfH_1 * psix
+                velocity[i, j, k, 1] = dfH_1 * psiy
+                velocity[i, j, k, 2] = dfH_1 * psiz
+    return position, velocity
+
+
+@utils.time_me
+@njit(
+    ["UniTuple(f4[:,:,:,::1], 2)(f4[:,:,:,::1], f4, f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def initialise_1LPT_center(
+    psi_1lpt: npt.NDArray[np.float32], dplus_1: np.float32, fH: np.float32
+) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+    """Initialise particles according to 1LPT (Zel'Dovich) displacement field
+
+    Initialise at cell centers
+
+    Parameters
+    ----------
+    psi_1lpt : npt.NDArray[np.float32]
+        1LPT displacement field [N, N, N, 3]
+    dplus1 : np.float32
+        First-order growth factor
+    fH : np.float32
+        First-order growth rate times Hubble parameter
+
+    Returns
+    -------
+    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+        Position, Velocity [N, N, N, 3]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import initialise_1LPT_center
+    >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
+    >>> dplus_1 = 0.1
+    >>> fH = 0.1
+    >>> initialise_1LPT_center(psi_1lpt, dplus_1, fH)
+    """
+    ncells_1d = psi_1lpt.shape[0]
+    h = np.float32(1.0 / ncells_1d)
+    half_h = np.float32(0.5 / ncells_1d)
+    dfH_1 = dplus_1 * fH
+    position = np.empty_like(psi_1lpt)
+    velocity = np.empty_like(psi_1lpt)
+    for i in prange(ncells_1d):
+        x = half_h + i * h
+        for j in prange(ncells_1d):
+            y = half_h + j * h
+            for k in prange(ncells_1d):
+                z = half_h + k * h
                 psix = -psi_1lpt[i, j, k, 0]
                 psiy = -psi_1lpt[i, j, k, 1]
                 psiz = -psi_1lpt[i, j, k, 2]
