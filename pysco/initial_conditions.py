@@ -156,13 +156,13 @@ def generate(
             finalise_initial_conditions(position, velocity, param)
             return position, velocity
         # 3LPT
-        dplus_3a = np.float32(tables[7](lna_start) / dplus_1_z0**3)
+        dplus_3a = -np.float32(tables[7](lna_start) / dplus_1_z0**3)
         f3a = tables[8](lna_start)
         fH_3a = np.float32(f3a * Hz)
-        dplus_3b = np.float32(tables[9](lna_start) / dplus_1_z0**3)
+        dplus_3b = -np.float32(tables[9](lna_start) / dplus_1_z0**3)
         f3b = tables[10](lna_start)
         fH_3b = np.float32(f3b * Hz)
-        dplus_3c = np.float32(tables[11](lna_start) / dplus_1_z0**3)
+        dplus_3c = -np.float32(tables[11](lna_start) / dplus_1_z0**3)
         f3c = tables[12](lna_start)
         fH_3c = np.float32(f3c * Hz)
         logging.warning("Compute 3LPT a) contribution")
@@ -193,7 +193,7 @@ def generate(
         )
         potential_1_fourier = 0
         potential_2_fourier = 0
-        add_nLPT(position, velocity, psi_3lpt_c_Az, -dplus_3c, fH_3c)
+        add_nLPT(position, velocity, psi_3lpt_c_Az, dplus_3c, fH_3c)
         psi_3lpt_c_Az = 0
         if INITIAL_CONDITIONS.casefold() == "3LPT".casefold():
             position = position.reshape(param["npart"], 3)
