@@ -94,9 +94,9 @@ def fourier_grid_to_Pk(
     nmodes = np.sum(nmodes_arrays, axis=0)
     kmax_orszag = int(2 * middle / 3)
     return (
-        k_array[:kmax_orszag] / nmodes[:kmax_orszag],
-        pk_array[:kmax_orszag] / nmodes[:kmax_orszag],
-        nmodes[:kmax_orszag],
+        k_array[1:kmax_orszag] / nmodes[1:kmax_orszag],
+        pk_array[1:kmax_orszag] / nmodes[1:kmax_orszag],
+        nmodes[1:kmax_orszag],
     )
 
 
