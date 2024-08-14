@@ -85,7 +85,7 @@ def fourier_grid_to_Pk(
                 tmp = density_k[i, j, k] * w_xyz**minus_p
                 delta2 = tmp.real**2 + tmp.imag**2
                 k_norm = math.sqrt(kx2_ky2 + kz**2)
-                k_index = int(k_norm)
+                k_index = int(k_norm + 0.5)
                 nmodes_arrays[i, k_index] += one
                 k_arrays[i, k_index] += k_norm
                 pk_arrays[i, k_index] += delta2
@@ -94,9 +94,9 @@ def fourier_grid_to_Pk(
     nmodes = np.sum(nmodes_arrays, axis=0)
     kmax_orszag = int(2 * middle / 3)
     return (
-        k_array[1:kmax_orszag] / nmodes[1:kmax_orszag],
-        pk_array[1:kmax_orszag] / nmodes[1:kmax_orszag],
-        nmodes[1:kmax_orszag],
+        k_array[:kmax_orszag] / nmodes[:kmax_orszag],
+        pk_array[:kmax_orszag] / nmodes[:kmax_orszag],
+        nmodes[:kmax_orszag],
     )
 
 

@@ -113,7 +113,15 @@ def generate(
 
         plt.loglog(data[:, 0], data[:, 1])
         plt.loglog(k, pk)
+        kf = 2 * np.pi / param["boxlen"]
+        plt.axvline(x=kf, color="k")
+        plt.axvline(x=2 * kf, color="k")
+        plt.show()
+
+        plt.semilogx(k, pk / np.interp(k, data[:, 0], data[:, 1]))
+        plt.axhline(y=1, color="k")
         plt.show() """
+
         fourier.inverse_laplacian(density_fourier)
         potential_1_fourier = density_fourier
         del density_fourier
@@ -124,6 +132,7 @@ def generate(
         logging.warning("Compute 1LPT contribution")
         dplus_1_z0 = tables[3](0)
         dplus_1 = np.float32(tables[3](lna_start) / dplus_1_z0)
+        print(f"{dplus_1=}")
         # print(f"{dplus_1=}")
         f1 = tables[4](lna_start)
         fH_1 = np.float32(f1 * Hz)
@@ -541,6 +550,9 @@ def get_transfer_grid(param: pd.Series) -> npt.NDArray[np.float32]:
     )
     k_1d = 0
     transfer_grid = np.interp(k_grid, k_dimensionless, sqrtPk)
+    """ transfer_grid = 10 ** np.interp(
+        np.log10(k_grid), np.log10(k_dimensionless), np.log10(sqrtPk)
+    ) """
     return transfer_grid
 
 

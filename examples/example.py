@@ -40,6 +40,7 @@ param = {
     "n_reorder": 25,
     "mass_scheme": "TSC",
     "Courant_factor": 1.0,
+    "max_aexp_stepping": 10,
     "linear_newton_solver": "multigrid",
     "gradient_stencil_order": 5,
     "Npre": 2,

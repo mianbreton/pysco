@@ -212,7 +212,9 @@ save_power_spectrum = all # Save power spectra. Either 'no', 'z_out' for specifi
 integrator = leapfrog # Integration scheme for time-stepping "Leapfrog" or "Euler"
 mass_scheme = TSC # CIC or TSC
 n_reorder = 25  # Re-order particles every n_reorder steps
-Courant_factor = 0.8 # Cell fraction for time stepping (Courant_factor < 1 means more time steps)
+# Time stepping
+Courant_factor = 1.0 # Cell fraction for time stepping based on velocity/acceleration (Courant_factor < 1 means more time steps)
+max_aexp_stepping = 10 # Maximum percentage [%] of scale factor that cannot be exceeded by a time step
 # Newtonian solver
 linear_newton_solver = multigrid # Linear solver for Newton's method: "multigrid", "fft" or "full_fft"
 gradient_stencil_order = 5 # n-point stencil with n = 2, 3, 5 or 7
@@ -273,6 +275,7 @@ param = {
     "n_reorder": 25,
     "mass_scheme": "TSC",
     "Courant_factor": 1.0,
+    "max_aexp_stepping", 10,
     "linear_newton_solver": "multigrid",
     "gradient_stencil_order": 5,
     "Npre": 2,
