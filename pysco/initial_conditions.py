@@ -105,22 +105,6 @@ def generate(
         # psi_1lpt = generate_force(param)
 
         density_fourier = generate_density_fourier(param)
-        """ k, pk, modes = fourier.fourier_grid_to_Pk(density_fourier, 0)
-        pk *= (param["boxlen"] / len(density_fourier) ** 2) ** 3
-        k *= 2 * np.pi / param["boxlen"]
-        data = np.loadtxt(f"{param['power_spectrum_file']}")
-        import matplotlib.pyplot as plt
-
-        plt.loglog(data[:, 0], data[:, 1])
-        plt.loglog(k, pk)
-        kf = 2 * np.pi / param["boxlen"]
-        plt.axvline(x=kf, color="k")
-        plt.axvline(x=2 * kf, color="k")
-        plt.show()
-
-        plt.semilogx(k, pk / np.interp(k, data[:, 0], data[:, 1]))
-        plt.axhline(y=1, color="k")
-        plt.show() """
 
         fourier.inverse_laplacian(density_fourier)
         potential_1_fourier = density_fourier
@@ -1007,12 +991,6 @@ def compute_2ndorder_rhs(
         phi_2 = trim(phi_2)
         phi_2 = fourier.ifft_3D_real(phi_2, nthreads)
         utils.prod_vector_scalar_inplace(phi_2, np.float32(1.5**3))
-
-    """ phi_2_fourier = fourier.fft_3D_real(phi_2, nthreads)
-    k, pk, modes = fourier.fourier_grid_to_Pk(phi_2_fourier, 0)
-    np.savetxt(
-        f"{param['base']}/pk_2_dealias_{param['dealiased_ICS']}.txt", np.c_[k, pk]
-    ) """
     return phi_2
 
 
@@ -1090,12 +1068,6 @@ def compute_3a_rhs(
         phi_3a = trim(phi_3a)
         phi_3a = fourier.ifft_3D_real(phi_3a, nthreads)
         utils.prod_vector_scalar_inplace(phi_3a, np.float32(1.5**6))
-
-    """ phi_3_fourier = fourier.fft_3D_real(phi_3a, nthreads)
-    k, pk, modes = fourier.fourier_grid_to_Pk(phi_3_fourier, 0)
-    np.savetxt(
-        f"{param['base']}/pk_3a_dealias_{param['dealiased_ICS']}.txt", np.c_[k, pk]
-    ) """
     return phi_3a
 
 
@@ -1211,12 +1183,6 @@ def compute_3b_rhs(
         phi_3b = trim(phi_3b)
         phi_3b = fourier.ifft_3D_real(phi_3b, nthreads)
         utils.prod_vector_scalar_inplace(phi_3b, np.float32(1.5**3))
-
-    """ phi_3_fourier = fourier.fft_3D_real(phi_3b, nthreads)
-    k, pk, modes = fourier.fourier_grid_to_Pk(phi_3_fourier, 0)
-    np.savetxt(
-        f"{param['base']}/pk_3b_dealias_{param['dealiased_ICS']}.txt", np.c_[k, pk]
-    ) """
     return phi_3b
 
 
@@ -1322,12 +1288,6 @@ def compute_3c_Ax_rhs(
         phi_3c = trim(phi_3c)
         phi_3c = fourier.ifft_3D_real(phi_3c, nthreads)
         utils.prod_vector_scalar_inplace(phi_3c, np.float32(1.5**3))
-
-    """ phi_3_fourier = fourier.fft_3D_real(phi_3c, nthreads)
-    k, pk, modes = fourier.fourier_grid_to_Pk(phi_3_fourier, 0)
-    np.savetxt(
-        f"{param['base']}/pk_3cx_dealias_{param['dealiased_ICS']}.txt", np.c_[k, pk]
-    ) """
     return phi_3c
 
 
@@ -1433,12 +1393,6 @@ def compute_3c_Ay_rhs(
         phi_3c = trim(phi_3c)
         phi_3c = fourier.ifft_3D_real(phi_3c, nthreads)
         utils.prod_vector_scalar_inplace(phi_3c, np.float32(1.5**3))
-
-    """ phi_3_fourier = fourier.fft_3D_real(phi_3c, nthreads)
-    k, pk, modes = fourier.fourier_grid_to_Pk(phi_3_fourier, 0)
-    np.savetxt(
-        f"{param['base']}/pk_3cy_dealias_{param['dealiased_ICS']}.txt", np.c_[k, pk]
-    ) """
     return phi_3c
 
 
@@ -1544,12 +1498,6 @@ def compute_3c_Az_rhs(
         phi_3c = trim(phi_3c)
         phi_3c = fourier.ifft_3D_real(phi_3c, nthreads)
         utils.prod_vector_scalar_inplace(phi_3c, np.float32(1.5**3))
-
-    """ phi_3_fourier = fourier.fft_3D_real(phi_3c, nthreads)
-    k, pk, modes = fourier.fourier_grid_to_Pk(phi_3_fourier, 0)
-    np.savetxt(
-        f"{param['base']}/pk_3cz_dealias_{param['dealiased_ICS']}.txt", np.c_[k, pk]
-    ) """
     return phi_3c
 
 
