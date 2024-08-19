@@ -187,7 +187,8 @@ parametrized_mu0 = -0.1 # If null, then is equivalent to GR. Model from Abbott e
 # Cosmology -- Put more parameters later
 H0 = 68  # Hubble constant at redshift z=0 (in km/s/Mpc).
 Om_m = 0.31   # Matter density parameter
-Om_lambda = 0.69 # Dark energy density parameter
+T_cmb = 2.726 # CMB temperature parameter
+N_eff = 3.044 # Effective number of neutrino species (by default 3.044)
 w0 = -1.0 # Equation of state for dark energy
 wa = 0.0 # Evolution parameter for dark energy equation of state
 # Simulation dimension
@@ -253,7 +254,8 @@ param = {
     # "parametrized_mu0": 0.1,
     "H0": 72,
     "Om_m": 0.25733,
-    "Om_lambda": 0.742589237,
+    "T_cmb": 2.726,
+    "N_eff": 3.044,
     "w0": -1.0,
     "wa": 0.0,
     "boxlen": 500,
@@ -310,6 +312,17 @@ where _theory_ and _N_ are user inputs.
 The ascii file contains three columns: `k [h/Mpc], P(k) [Mpc/h]^3, N_modes`
 
 Additionally, the file header contains the scale factor, the box length and number of particles.
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+#### Background evolution
+
+Background evolution file written as ascii files in `base/evolution_table_pysco.txt`
+where _base_ in given by the user.
+
+The ascii file contains three columns: `aexp, H/H0, t_supercomoving, dplus1, f1, dplus2, f2, dplus3a, f3a, dplus3b, f3b, dplus3c, f3c`
+
+where `aexp` is the scale factor, `H/H0` the dimensionless Hubble parameter, `t_supercomoving` is the time in dimensionless supercomoving units, while `dplusN` and `fN` are the _N_-th order growth factor and growth rate respectively.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 

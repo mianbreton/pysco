@@ -85,7 +85,7 @@ def generate(param: pd.Series) -> List[interp1d]:
         f"Write table in: {param['base']}/evolution_table_pysco_{param['extra']}.txt"
     )
     np.savetxt(
-        f"{param['base']}/evolution_table_pysco_{param['extra']}.txt",
+        f"{param['base']}/evolution_table_pysco.txt",
         np.c_[
             a,
             E_array,

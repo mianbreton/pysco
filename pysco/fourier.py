@@ -373,25 +373,27 @@ def ifft_3D_real_grad(
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
     x_in = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64"
+        (ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64"
     )
-    x_out = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="float32"
-    )
+    x_out = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="float32")
     fftw_plan = pyfftw.FFTW(
         x_in,
         x_out,
-        axes=(1, 2, 3),
+        axes=(0, 1, 2),
         flags=("FFTW_ESTIMATE",),
         direction="FFTW_BACKWARD",
         threads=threads,
     )
 
-    x_in[:] = np.transpose(x, (3, 0, 1, 2))
-    fftw_plan(x_in, x_out)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d, ndim), dtype=np.float32)
+
+    for i in range(ndim):
+        x_in[:] = x[:, :, :, i]
+        fftw_plan(x_in, x_out)
+        result[:, :, :, i] = x_out[:]
     x_in = 0
-    x_out = np.transpose(x_out, (1, 2, 3, 0))
-    return np.ascontiguousarray(x_out)
+    x_out = 0
+    return result
 
 
 @utils.time_me
