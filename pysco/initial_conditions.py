@@ -116,8 +116,6 @@ def generate(
         logging.warning("Compute 1LPT contribution")
         dplus_1_z0 = tables[3](0)
         dplus_1 = np.float32(tables[3](lna_start) / dplus_1_z0)
-        print(f"{dplus_1=}")
-        # print(f"{dplus_1=}")
         f1 = tables[4](lna_start)
         fH_1 = np.float32(f1 * Hz)
         position, velocity = initialise_1LPT(psi_1lpt, dplus_1, fH_1, param)
@@ -261,7 +259,7 @@ def finalise_initial_conditions(
             raise ValueError(
                 f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'"
             )
-    logging.warning(f"Write initial snapshot...{snap_name=} {param['aexp']=}")
+    logging.warning(f"Write initial snapshot...{snap_name=}")
 
 
 def read_hdf5(
