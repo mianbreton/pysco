@@ -303,7 +303,8 @@ def restrict_residual(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
             )
     else:
-        return laplacian.restrict_residual_half(x, b, h)
+        return laplacian.restrict_residual(x, b, h)
+        # return laplacian.restrict_residual_half(x, b, h)
 
 
 def smoothing(
@@ -476,7 +477,7 @@ def V_cycle(
     res_c = restrict_residual(x, b, h, param)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
 
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
         V_cycle(x_corr_c, res_c, param, nlevel + 1)
@@ -534,7 +535,7 @@ def V_cycle_FAS(
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
 
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
         V_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
@@ -588,7 +589,7 @@ def F_cycle(
     res_c = restrict_residual(x, b, h, param)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
 
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
         F_cycle(x_corr_c, res_c, param, nlevel + 1)
@@ -599,7 +600,7 @@ def F_cycle(
 
     res_c = restrict_residual(x, b, h, param)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
         V_cycle(x_corr_c, res_c, param, nlevel + 1)
@@ -656,7 +657,7 @@ def F_cycle_FAS(
     L_c = operator(x_c, two * h, param, b_c)
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
         F_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
@@ -673,7 +674,7 @@ def F_cycle_FAS(
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
 
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
         V_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
@@ -725,7 +726,7 @@ def W_cycle(
     smoothing(x, b, h, param["Npre"], param)
     res_c = restrict_residual(x, b, h, param)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
         W_cycle(x_corr_c, res_c, param, nlevel + 1)
@@ -736,7 +737,7 @@ def W_cycle(
 
     res_c = restrict_residual(x, b, h, param)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
         W_cycle(x_corr_c, res_c, param, nlevel + 1)
@@ -794,7 +795,7 @@ def W_cycle_FAS(
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
 
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
         W_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
@@ -812,7 +813,7 @@ def W_cycle_FAS(
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
 
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
         W_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)

@@ -1,6 +1,7 @@
 """
 This module defines functions for solving a discretized three-dimensional Poisson equation using numerical methods.
 """
+
 import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange
@@ -116,6 +117,116 @@ def residual(
                     )
                     * invh2
                     + b[i, j, k]
+                )
+
+    return result
+
+
+@njit(
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def restrict_residual(
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
+) -> npt.NDArray[np.float32]:
+    """Restriction operator on half of the residual of Laplacian operator \\
+    residual = -(Ax - b)  \\
+    This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
+    in this case we can compute the residual and restriction for only half the points.
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import restrict_residual
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> result = restrict_residual(x, b, h)
+    """
+    inveight = np.float32(0.125)
+    three = np.float32(3.0)
+    invh2 = np.float32(h ** (-2))
+    ncells_1d = x.shape[0] >> 1
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(-1, ncells_1d - 1):
+        ii = 2 * i
+        iim1 = ii - 1
+        iip1 = ii + 1
+        iip2 = iip1 + 1
+        for j in prange(-1, ncells_1d - 1):
+            jj = 2 * j
+            jjm1 = jj - 1
+            jjp1 = jj + 1
+            jjp2 = jjp1 + 1
+            for k in prange(-1, ncells_1d - 1):
+                kk = 2 * k
+                kkm1 = kk - 1
+                kkp1 = kk + 1
+                kkp2 = kkp1 + 1
+
+                result[i, j, k] = inveight * (
+                    -(
+                        +x[iim1, jj, kk]
+                        + x[iim1, jj, kkp1]
+                        + x[iim1, jjp1, kk]
+                        + x[iim1, jjp1, kkp1]
+                        + x[ii, jjm1, kk]
+                        + x[ii, jjm1, kkp1]
+                        + x[ii, jj, kkm1]
+                        + x[ii, jj, kkp2]
+                        + x[ii, jjp1, kkm1]
+                        + x[ii, jjp1, kkp2]
+                        + x[ii, jjp2, kk]
+                        + x[ii, jjp2, kkp1]
+                        + x[iip1, jjm1, kk]
+                        + x[iip1, jjm1, kkp1]
+                        + x[iip1, jj, kkm1]
+                        + x[iip1, jj, kkp2]
+                        + x[iip1, jjp1, kkm1]
+                        + x[iip1, jjp1, kkp2]
+                        + x[iip1, jjp2, kk]
+                        + x[iip1, jjp2, kkp1]
+                        + x[iip2, jj, kk]
+                        + x[iip2, jj, kkp1]
+                        + x[iip2, jjp1, kk]
+                        + x[iip2, jjp1, kkp1]
+                        - three
+                        * (
+                            x[ii, jj, kk]
+                            + x[ii, jj, kkp1]
+                            + x[ii, jjp1, kk]
+                            + x[ii, jjp1, kkp1]
+                            + x[iip1, jj, kk]
+                            + x[iip1, jj, kkp1]
+                            + x[iip1, jjp1, kk]
+                            + x[iip1, jjp1, kkp1]
+                        )
+                    )
+                    * invh2
+                    + b[ii, jj, kk]
+                    + b[ii, jj, kkp1]
+                    + b[ii, jjp1, kk]
+                    + b[ii, jjp1, kkp1]
+                    + b[iip1, jj, kk]
+                    + b[iip1, jj, kkp1]
+                    + b[iip1, jjp1, kk]
+                    + b[iip1, jjp1, kkp1]
                 )
 
     return result
