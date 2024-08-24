@@ -282,6 +282,129 @@ def prolongation(
 
 
 @njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+def add_prolongation(
+    y: npt.NDArray[np.float32],
+    x: npt.NDArray[np.float32],
+) -> None:
+    """Add prolongation operator \\
+    Interpolate field to finer level and add to array
+
+    y += P(x)
+
+    Parameters
+    ----------
+    y : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    x : npt.NDArray[np.float32]
+        Potential at coarser level [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import prolongation
+    >>> coarse_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> fine_field = prolongation(coarse_field)
+    """
+    ncells_1d = x.shape[0]
+    f0 = np.float32(27.0 / 64)
+    f1 = np.float32(9.0 / 64)
+    f2 = np.float32(3.0 / 64)
+    f3 = np.float32(1.0 / 64)
+    for i in prange(-1, ncells_1d - 1):
+        im1 = i - 1
+        ip1 = i + 1
+        ii = 2 * i
+        iip1 = ii + 1
+        for j in prange(-1, ncells_1d - 1):
+            jm1 = j - 1
+            jp1 = j + 1
+            jj = 2 * j
+            jjp1 = jj + 1
+            for k in prange(-1, ncells_1d - 1):
+                km1 = k - 1
+                kp1 = k + 1
+                kk = 2 * k
+                kkp1 = kk + 1
+                tmp000 = x[im1, jm1, km1]
+                tmp001 = x[im1, jm1, k]
+                tmp002 = x[im1, jm1, kp1]
+                tmp010 = x[im1, j, km1]
+                tmp011 = x[im1, j, k]
+                tmp012 = x[im1, j, kp1]
+                tmp020 = x[im1, jp1, km1]
+                tmp021 = x[im1, jp1, k]
+                tmp022 = x[im1, jp1, kp1]
+                tmp100 = x[i, jm1, km1]
+                tmp101 = x[i, jm1, k]
+                tmp102 = x[i, jm1, kp1]
+                tmp110 = x[i, j, km1]
+                tmp111 = x[i, j, k]
+                tmp112 = x[i, j, kp1]
+                tmp120 = x[i, jp1, km1]
+                tmp121 = x[i, jp1, k]
+                tmp122 = x[i, jp1, kp1]
+                tmp200 = x[ip1, jm1, km1]
+                tmp201 = x[ip1, jm1, k]
+                tmp202 = x[ip1, jm1, kp1]
+                tmp210 = x[ip1, j, km1]
+                tmp211 = x[ip1, j, k]
+                tmp212 = x[ip1, j, kp1]
+                tmp220 = x[ip1, jp1, km1]
+                tmp221 = x[ip1, jp1, k]
+                tmp222 = x[ip1, jp1, kp1]
+                tmp0 = f0 * tmp111
+
+                y[ii, jj, kk] += (
+                    tmp0
+                    + f1 * (tmp011 + tmp101 + tmp110)
+                    + f2 * (tmp001 + tmp010 + tmp100)
+                    + f3 * tmp000
+                )
+                y[ii, jj, kkp1] += (
+                    tmp0
+                    + f1 * (tmp011 + tmp101 + tmp112)
+                    + f2 * (tmp001 + tmp012 + tmp102)
+                    + f3 * tmp002
+                )
+                y[ii, jjp1, kk] += (
+                    tmp0
+                    + f1 * (tmp011 + tmp121 + tmp110)
+                    + f2 * (tmp021 + tmp010 + tmp120)
+                    + f3 * tmp020
+                )
+                y[ii, jjp1, kkp1] += (
+                    tmp0
+                    + f1 * (tmp011 + tmp121 + tmp112)
+                    + f2 * (tmp021 + tmp012 + tmp122)
+                    + f3 * tmp022
+                )
+                y[iip1, jj, kk] += (
+                    tmp0
+                    + f1 * (tmp211 + tmp101 + tmp110)
+                    + f2 * (tmp201 + tmp210 + tmp100)
+                    + f3 * tmp200
+                )
+                y[iip1, jj, kkp1] += (
+                    tmp0
+                    + f1 * (tmp211 + tmp101 + tmp112)
+                    + f2 * (tmp201 + tmp212 + tmp102)
+                    + f3 * tmp202
+                )
+                y[iip1, jjp1, kk] += (
+                    tmp0
+                    + f1 * (tmp211 + tmp121 + tmp110)
+                    + f2 * (tmp221 + tmp210 + tmp120)
+                    + f3 * tmp220
+                )
+                y[iip1, jjp1, kkp1] += (
+                    tmp0
+                    + f1 * (tmp211 + tmp121 + tmp112)
+                    + f2 * (tmp221 + tmp212 + tmp122)
+                    + f3 * tmp222
+                )
+
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
 def add_prolongation_half(
     x: npt.NDArray[np.float32],
     corr_c: npt.NDArray[np.float32],

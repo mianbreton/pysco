@@ -247,7 +247,8 @@ def residual_error_half(
             )
 
     else:
-        return laplacian.residual_error_half(x, b, h)
+        # return laplacian.residual_error_half(x, b, h)
+        return laplacian.residual_error(x, b, h)
 
 
 def restrict_residual(
@@ -482,7 +483,7 @@ def V_cycle(
     else:
         V_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npost"], param)
 
@@ -594,7 +595,7 @@ def F_cycle(
     else:
         F_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npre"], param)
 
@@ -605,7 +606,7 @@ def F_cycle(
     else:
         V_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npost"], param)
 
@@ -731,7 +732,7 @@ def W_cycle(
     else:
         W_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npre"], param)
 
@@ -742,7 +743,7 @@ def W_cycle(
     else:
         W_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npost"], param)
 
