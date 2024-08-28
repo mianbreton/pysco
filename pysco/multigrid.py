@@ -67,14 +67,14 @@ def linear(
         tolerance = param["tolerance"]
 
     logging.info("Start linear Multigrid")
-    residual_error = 1e30
-    while residual_error > tolerance:
+    residual_err = 1e30
+    while residual_err > tolerance:
         V_cycle(x, rhs, param)
-        residual_error_tmp = residual_error_half(x, rhs, h, param)
+        residual_error_tmp = residual_error(x, rhs, h, param)
         logging.info(f"{residual_error_tmp=} {tolerance=}")
-        if residual_error_tmp < tolerance or residual_error / residual_error_tmp < 2:
+        if residual_error_tmp < tolerance or residual_err / residual_error_tmp < 2:
             break
-        residual_error = residual_error_tmp
+        residual_err = residual_error_tmp
     return x
 
 
@@ -130,7 +130,7 @@ def FAS(
     # Main procedure: Multigrid
     logging.info("Start Full-Approximation Storage Multigrid")
     F_cycle_FAS(x, b, param)
-    residual_error_tmp = residual_error_half(x, b, h, param)
+    residual_error_tmp = residual_error(x, b, h, param)
     logging.info(f"{residual_error_tmp=} {tolerance=}")
     return x
 
@@ -191,13 +191,13 @@ def truncation_error(
 
 
 @utils.time_me
-def residual_error_half(
+def residual_error(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     h: np.float32,
     param: pd.Series,
 ) -> np.float32:
-    """Error on half of the residual (the other half is zero by construction)\\
+    """Error on the residual \\
     For residuals, we use the opposite convention compared to Numerical Recipes\\
     residual = f_h - L(u_h)
 

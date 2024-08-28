@@ -883,69 +883,57 @@ def gauss_seidel(
                 x010 = x[iim1, jj, kkm1]
                 x100 = x[ii, jjm1, kkm1]
                 x111 = x[ii, jj, kk]
-                x[iim1, jjm1, kkm1] += (
-                    f_relax
-                    * (
-                        (
-                            +x001
-                            + x010
-                            + x100
-                            + x[iim2, jjm1, kkm1]
-                            + x[iim1, jjm2, kkm1]
-                            + x[iim1, jjm1, kkm2]
-                            - h2 * b[iim1, jjm1, kkm1]
-                        )
-                        * invsix
+                x[iim1, jjm1, kkm1] += f_relax * (
+                    (
+                        +x001
+                        + x010
+                        + x100
+                        + x[iim2, jjm1, kkm1]
+                        + x[iim1, jjm2, kkm1]
+                        + x[iim1, jjm1, kkm2]
+                        - h2 * b[iim1, jjm1, kkm1]
                     )
-                    - f_relax * x[iim1, jjm1, kkm1]
+                    * invsix
+                    - x[iim1, jjm1, kkm1]
                 )
-                x[iim1, jj, kk] += (
-                    f_relax
-                    * (
-                        (
-                            +x001
-                            + x010
-                            + x111
-                            + x[iim2, jj, kk]
-                            - h2 * b[iim1, jj, kk]
-                            + x[iim1, jj, kkp1]
-                            + x[iim1, jjp1, kk]
-                        )
-                        * invsix
+                x[iim1, jj, kk] += f_relax * (
+                    (
+                        +x001
+                        + x010
+                        + x111
+                        + x[iim2, jj, kk]
+                        - h2 * b[iim1, jj, kk]
+                        + x[iim1, jj, kkp1]
+                        + x[iim1, jjp1, kk]
                     )
-                    - f_relax * x[iim1, jj, kk]
+                    * invsix
+                    - x[iim1, jj, kk]
                 )
-                x[ii, jjm1, kk] += (
-                    f_relax
-                    * (
-                        (
-                            x001
-                            + x111
-                            + x100
-                            + x[iip1, jjm1, kk]
-                            + x[ii, jjm2, kk]
-                            + x[ii, jjm1, kkp1]
-                            - h2 * b[ii, jjm1, kk]
-                        )
-                        * invsix
+                x[ii, jjm1, kk] += f_relax * (
+                    (
+                        x001
+                        + x111
+                        + x100
+                        + x[iip1, jjm1, kk]
+                        + x[ii, jjm2, kk]
+                        + x[ii, jjm1, kkp1]
+                        - h2 * b[ii, jjm1, kk]
                     )
-                    - f_relax * x[ii, jjm1, kk]
+                    * invsix
+                    - x[ii, jjm1, kk]
                 )
-                x[ii, jj, kkm1] += (
-                    f_relax
-                    * (
-                        (
-                            x010
-                            + x100
-                            + x111
-                            + x[ii, jj, kkm2]
-                            - h2 * b[ii, jj, kkm1]
-                            + x[ii, jjp1, kkm1]
-                            + x[iip1, jj, kkm1]
-                        )
-                        * invsix
+                x[ii, jj, kkm1] += f_relax * (
+                    (
+                        x010
+                        + x100
+                        + x111
+                        + x[ii, jj, kkm2]
+                        - h2 * b[ii, jj, kkm1]
+                        + x[ii, jjp1, kkm1]
+                        + x[iip1, jj, kkm1]
                     )
-                    - f_relax * x[ii, jj, kkm1]
+                    * invsix
+                    - x[ii, jj, kkm1]
                 )
 
     # Computation Black
@@ -969,69 +957,57 @@ def gauss_seidel(
                 x011 = x[iim1, jj, kk]
                 x101 = x[ii, jjm1, kk]
                 x110 = x[ii, jj, kkm1]
-                x[iim1, jjm1, kk] += (
-                    f_relax
-                    * (
-                        (
-                            +x000
-                            + x011
-                            + x101
-                            + x[iim2, jjm1, kk]
-                            + x[iim1, jjm2, kk]
-                            - h2 * b[iim1, jjm1, kk]
-                            + x[iim1, jjm1, kkp1]
-                        )
-                        * invsix
+                x[iim1, jjm1, kk] += f_relax * (
+                    (
+                        +x000
+                        + x011
+                        + x101
+                        + x[iim2, jjm1, kk]
+                        + x[iim1, jjm2, kk]
+                        - h2 * b[iim1, jjm1, kk]
+                        + x[iim1, jjm1, kkp1]
                     )
-                    - f_relax * x[iim1, jjm1, kk]
+                    * invsix
+                    - x[iim1, jjm1, kk]
                 )
-                x[iim1, jj, kkm1] += (
-                    f_relax
-                    * (
-                        (
-                            +x000
-                            + x011
-                            + x110
-                            + x[iim2, jj, kkm1]
-                            + x[iim1, jj, kkm2]
-                            - h2 * b[iim1, jj, kkm1]
-                            + x[iim1, jjp1, kkm1]
-                        )
-                        * invsix
+                x[iim1, jj, kkm1] += f_relax * (
+                    (
+                        +x000
+                        + x011
+                        + x110
+                        + x[iim2, jj, kkm1]
+                        + x[iim1, jj, kkm2]
+                        - h2 * b[iim1, jj, kkm1]
+                        + x[iim1, jjp1, kkm1]
                     )
-                    - f_relax * x[iim1, jj, kkm1]
+                    * invsix
+                    - x[iim1, jj, kkm1]
                 )
-                x[ii, jjm1, kkm1] += (
-                    f_relax
-                    * (
-                        (
-                            x000
-                            + x101
-                            + x110
-                            + x[ii, jjm2, kkm1]
-                            + x[ii, jjm1, kkm2]
-                            - h2 * b[ii, jjm1, kkm1]
-                            + x[iip1, jjm1, kkm1]
-                        )
-                        * invsix
+                x[ii, jjm1, kkm1] += f_relax * (
+                    (
+                        x000
+                        + x101
+                        + x110
+                        + x[ii, jjm2, kkm1]
+                        + x[ii, jjm1, kkm2]
+                        - h2 * b[ii, jjm1, kkm1]
+                        + x[iip1, jjm1, kkm1]
                     )
-                    - f_relax * x[ii, jjm1, kkm1]
+                    * invsix
+                    - x[ii, jjm1, kkm1]
                 )
-                x[ii, jj, kk] += (
-                    f_relax
-                    * (
-                        (
-                            x011
-                            + x101
-                            + x110
-                            - h2 * b[ii, jj, kk]
-                            + x[ii, jj, kkp1]
-                            + x[ii, jjp1, kk]
-                            + x[iip1, jj, kk]
-                        )
-                        * invsix
+                x[ii, jj, kk] += f_relax * (
+                    (
+                        x011
+                        + x101
+                        + x110
+                        - h2 * b[ii, jj, kk]
+                        + x[ii, jj, kkp1]
+                        + x[ii, jjp1, kk]
+                        + x[iip1, jj, kk]
                     )
-                    - f_relax * x[ii, jj, kk]
+                    * invsix
+                    - x[ii, jj, kk]
                 )
 
 
