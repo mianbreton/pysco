@@ -101,13 +101,8 @@ def pm(
         param["parametrized_mu_z"] = np.float32(1)
 
     if ncells_1d**3 != param["npart"]:
-        conversion = np.float32(
-            param["parametrized_mu_z"] * ncells_1d**3 / param["npart"]
-        )
+        conversion = np.float32(ncells_1d**3 / param["npart"])
         utils.prod_vector_scalar_inplace(density, conversion)
-    else:
-        if "parametrized" == THEORY:
-            utils.prod_vector_scalar_inplace(density, param["parametrized_mu_z"])
 
     save_pk = False
     if param["save_power_spectrum"].casefold() == "yes".casefold() or (
@@ -121,9 +116,7 @@ def pm(
         density_fourier = fourier.fft_3D_real(density, param["nthreads"])
         k, Pk, Nmodes = fourier.fourier_grid_to_Pk(density_fourier, param["MAS_index"])
         density_fourier = 0
-        Pk *= (param["boxlen"] / len(density) ** 2) ** 3 / param[
-            "parametrized_mu_z"
-        ] ** 2
+        Pk *= (param["boxlen"] / len(density) ** 2) ** 3
         k *= 2 * np.pi / param["boxlen"]
         iostream.write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
 
@@ -430,7 +423,9 @@ def rhs_poisson(
                 )
         mesh.divergence2(force, density)
     else:
-        f1 = np.float32(1.5 * param["aexp"] * param["Om_m"])
+        f1 = np.float32(
+            1.5 * param["aexp"] * param["Om_m"] * param["parametrized_mu_z"]
+        )
         f2 = -f1
         utils.linear_operator_inplace(density, f1, f2)
 
