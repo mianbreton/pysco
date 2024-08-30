@@ -1113,7 +1113,7 @@ def derivative7_fR_n1(
                     )
                     - a[im3, j, k]
                     + a[ip3, j, k]
-                    + f * (-b[im2, j, k] ** 2 + b[ip2, j, k] ** 2)
+                    + f * (-b[im3, j, k] ** 2 + b[ip3, j, k] ** 2)
                 )
 
                 result[i, j, k, 1] = inv60h * (
@@ -1709,7 +1709,7 @@ def derivative7_fR_n2(
                     )
                     - a[im3, j, k]
                     + a[ip3, j, k]
-                    + f * (-b[im2, j, k] ** 3 + b[ip2, j, k] ** 3)
+                    + f * (-b[im3, j, k] ** 3 + b[ip3, j, k] ** 3)
                 )
 
                 result[i, j, k, 1] = inv60h * (
@@ -1955,38 +1955,44 @@ def add_derivative7_fR_n2(
     fortyfive = np.float32(45.0)
     ncells_1d = b.shape[0]
     inv60h_f = np.float32(f * ncells_1d / 60.0)
-    for i in prange(-2, ncells_1d - 2):
+    for i in prange(-3, ncells_1d - 3):
         ip1 = i + 1
         im1 = i - 1
         ip2 = i + 2
         im2 = i - 2
-        for j in prange(-2, ncells_1d - 2):
+        ip3 = i + 3
+        im3 = i - 3
+        for j in prange(-3, ncells_1d - 3):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
-            for k in prange(-2, ncells_1d - 2):
+            jp3 = j + 3
+            jm3 = j - 3
+            for k in prange(-3, ncells_1d - 3):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
                 km2 = k - 2
+                kp3 = k + 3
+                km3 = k - 3
                 force[i, j, k, 0] += inv60h_f * (
                     fortyfive * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
                     + nine * (+b[im2, j, k] ** 3 - b[ip2, j, k] ** 3)
-                    - b[im2, j, k] ** 3
-                    + b[ip2, j, k] ** 3
+                    - b[im3, j, k] ** 3
+                    + b[ip3, j, k] ** 3
                 )
                 force[i, j, k, 1] += inv60h_f * (
                     fortyfive * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
                     + nine * (+b[i, jm2, k] ** 3 - b[i, jp2, k] ** 3)
-                    - b[i, jm2, k] ** 3
-                    + b[i, jp2, k] ** 3
+                    - b[i, jm3, k] ** 3
+                    + b[i, jp3, k] ** 3
                 )
                 force[i, j, k, 2] += inv60h_f * (
                     fortyfive * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
                     + nine * (+b[i, j, km2] ** 3 - b[i, j, kp2] ** 3)
-                    - b[i, j, km2] ** 3
-                    + b[i, j, kp2] ** 3
+                    - b[i, j, km3] ** 3
+                    + b[i, j, kp3] ** 3
                 )
 
 
