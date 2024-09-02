@@ -1130,7 +1130,7 @@ def derivative7_fR_n1(
                         + f * (b[i, jm2, k] ** 2 - b[i, jp2, k] ** 2)
                     )
                     - a[i, jm3, k]
-                    + a[i, jm3, k]
+                    + a[i, jp3, k]
                     + f * (-b[i, jm3, k] ** 2 + b[i, jp3, k] ** 2)
                 )
                 result[i, j, k, 2] = inv60h * (
@@ -1726,7 +1726,7 @@ def derivative7_fR_n2(
                         + f * (b[i, jm2, k] ** 3 - b[i, jp2, k] ** 3)
                     )
                     - a[i, jm3, k]
-                    + a[i, jm3, k]
+                    + a[i, jp3, k]
                     + f * (-b[i, jm3, k] ** 3 + b[i, jp3, k] ** 3)
                 )
                 result[i, j, k, 2] = inv60h * (
