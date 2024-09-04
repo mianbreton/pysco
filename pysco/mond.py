@@ -132,7 +132,8 @@ def inner_gradient_gamma(
     one = np.float32(1)
     inv_g0 = np.float32(1.0 / g0)
     half_gamma = np.float32(0.5 * gamma)
-    minus_inv_gamma = np.float32(1.0 / gamma)
+    inv_gamma = np.float32(gamma ** (-1))
+    minus_inv_gamma = np.float32(-1.0 / gamma)
     force_ravel = force.ravel()
     size = force_ravel.shape[0]
     for i in prange(size):
@@ -143,7 +144,7 @@ def inner_gradient_gamma(
         y = abs(force_tmp) * inv_g0
         exp_minus_y_halfgamma = math.exp(-(y**half_gamma))
         nu = (one - exp_minus_y_halfgamma) ** (minus_inv_gamma) + (
-            1 - gamma ** (-1)
+            one - inv_gamma
         ) * exp_minus_y_halfgamma
         force_ravel[i] *= nu
 
@@ -165,8 +166,8 @@ def inner_gradient_delta(
     """
     one = np.float32(1)
     inv_g0 = np.float32(1.0 / g0)
-    half_beta = np.float32(0.5 * delta)
-    minus_inv_beta = np.float32(1.0 / delta)
+    half_delta = np.float32(0.5 * delta)
+    minus_inv_delta = np.float32(-1.0 / delta)
     force_ravel = force.ravel()
     size = force_ravel.shape[0]
     for i in prange(size):
@@ -175,5 +176,5 @@ def inner_gradient_delta(
             force_ravel[i] = 0
             continue
         y = abs(force_tmp) * inv_g0
-        nu = (one - math.exp(-(y**half_beta))) ** (minus_inv_beta)
+        nu = (one - math.exp(-(y**half_delta))) ** (minus_inv_delta)
         force_ravel[i] *= nu
