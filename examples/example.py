@@ -13,6 +13,7 @@ param = {
     # "fR_n": 1,
     # "mond_function": "simple",
     # "mond_g0": 1.2,
+    # "mond_scale_factor_exponent": 0,
     # "mond_alpha": 1,
     # "parametrized_mu0": 0.1,
     "H0": 72,

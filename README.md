@@ -180,7 +180,8 @@ fR_logfR0 = 5 # Background value of the scalaron field today -log(fR0)
 fR_n = 1 # Exponent on the curvature in the Hu & Sawicki model. Currently n = 1 or 2
 ## QUMOND
 mond_function = simple # "simple", "n", "beta", "gamma" or "delta"
-mond_a0 = 1.2 # Acceleration constant (in 1e-10 m/s²)
+mond_g0 = 1.2 # Acceleration constant (in 1e-10 m/s²)
+mond_scale_factor_exponent = 0 # Exponent N so that g0 -> a^N g0
 mond_alpha = 1 #  Interpolating function parameter
 ## Parametrized
 parametrized_mu0 = -0.1 # If null, then is equivalent to GR. Model from Abbott et al. (2019)
@@ -250,6 +251,7 @@ param = {
     # "fR_n": 1,
     # "mond_function": "simple",
     # "mond_g0": 1.2,
+    # "mond_scale_factor_exponent": 0,
     # "mond_alpha": 1,
     # "parametrized_mu0": 0.1,
     "H0": 72,

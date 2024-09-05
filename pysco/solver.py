@@ -399,7 +399,7 @@ def rhs_poisson(
             * 1e-10
             * param["unit_t"] ** 2
             / param["unit_l"]
-            / param["aexp"]
+            * param["aexp"] ** param["mond_scale_factor_exponent"]
         )
         alpha = param["mond_alpha"]
         force = mesh.derivative2(additional_field)

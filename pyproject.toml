@@ -4,7 +4,7 @@ build-backend = "pdm.backend"
 
 [project]
 name = "pysco-nbody"
-version = "0.6.9"
+version = "0.6.10"
 authors = [
     { name = "Michel-Andrès Breton", email = "michel-andres.breton@obspm.fr" },
 ]
