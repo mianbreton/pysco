@@ -83,7 +83,7 @@ def run(param) -> None:
         extra += f"{param['fR_logfR0']}_n{param['fR_n']}"
     elif extra.casefold() == "mond".casefold():
         mond_function = param["mond_function"].casefold()
-        extra += f"_g0_{param['mond_g0']}_{mond_function}"
+        extra += f"_g0_{param['mond_g0']}_exponent_{param['mond_scale_factor_exponent']}_{mond_function}"
         if "simple".casefold() != mond_function:
             extra += f"_{param['mond_alpha']}"
     elif extra.casefold() == "parametrized".casefold():
