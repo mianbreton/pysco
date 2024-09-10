@@ -184,8 +184,8 @@ def compute_growth_functions(
             lnaexp_span,
             y0,
             t_eval=lnaexp_array,
-            rtol=1e-14,
-            atol=1e-14,
+            rtol=1e-13,
+            atol=1e-13,
             args=(cosmo, param["parametrized_mu0"]),
         )
     else:
@@ -194,8 +194,8 @@ def compute_growth_functions(
             lnaexp_span,
             y0,
             t_eval=lnaexp_array,
-            rtol=1e-14,
-            atol=1e-14,
+            rtol=1e-13,
+            atol=1e-13,
             args=(cosmo,),
         )
 

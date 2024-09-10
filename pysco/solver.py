@@ -74,10 +74,10 @@ def pm(
             density = mesh.CIC(position, ncells_1d)
         case "tsc":
             param["MAS_index"] = 3
-            if param["nthreads"] < 5:
-                density = mesh.TSC_seq(position, ncells_1d)
-            else:
+            if param["nthreads"] >= 4:
                 density = mesh.TSC(position, ncells_1d)
+            else:
+                density = mesh.TSC_seq(position, ncells_1d)
         case _:
             raise ValueError(f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'")
 
@@ -190,7 +190,7 @@ def pm(
             acceleration = mesh.invTSC_vec(force, position)
         case _:
             raise ValueError(f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'")
-
+    force = 0
     return (acceleration, potential, additional_field)
 
 

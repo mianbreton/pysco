@@ -123,7 +123,7 @@ def generate(
         if INITIAL_CONDITIONS.casefold() == "1LPT".casefold():
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
-            finalise_initial_conditions(position, velocity, param)
+            finalise_initial_conditions(position, velocity, param, do_reorder=False)
             return position, velocity
         # 2LPT
         logging.warning("Compute 2LPT contribution")
@@ -144,7 +144,7 @@ def generate(
         if INITIAL_CONDITIONS.casefold() == "2LPT".casefold():
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
-            finalise_initial_conditions(position, velocity, param)
+            finalise_initial_conditions(position, velocity, param, do_reorder=False)
             return position, velocity
         # 3LPT
         dplus_3a = -np.float32(tables[7](lna_start) / dplus_1_z0**3)
@@ -189,17 +189,17 @@ def generate(
         if INITIAL_CONDITIONS.casefold() == "3LPT".casefold():
             position = position.reshape(param["npart"], 3)
             velocity = velocity.reshape(param["npart"], 3)
-            finalise_initial_conditions(position, velocity, param)
+            finalise_initial_conditions(position, velocity, param, do_reorder=False)
             return position, velocity
         else:
             raise ValueError(f"{INITIAL_CONDITIONS=}, should be 1LPT, 2LPT or 3LPT")
     elif INITIAL_CONDITIONS[-3:].casefold() == ".h5".casefold():
         position, velocity = read_hdf5(param)
-        finalise_initial_conditions(position, velocity, param)
+        finalise_initial_conditions(position, velocity, param, do_reorder=True)
         return position, velocity
     else:  # Gadget format
         position, velocity = read_gadget(param)
-        finalise_initial_conditions(position, velocity, param)
+        finalise_initial_conditions(position, velocity, param, do_reorder=True)
         return position, velocity
 
 
@@ -207,6 +207,7 @@ def finalise_initial_conditions(
     position: npt.NDArray[np.float32],
     velocity: npt.NDArray[np.float32],
     param: pd.Series,
+    do_reorder: bool,
 ) -> None:
     """Wrap, reorder, and write initial conditions to output files.
 
@@ -221,6 +222,8 @@ def finalise_initial_conditions(
         Particle velocities [Npart, 3]
     param : pd.Series
         Parameter container
+    do_reorder: bool
+        Reorder the particle
 
     Example
     -------
@@ -232,14 +235,16 @@ def finalise_initial_conditions(
     >>> param = pd.Series({
     ...     'aexp': 0.8,
     ...  })
-    >>> finalise_initial_conditions(position, velocity, param)
+    >>> finalise_initial_conditions(position, velocity, param, True)
     """
 
     if "base" not in param:
         raise ValueError(f"{param.index=}, should contain 'base'")
 
     utils.periodic_wrap(position)
-    utils.reorder_particles(position, velocity)
+    if do_reorder:
+        utils.reorder_particles(position, velocity)
+
     OUTPUT_SNAPSHOT_FORMAT = param["output_snapshot_format"].casefold()
     match OUTPUT_SNAPSHOT_FORMAT:
         case "parquet":

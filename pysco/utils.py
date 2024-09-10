@@ -10,6 +10,7 @@ import numpy.typing as npt
 import pandas as pd
 from astropy.constants import G, pc
 from numba import njit, prange
+import numba
 import morton
 import logging
 
@@ -776,12 +777,54 @@ def reorder_particles(
     >>> reorder_particles(position, velocity, acceleration)
     """
     index = morton.positions_to_keys(position)
-    arg = np.argsort(index)
+    nthreads = numba.get_num_threads()
+    if nthreads > 1:
+        arg = argsort_par(index)
+    else:
+        arg = np.argsort(index)
     position[:] = position[arg, :]
     if velocity is not None:
         velocity[:] = velocity[arg, :]
     if acceleration is not None:
         acceleration[:] = acceleration[arg, :]
+
+
+@time_me
+@njit(["i8[:](i8[:])"], fastmath=True, cache=True, parallel=True)
+def argsort_par(
+    indices: npt.NDArray[np.int64],
+) -> npt.NDArray[np.int64]:
+    """Reorder particles inplace with Morton indices
+
+    Parameters
+    ----------
+    indices : npt.NDArray[np.int64]
+        Morton index array [N_part]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import argsort_par
+    >>> indices = np.random.randint(0, 100, 64)
+    >>> argsort_par(indices)
+    """
+    size = len(indices)
+    nthreads = numba.get_num_threads()
+    group, remainder = np.divmod(size, nthreads)
+    result = np.empty_like(indices)
+    for i in prange(nthreads):
+        if remainder == 0:
+            imin = i * group
+            imax = imin + group
+        elif i < remainder:
+            imin = i * (group + 1)
+            imax = imin + group + 1
+        else:
+            imin = remainder * (group + 1) + (i - remainder) * group
+            imax = imin + group
+        result[imin:imax] = np.argsort(indices[imin:imax]) + imin
+        print(i, imin, imax, size)
+    return result
 
 
 @njit(fastmath=True, cache=True, parallel=True)
