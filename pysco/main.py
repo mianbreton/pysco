@@ -144,7 +144,9 @@ def run(param) -> None:
 
         if (param["nsteps"] % param["n_reorder"]) == 0:
             logging.info("Reordering particles")
-            utils.reorder_particles(position, velocity, acceleration)
+            position, velocity, acceleration = utils.reorder_particles(
+                position, velocity, acceleration
+            )
         if param["write_snapshot"]:
             iostream.write_snapshot_particles(position, velocity, param)
             param["i_snap"] += 1

@@ -873,7 +873,7 @@ def reorder_particles(
     position: npt.NDArray[np.float32],
     velocity: npt.NDArray[np.float32] = None,
     acceleration: npt.NDArray[np.float32] = None,
-) -> None:
+):
     """Reorder particles inplace with Morton indices
 
     Parameters
@@ -885,18 +885,23 @@ def reorder_particles(
     acceleration : npt.NDArray[np.float32], optional
         Acceleration [N_part, 3], by default None
 
+    Returns
+    -------
+    npt.NDArray[np.float32] or Tuple of arrays
+        Sorted array(s)
+
     Examples
     --------
     >>> import numpy as np
     >>> from pysco.utils import reorder_particles
     >>> position = np.random.rand(64, 3).astype(np.float32)
-    >>> reorder_particles(position)
+    >>> position = reorder_particles(position)
     >>> position
     >>> # Can also add velocity and acceleration
     >>> position = np.random.rand(64, 3).astype(np.float32)
     >>> velocity = np.random.rand(64, 3).astype(np.float32)
     >>> acceleration = np.random.rand(64, 3).astype(np.float32)
-    >>> reorder_particles(position, velocity, acceleration)
+    >>> position, velocity, acceleration = reorder_particles(position, velocity, acceleration)
     """
     index = morton.positions_to_keys(position)
     nthreads = numba.get_num_threads()
@@ -909,10 +914,13 @@ def reorder_particles(
         position, velocity, acceleration = injection_with_indices3(
             arg, position, velocity, acceleration
         )
+        return position, velocity, acceleration
     elif velocity is not None:
         position, velocity = injection_with_indices2(arg, position, velocity)
+        return position, velocity
     else:
         position = injection_with_indices(arg, position)
+        return position
 
 
 @time_me
@@ -927,12 +935,17 @@ def argsort_par(
     indices : npt.NDArray[np.int64]
         Morton index array [N_part]
 
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Sorted index array
+
     Examples
     --------
     >>> import numpy as np
     >>> from pysco.utils import argsort_par
     >>> indices = np.random.randint(0, 100, 64)
-    >>> argsort_par(indices)
+    >>> sorted = argsort_par(indices)
     """
     size = len(indices)
     nthreads = numba.get_num_threads()

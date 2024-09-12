@@ -243,7 +243,7 @@ def finalise_initial_conditions(
 
     utils.periodic_wrap(position)
     if do_reorder:
-        utils.reorder_particles(position, velocity)
+        position, velocity = utils.reorder_particles(position, velocity)
 
     OUTPUT_SNAPSHOT_FORMAT = param["output_snapshot_format"].casefold()
     match OUTPUT_SNAPSHOT_FORMAT:
