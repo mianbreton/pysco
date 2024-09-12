@@ -142,7 +142,11 @@ def fft_3D_real(x: npt.NDArray[np.float32], threads: int) -> npt.NDArray[np.comp
         direction="FFTW_FORWARD",
         threads=threads,
     )
+    start = perf_counter()
     x_in[:] = x
+    t1 = perf_counter()
+    utils.injection(x_in, x)
+    print(f"New {perf_counter() - t1}s, Old {t1-start=}s")
     fftw_plan(x_in, x_out)
     return x_out
 
@@ -289,7 +293,11 @@ def ifft_3D_real(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.f
         direction="FFTW_BACKWARD",
         threads=threads,
     )
+    start = perf_counter()
     x_in[:] = x
+    t1 = perf_counter()
+    utils.injection(x_in, x)
+    print(f"New {perf_counter() - t1}s, Old {t1-start=}s")
     fftw_plan(x_in, x_out)
     return x_out
 

@@ -747,6 +747,33 @@ def operator_fR_inplace(
 
 
 @njit(fastmath=True, cache=True, parallel=True)
+def injection(a: npt.NDArray, b: npt.NDArray) -> None:
+    """Straight injection \\
+    a[:] = b[:]
+
+    Parameters
+    ----------
+    a : npt.NDArray
+        Mutable array
+    b : npt.NDArray
+        Array to copy
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import injection
+    >>> array = np.array([1.0, 2.0, 3.0])
+    >>> idx = np.array([1,2,0])
+    >>> injection(a, b)
+    """
+    size = len(a)
+    ar = a.ravel()
+    br = b.ravel()
+    for i in prange(size):
+        ar[i] = br[i]
+
+
+@njit(fastmath=True, cache=True, parallel=True)
 def injection_with_indices(
     idx: npt.NDArray[np.int32], a: npt.NDArray[np.float32]
 ) -> npt.NDArray[np.float32]:
@@ -771,7 +798,7 @@ def injection_with_indices(
     >>> from pysco.utils import injection_with_indices
     >>> array = np.array([1.0, 2.0, 3.0])
     >>> idx = np.array([1,2,0])
-    >>> injection_with_indices(idx, array)
+    >>> sorted = injection_with_indices(idx, array)
     """
     out = np.empty_like(a)
     size = len(a)
@@ -805,10 +832,11 @@ def injection_with_indices2(
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.utils import injection_with_indices
+    >>> from pysco.utils import injection_with_indices2
     >>> array = np.array([1.0, 2.0, 3.0])
+    >>> array2 = np.array([1.0, 3.0, 6.0])
     >>> idx = np.array([1,2,0])
-    >>> injection_with_indices(idx, array)
+    >>> sorted1, sorted2 = injection_with_indices2(idx, array, array2)
     """
     out_a = np.empty_like(a)
     out_b = np.empty_like(b)
@@ -851,10 +879,12 @@ def injection_with_indices3(
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.utils import injection_with_indices
-    >>> array = np.array([1.0, 2.0, 3.0])
+    >>> from pysco.utils import injection_with_indices3
+    >>> array1 = np.array([1.0, 2.0, 3.0])
+    >>> array2 = np.array([1.0, 3.0, 6.0])
+    >>> array3 = np.array([7.0, 8.0, 9.0])
     >>> idx = np.array([1,2,0])
-    >>> injection_with_indices(idx, array)
+    >>> sorted1, sorted2, sorted3 = injection_with_indices3(idx, array1, array2, array3)
     """
     out_a = np.empty_like(a)
     out_b = np.empty_like(b)
@@ -906,34 +936,29 @@ def reorder_particles(
     index = morton.positions_to_keys(position)
     nthreads = numba.get_num_threads()
     if nthreads > 1:
-        arg = argsort_par(index)
+        arg = argsort_par(index, nthreads)
     else:
         arg = np.argsort(index)
 
     if acceleration is not None:
-        position, velocity, acceleration = injection_with_indices3(
-            arg, position, velocity, acceleration
-        )
-        return position, velocity, acceleration
+        return injection_with_indices3(arg, position, velocity, acceleration)
     elif velocity is not None:
-        position, velocity = injection_with_indices2(arg, position, velocity)
-        return position, velocity
+        return injection_with_indices2(arg, position, velocity)
     else:
-        position = injection_with_indices(arg, position)
-        return position
+        return injection_with_indices(arg, position)
 
 
 @time_me
-@njit(["i8[:](i8[:])"], fastmath=True, cache=True, parallel=True)
-def argsort_par(
-    indices: npt.NDArray[np.int64],
-) -> npt.NDArray[np.int64]:
+@njit(["i8[:](i8[:], i8)"], fastmath=True, cache=True, parallel=True)
+def argsort_par(indices: npt.NDArray[np.int64], nthreads: int) -> npt.NDArray[np.int64]:
     """Parallel partial argsort algorithm
 
     Parameters
     ----------
     indices : npt.NDArray[np.int64]
         Morton index array [N_part]
+    nthreads : int
+        Number of threads
 
     Returns
     -------
@@ -948,7 +973,6 @@ def argsort_par(
     >>> sorted = argsort_par(indices)
     """
     size = len(indices)
-    nthreads = numba.get_num_threads()
     group, remainder = np.divmod(size, nthreads)
     sorted = np.empty_like(indices)
     for i in prange(nthreads):
