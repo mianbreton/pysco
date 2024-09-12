@@ -748,7 +748,8 @@ def operator_fR_inplace(
 
 @njit(fastmath=True, cache=True, parallel=True)
 def injection(a: npt.NDArray, b: npt.NDArray) -> None:
-    """Straight injection \\
+    """Straight injection
+
     a[:] = b[:]
 
     Parameters
@@ -766,18 +767,78 @@ def injection(a: npt.NDArray, b: npt.NDArray) -> None:
     >>> idx = np.array([1,2,0])
     >>> injection(a, b)
     """
-    size = len(a)
     ar = a.ravel()
     br = b.ravel()
-    for i in prange(size):
+    for i in prange(len(ar)):
         ar[i] = br[i]
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def injection_to_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
+    """Straight injection to gradient array
+
+    a[:,:,:,i] = b[:,:,:]
+
+    Parameters
+    ----------
+    a : npt.NDArray
+        Mutable array
+    b : npt.NDArray
+        Array to copy
+    dim : int
+        Dimension
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import injection
+    >>> array = np.array([1.0, 2.0, 3.0])
+    >>> idx = np.array([1,2,0])
+    >>> injection(a, b)
+    """
+    ii, jj, kk = b.shape
+    for i in prange(ii):
+        for j in prange(jj):
+            for k in prange(kk):
+                a[i, j, k, dim] = b[i, j, k]
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def injection_from_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
+    """Straight injection from gradient array
+
+    a[:,:,:] = b[:,:,:,i]
+
+    Parameters
+    ----------
+    a : npt.NDArray
+        Mutable array
+    b : npt.NDArray
+        Array to copy
+    dim : int
+        Dimension
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import injection
+    >>> array = np.array([1.0, 2.0, 3.0])
+    >>> idx = np.array([1,2,0])
+    >>> injection(a, b)
+    """
+    ii, jj, kk = a.shape
+    for i in prange(ii):
+        for j in prange(jj):
+            for k in prange(kk):
+                a[i, j, k] = b[i, j, k, dim]
 
 
 @njit(fastmath=True, cache=True, parallel=True)
 def injection_with_indices(
     idx: npt.NDArray[np.int32], a: npt.NDArray[np.float32]
 ) -> npt.NDArray[np.float32]:
-    """Reorder array according to indices \\
+    """Reorder array according to indices
+
     a[:,:] = a[idx,:]
 
     Parameters
@@ -811,7 +872,8 @@ def injection_with_indices(
 def injection_with_indices2(
     idx: npt.NDArray[np.int32], a: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
 ) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
-    """Reorder array according to indices  \\
+    """Reorder array according to indices
+
     a[:,:] = a[idx,:]
     b[:,:] = b[idx,:]
 
@@ -855,7 +917,8 @@ def injection_with_indices3(
     b: npt.NDArray[np.float32],
     c: npt.NDArray[np.float32],
 ) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32]]:
-    """Reorder array according to indices  \\
+    """Reorder array according to indices
+
     a[:,:] = a[idx,:]
     b[:,:] = b[idx,:]
     c[:,:] = c[idx,:]
