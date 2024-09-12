@@ -746,6 +746,128 @@ def operator_fR_inplace(
         density_ravel[i] = f1 * density_ravel[i] + f2 / u_scalaron_ravel[i] + f3
 
 
+@njit(fastmath=True, cache=True, parallel=True)
+def injection_with_indices(
+    idx: npt.NDArray[np.int32], a: npt.NDArray[np.float32]
+) -> npt.NDArray[np.float32]:
+    """Reorder array according to indices \\
+    a[:,:] = a[idx,:]
+
+    Parameters
+    ----------
+    idx : npt.NDArray[np.float32]
+        Indices to sort array
+    a : npt.NDArray[np.float32]
+        Mutable array
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Sorted array
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import injection_with_indices
+    >>> array = np.array([1.0, 2.0, 3.0])
+    >>> idx = np.array([1,2,0])
+    >>> injection_with_indices(idx, array)
+    """
+    out = np.empty_like(a)
+    size = len(a)
+    for i in prange(size):
+        out[i] = a[idx[i]]
+    return out
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def injection_with_indices2(
+    idx: npt.NDArray[np.int32], a: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
+) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+    """Reorder array according to indices  \\
+    a[:,:] = a[idx,:]
+    b[:,:] = b[idx,:]
+
+    Parameters
+    ----------
+    idx : npt.NDArray[np.float32]
+        Indices to sort array
+    a : npt.NDArray[np.float32]
+        Mutable array
+    b : npt.NDArray[np.float32]
+        Mutable array
+
+    Returns
+    -------
+    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+        Sorted arrays
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import injection_with_indices
+    >>> array = np.array([1.0, 2.0, 3.0])
+    >>> idx = np.array([1,2,0])
+    >>> injection_with_indices(idx, array)
+    """
+    out_a = np.empty_like(a)
+    out_b = np.empty_like(b)
+    size = len(a)
+    for i in prange(size):
+        idx_tmp = idx[i]
+        out_a[i] = a[idx_tmp]
+        out_b[i] = b[idx_tmp]
+    return out_a, out_b
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def injection_with_indices3(
+    idx: npt.NDArray[np.int32],
+    a: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    c: npt.NDArray[np.float32],
+) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+    """Reorder array according to indices  \\
+    a[:,:] = a[idx,:]
+    b[:,:] = b[idx,:]
+    c[:,:] = c[idx,:]
+
+    Parameters
+    ----------
+    idx : npt.NDArray[np.float32]
+        Indices to sort array
+    a : npt.NDArray[np.float32]
+        Mutable array
+    b : npt.NDArray[np.float32]
+        Mutable array
+    c : npt.NDArray[np.float32]
+        Mutable array
+
+    Returns
+    -------
+    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+        Sorted arrays
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import injection_with_indices
+    >>> array = np.array([1.0, 2.0, 3.0])
+    >>> idx = np.array([1,2,0])
+    >>> injection_with_indices(idx, array)
+    """
+    out_a = np.empty_like(a)
+    out_b = np.empty_like(b)
+    out_c = np.empty_like(c)
+    size = len(a)
+    for i in prange(size):
+        idx_tmp = idx[i]
+        out_a[i] = a[idx_tmp]
+        out_b[i] = b[idx_tmp]
+        out_c[i] = c[idx_tmp]
+    return out_a, out_b, out_c
+
+
 @time_me
 def reorder_particles(
     position: npt.NDArray[np.float32],
@@ -782,11 +904,15 @@ def reorder_particles(
         arg = argsort_par(index)
     else:
         arg = np.argsort(index)
-    position[:] = position[arg, :]
-    if velocity is not None:
-        velocity[:] = velocity[arg, :]
+
     if acceleration is not None:
-        acceleration[:] = acceleration[arg, :]
+        position, velocity, acceleration = injection_with_indices3(
+            arg, position, velocity, acceleration
+        )
+    elif velocity is not None:
+        position, velocity = injection_with_indices2(arg, position, velocity)
+    else:
+        position = injection_with_indices(arg, position)
 
 
 @time_me
@@ -794,7 +920,7 @@ def reorder_particles(
 def argsort_par(
     indices: npt.NDArray[np.int64],
 ) -> npt.NDArray[np.int64]:
-    """Reorder particles inplace with Morton indices
+    """Parallel partial argsort algorithm
 
     Parameters
     ----------
@@ -811,7 +937,7 @@ def argsort_par(
     size = len(indices)
     nthreads = numba.get_num_threads()
     group, remainder = np.divmod(size, nthreads)
-    result = np.empty_like(indices)
+    sorted = np.empty_like(indices)
     for i in prange(nthreads):
         if remainder == 0:
             imin = i * group
@@ -822,9 +948,8 @@ def argsort_par(
         else:
             imin = remainder * (group + 1) + (i - remainder) * group
             imax = imin + group
-        result[imin:imax] = np.argsort(indices[imin:imax]) + imin
-        print(i, imin, imax, size)
-    return result
+        sorted[imin:imax] = np.argsort(indices[imin:imax]) + imin
+    return sorted
 
 
 @njit(fastmath=True, cache=True, parallel=True)
