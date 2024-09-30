@@ -296,9 +296,9 @@ def restrict_residual(
     ):
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
-            return -mesh.restriction(cubic.operator(x, b, h, q))
+            return mesh.minus_restriction(cubic.operator(x, b, h, q))
         elif param["fR_n"] == 2:
-            return -mesh.restriction(quartic.operator(x, b, h, q))
+            return mesh.minus_restriction(quartic.operator(x, b, h, q))
         else:
             raise NotImplemented(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"

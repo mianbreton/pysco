@@ -763,8 +763,8 @@ def injection(a: npt.NDArray, b: npt.NDArray) -> None:
     --------
     >>> import numpy as np
     >>> from pysco.utils import injection
-    >>> array = np.array([1.0, 2.0, 3.0])
-    >>> idx = np.array([1,2,0])
+    >>> a = np.random.rand(64)
+    >>> b = np.random.rand(64)
     >>> injection(a, b)
     """
     ar = a.ravel()
@@ -791,10 +791,10 @@ def injection_to_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.utils import injection
-    >>> array = np.array([1.0, 2.0, 3.0])
-    >>> idx = np.array([1,2,0])
-    >>> injection(a, b)
+    >>> from pysco.utils import injection_to_gradient
+    >>> a = np.random.rand(64, 3)
+    >>> b = np.random.rand(64)
+    >>> injection_to_gradient(a, b, 1)
     """
     ii, jj, kk = b.shape
     for i in prange(ii):
@@ -822,9 +822,9 @@ def injection_from_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
     --------
     >>> import numpy as np
     >>> from pysco.utils import injection
-    >>> array = np.array([1.0, 2.0, 3.0])
-    >>> idx = np.array([1,2,0])
-    >>> injection(a, b)
+    >>> a = np.random.rand(64)
+    >>> b = np.random.rand(64, 3)
+    >>> injection(a, b, 1)
     """
     ii, jj, kk = a.shape
     for i in prange(ii):
@@ -862,8 +862,7 @@ def injection_with_indices(
     >>> sorted = injection_with_indices(idx, array)
     """
     out = np.empty_like(a)
-    size = len(a)
-    for i in prange(size):
+    for i in prange(len(a)):
         out[i] = a[idx[i]]
     return out
 
@@ -902,8 +901,7 @@ def injection_with_indices2(
     """
     out_a = np.empty_like(a)
     out_b = np.empty_like(b)
-    size = len(a)
-    for i in prange(size):
+    for i in prange(len(a)):
         idx_tmp = idx[i]
         out_a[i] = a[idx_tmp]
         out_b[i] = b[idx_tmp]
@@ -952,8 +950,7 @@ def injection_with_indices3(
     out_a = np.empty_like(a)
     out_b = np.empty_like(b)
     out_c = np.empty_like(c)
-    size = len(a)
-    for i in prange(size):
+    for i in prange(len(a)):
         idx_tmp = idx[i]
         out_a[i] = a[idx_tmp]
         out_b[i] = b[idx_tmp]

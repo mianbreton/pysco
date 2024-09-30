@@ -58,6 +58,54 @@ def restriction(
                 )
     return result
 
+@njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+def minus_restriction(
+    x: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Restriction operator (with minus sign) \\
+    Interpolate field to coarser level.
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import minus_restriction
+    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> result = minus_restriction(x)
+    """
+    minus_inveighth = np.float32(-0.125)
+    ncells_1d = x.shape[0] >> 1
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(ncells_1d):
+        ii = 2 * i
+        iip1 = ii + 1
+        for j in prange(ncells_1d):
+            jj = 2 * j
+            jjp1 = jj + 1
+            for k in prange(ncells_1d):
+                kk = 2 * k
+                kkp1 = kk + 1
+                result[i, j, k] = minus_inveighth * (
+                    x[ii, jj, kk]
+                    + x[ii, jj, kkp1]
+                    + x[ii, jjp1, kk]
+                    + x[ii, jjp1, kkp1]
+                    + x[iip1, jj, kk]
+                    + x[iip1, jj, kkp1]
+                    + x[iip1, jjp1, kk]
+                    + x[iip1, jjp1, kkp1]
+                )
+    return result
+
 
 @njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
 def restriction_half(

@@ -60,6 +60,28 @@ The goal is to develop a Python-based N-body code that is user-friendly and effi
 
 ## Getting Started
 
+### Installation
+
+The first method is to pip install pysco using
+
+```sh
+python -m pip install pysco-nbody
+```
+
+Otherwise, it is possible to install directly from source
+
+```sh
+git clone https://github.com/mianbreton/pysco.git
+cd pysco
+python -m pip install -e .
+```
+
+It is then possible to access other branches. If one wants to use the `feature/AwesomeNewFeature` branch but without having to download the source directory, it is possible to pip install directly from github
+
+```sh
+python -m pip install git+https://github.com/mianbreton/pysco.git@feature/AwesomeNewFeature
+```
+
 ### Prerequisites
 
 All dependencies will be automatically installed when using pip install (see [Installation](#installation)) so you can skip the remainder of this section.
@@ -128,28 +150,6 @@ However, if you prefer to install each of them by hand, then you will need the f
 
   <p align="right">(<a href="#top">back to top</a>)</p>
 
-### Installation
-
-The first method is to pip install pysco using
-
-```sh
-python -m pip install pysco-nbody
-```
-
-Otherwise, it is possible to install directly from source
-
-```sh
-git clone https://github.com/mianbreton/pysco.git
-cd pysco
-python -m pip install -e .
-```
-
-It is then possible to access other branches. If one wants to use the `feature/AwesomeNewFeature` branch but without having to download the source directory, it is possible to pip install directly from github
-
-```sh
-python -m pip install git+https://github.com/mianbreton/pysco.git@feature/AwesomeNewFeature
-```
-
 <!-- USAGE EXAMPLES -->
 
 ## Usage
@@ -199,7 +199,7 @@ npart = 128**3 # Number of particles in the simulation
 # Initial conditions
 z_start = 49 # Starting redshift of the simulation
 seed = 42 # Seed for random number generation (completely random if negative)
-position_ICS = edge # Initial particle position on uniform grid. Put "center" or "edge" to start from cell centers or edges.
+position_ICS = center # Initial particle position on uniform grid. Put "center" or "edge" to start from cell centers or edges.
 fixed_ICS = False # Use fixed initial conditions (Gaussian Random Field). If True, fixes the amplitude to match exactly the input P(k)
 paired_ICS = False # Use paired initial conditions. If True, add π to the random phases (works only with fixed_ICS = True)
 dealiased_ICS = False # Dealiasing 2LPT and 3LPT components using Orszag 3/2 rule
@@ -213,10 +213,10 @@ save_power_spectrum = all # Save power spectra. Either 'no', 'z_out' for specifi
 # Particles
 integrator = leapfrog # Integration scheme for time-stepping "Leapfrog" or "Euler"
 mass_scheme = TSC # CIC or TSC
-n_reorder = 25  # Re-order particles every n_reorder steps
+n_reorder = 50  # Re-order particles every n_reorder steps
 # Time stepping
-Courant_factor = 1.0 # Cell fraction for time stepping based on velocity/acceleration (Courant_factor < 1 means more time steps)
-max_aexp_stepping = 10 # Maximum percentage [%] of scale factor that cannot be exceeded by a time step
+Courant_factor = 0.8 # Cell fraction for time stepping based on velocity/acceleration (Courant_factor < 1 means more time steps)
+max_aexp_stepping = 5 # Maximum percentage [%] of scale factor that cannot be exceeded by a time step
 # Newtonian solver
 linear_newton_solver = multigrid # Linear solver for Newton's method: "multigrid", "fft" or "full_fft"
 gradient_stencil_order = 5 # n-point stencil with n = 2, 3, 5 or 7
@@ -265,7 +265,7 @@ param = {
     "npart": 128**3,
     "z_start": 49,
     "seed": 42,
-    "position_ICS": "edge",
+    "position_ICS": "center",
     "fixed_ICS": False,
     "paired_ICS": False,
     "dealiased_ICS": False,
@@ -276,10 +276,10 @@ param = {
     "output_snapshot_format": "HDF5",
     "save_power_spectrum": "yes",
     "integrator": "leapfrog",
-    "n_reorder": 25,
+    "n_reorder": 50,
     "mass_scheme": "TSC",
-    "Courant_factor": 1.0,
-    "max_aexp_stepping", 10,
+    "Courant_factor": 0.8,
+    "max_aexp_stepping", 5,
     "linear_newton_solver": "multigrid",
     "gradient_stencil_order": 5,
     "Npre": 2,
@@ -391,8 +391,8 @@ Since PySCo does not use classes (not supported by Numba), we made it straightfo
 ```python
 import numpy as np
 from pysco.mesh import TSC
-particles = np.random.rand(32**3, 3).astype(np.float32)
-grid_density = TSC(particles, ncells_1d=64)
+positions = np.random.rand(32**3, 3).astype(np.float32)
+density_grid = TSC(positions, ncells_1d=64)
 ```
 
 - Interpolating to a finer grid
@@ -411,7 +411,7 @@ import numpy as np
 from pysco.utils import reorder_particles
 position = np.random.rand(64, 3).astype(np.float32)
 velocity = np.random.rand(64, 3).astype(np.float32)
-reorder_particles(position, velocity)
+position, velocity = reorder_particles(position, velocity)
 ```
 
 - FFT a real-valued grid and compute power spectrum
