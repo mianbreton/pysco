@@ -25,20 +25,24 @@ def inner_gradient_simple(force: npt.NDArray[np.float32], g0: np.float32) -> Non
     g0 : np.float32
         Acceleration constant
     """
-    half = np.float32(0.5)
     one = np.float32(1)
-    four = np.float32(4)
+    half = np.float32(0.5)
+    invfour = np.float32(0.25)
     inv_g0 = np.float32(1.0 / g0)
-    force_ravel = force.ravel()
-    size = force_ravel.shape[0]
-    for i in prange(size):
-        force_tmp = force_ravel[i]
-        if force_tmp == 0:
-            force_ravel[i] = 0
-            continue
-        y = abs(force_tmp) * inv_g0
-        nu = half + half * math.sqrt(one + four / y)
-        force_ravel[i] *= nu
+    ncells_1d = len(force)
+    for i in prange(ncells_1d):
+        for j in prange(ncells_1d):
+            for k in prange(ncells_1d):
+                force_x, force_y, force_z = force[i, j, k]
+                force_abs = force_x**2 + force_y**2 + force_z**2
+                if force_abs == 0:
+                    continue
+                else:
+                    y = math.sqrt(force_abs) * inv_g0
+                    nu = half + math.sqrt(invfour + one / y)
+                    force[i, j, k, 0] *= nu
+                    force[i, j, k, 1] *= nu
+                    force[i, j, k, 2] *= nu
 
 
 @njit(["void(f4[:,:,:,::1], f4, i4)"], fastmath=True, cache=True, parallel=True)
@@ -61,19 +65,22 @@ def inner_gradient_n(force: npt.NDArray[np.float32], g0: np.float32, n: int) -> 
     )  # LLVM sometimes cannot compile if n is an integer. Hope this gets fixed.
     inv_n = np.float32(1.0 / n)
     half = np.float32(0.5)
-    one = np.float32(1)
-    four = np.float32(4)
+    invfour = np.float32(0.25)
     inv_g0 = np.float32(1.0 / g0)
-    force_ravel = force.ravel()
-    size = force_ravel.shape[0]
-    for i in prange(size):
-        force_tmp = force_ravel[i]
-        if force_tmp == 0:
-            force_ravel[i] = 0
-            continue
-        y = abs(force_tmp) * inv_g0
-        nu = (half + half * math.sqrt(one + four * y**minus_n)) ** inv_n
-        force_ravel[i] *= nu
+    ncells_1d = len(force)
+    for i in prange(ncells_1d):
+        for j in prange(ncells_1d):
+            for k in prange(ncells_1d):
+                force_x, force_y, force_z = force[i, j, k]
+                force_abs = force_x**2 + force_y**2 + force_z**2
+                if force_abs == 0:
+                    continue
+                else:
+                    y = math.sqrt(force_abs) * inv_g0
+                    nu = (half + math.sqrt(invfour + y**minus_n)) ** inv_n
+                    force[i, j, k, 0] *= nu
+                    force[i, j, k, 1] *= nu
+                    force[i, j, k, 2] *= nu
 
 
 @njit(["void(f4[:,:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True)
@@ -96,20 +103,24 @@ def inner_gradient_beta(
     minus_half = np.float32(-0.5)
     one = np.float32(1)
     inv_g0 = np.float32(1.0 / g0)
-    force_ravel = force.ravel()
-    size = force_ravel.shape[0]
-    for i in prange(size):
-        force_tmp = force_ravel[i]
-        if force_tmp == 0:
-            force_ravel[i] = 0
-            continue
-        y = abs(force_tmp) * inv_g0
-        exp_minus_y = math.exp(-y)
-        nu = beta * exp_minus_y
-        one_minus_expmy = one - exp_minus_y
-        if one_minus_expmy > 0:
-            nu += one_minus_expmy**minus_half
-        force_ravel[i] *= nu
+    ncells_1d = len(force)
+    for i in prange(ncells_1d):
+        for j in prange(ncells_1d):
+            for k in prange(ncells_1d):
+                force_x, force_y, force_z = force[i, j, k]
+                force_abs = force_x**2 + force_y**2 + force_z**2
+                if force_abs == 0:
+                    continue
+                else:
+                    y = math.sqrt(force_abs) * inv_g0
+                    exp_minus_y = math.exp(-y)
+                    nu = beta * exp_minus_y
+                    one_minus_expmy = one - exp_minus_y
+                    if one_minus_expmy > 0:
+                        nu += one_minus_expmy**minus_half
+                    force[i, j, k, 0] *= nu
+                    force[i, j, k, 1] *= nu
+                    force[i, j, k, 2] *= nu
 
 
 @njit(["void(f4[:,:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True)
@@ -134,19 +145,23 @@ def inner_gradient_gamma(
     half_gamma = np.float32(0.5 * gamma)
     inv_gamma = np.float32(gamma ** (-1))
     minus_inv_gamma = np.float32(-1.0 / gamma)
-    force_ravel = force.ravel()
-    size = force_ravel.shape[0]
-    for i in prange(size):
-        force_tmp = force_ravel[i]
-        if force_tmp == 0:
-            force_ravel[i] = 0
-            continue
-        y = abs(force_tmp) * inv_g0
-        exp_minus_y_halfgamma = math.exp(-(y**half_gamma))
-        nu = (one - exp_minus_y_halfgamma) ** (minus_inv_gamma) + (
-            one - inv_gamma
-        ) * exp_minus_y_halfgamma
-        force_ravel[i] *= nu
+    ncells_1d = len(force)
+    for i in prange(ncells_1d):
+        for j in prange(ncells_1d):
+            for k in prange(ncells_1d):
+                force_x, force_y, force_z = force[i, j, k]
+                force_abs = force_x**2 + force_y**2 + force_z**2
+                if force_abs == 0:
+                    continue
+                else:
+                    y = math.sqrt(force_abs) * inv_g0
+                    exp_minus_y_halfgamma = math.exp(-(y**half_gamma))
+                    nu = (one - exp_minus_y_halfgamma) ** (minus_inv_gamma) + (
+                        one - inv_gamma
+                    ) * exp_minus_y_halfgamma
+                    force[i, j, k, 0] *= nu
+                    force[i, j, k, 1] *= nu
+                    force[i, j, k, 2] *= nu
 
 
 @njit(["void(f4[:,:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True)
@@ -168,13 +183,17 @@ def inner_gradient_delta(
     inv_g0 = np.float32(1.0 / g0)
     half_delta = np.float32(0.5 * delta)
     minus_inv_delta = np.float32(-1.0 / delta)
-    force_ravel = force.ravel()
-    size = force_ravel.shape[0]
-    for i in prange(size):
-        force_tmp = force_ravel[i]
-        if force_tmp == 0:
-            force_ravel[i] = 0
-            continue
-        y = abs(force_tmp) * inv_g0
-        nu = (one - math.exp(-(y**half_delta))) ** (minus_inv_delta)
-        force_ravel[i] *= nu
+    ncells_1d = len(force)
+    for i in prange(ncells_1d):
+        for j in prange(ncells_1d):
+            for k in prange(ncells_1d):
+                force_x, force_y, force_z = force[i, j, k]
+                force_abs = force_x**2 + force_y**2 + force_z**2
+                if force_abs == 0:
+                    continue
+                else:
+                    y = math.sqrt(force_abs) * inv_g0
+                    nu = (one - math.exp(-(y**half_delta))) ** (minus_inv_delta)
+                    force[i, j, k, 0] *= nu
+                    force[i, j, k, 1] *= nu
+                    force[i, j, k, 2] *= nu

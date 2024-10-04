@@ -58,13 +58,24 @@ def linear(
     >>> # Call the linear multigrid solver
     >>> result = linear(x_initial, rhs, grid_size, parameters)
     """
-    if param["compute_additional_field"] and "fr" == param["theory"].casefold():
+    THEORY = param["theory"].casefold()
+    if param["compute_additional_field"] and "fr" == THEORY:
         tolerance = 1e-20  # For scalaron field do not use any tolerance threshold but rather a convergence of residual
     else:
         if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
             logging.info("Compute Truncation error")
-            param["tolerance"] = param["epsrel"] * truncation_error(x, h, param, rhs)
-        tolerance = param["tolerance"]
+            if not param["compute_additional_field"] and "mond" == THEORY:
+                param["tolerance_mond"] = param["epsrel"] * truncation_error(
+                    x, h, param, rhs
+                )
+            else:
+                param["tolerance"] = param["epsrel"] * truncation_error(
+                    x, h, param, rhs
+                )
+        if not param["compute_additional_field"] and "mond" == THEORY:
+            tolerance = param["tolerance_mond"]
+        else:
+            tolerance = param["tolerance"]
 
     logging.info("Start linear Multigrid")
     residual_err = 1e30
