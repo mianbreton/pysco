@@ -402,26 +402,23 @@ def rhs_poisson(
             * param["aexp"] ** param["mond_scale_factor_exponent"]
         )
         alpha = param["mond_alpha"]
-        force = mesh.derivative2(additional_field)
 
         MOND_FUNCTION = param["mond_function"].casefold()
-
         match MOND_FUNCTION:
             case "simple":
-                mond.inner_gradient_simple(force, g0)
+                density[:] = mond.rhs_simple(additional_field, g0)
             case "n":
-                mond.inner_gradient_n(force, g0, n=alpha)
+                density[:] = mond.rhs_n(additional_field, g0, n=alpha)
             case "beta":
-                mond.inner_gradient_beta(force, g0, beta=alpha)
+                density[:] = mond.rhs_beta(additional_field, g0, beta=alpha)
             case "gamma":
-                mond.inner_gradient_gamma(force, g0, gamma=alpha)
+                density[:] = mond.rhs_gamma(additional_field, g0, gamma=alpha)
             case "delta":
-                mond.inner_gradient_delta(force, g0, delta=alpha)
+                density[:] = mond.rhs_delta(additional_field, g0, delta=alpha)
             case _:
                 raise NotImplementedError(
                     f"{MOND_FUNCTION=}, should be 'simple', 'n', 'beta', 'gamma' or 'delta'"
                 )
-        mesh.divergence2(force, density)
     else:
         f1 = np.float32(
             1.5 * param["aexp"] * param["Om_m"] * param["parametrized_mu_z"]
