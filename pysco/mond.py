@@ -137,10 +137,15 @@ def nu_delta(y: np.float32, delta: np.float32) -> np.float32:
     return (one - math.exp(-(y**half_delta))) ** (minus_inv_delta)
 
 
-@njit(["f4[:,:,::1](f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
+@njit(
+    ["void(f4[:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
 def rhs_simple(
-    potential: npt.NDArray[np.float32], g0: np.float32
-) -> npt.NDArray[np.float32]:
+    potential: npt.NDArray[np.float32], out: npt.NDArray[np.float32], g0: np.float32
+) -> None:
     """
     This function implements the right-hand side of QUMOND Poisson equation using interpolating function
     with the simple parameterization.
@@ -149,20 +154,16 @@ def rhs_simple(
     ----------
     potential : npt.NDArray[np.float32]
         Newtonian Potential field [N, N, N]
+    out : npt.NDArray[np.float32]
+        Output array [N, N, N]
     g0 : np.float32
         Acceleration constant
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        MOND Laplacian of Potential field [N_cells_1d, N_cells_1d, N_cells_1d]
     """
-    zero = np.float32(0)
     inv_g0 = np.float32(1.0 / g0)
     ncells_1d = len(potential)
     invh = np.float32(ncells_1d)
+    inv4h = np.float32(0.25 * ncells_1d)
 
-    result = np.empty_like(potential)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -174,46 +175,124 @@ def rhs_simple(
                 kp1 = k + 1
 
                 potential_000 = potential[i, j, k]
-                # Point A at h/2, Point B at -h/2
-                fz_B = invh * (potential_000 - potential[i, j, km1])
-                fz_A = invh * (-potential_000 + potential[i, j, kp1])
-                fy_B = invh * (potential_000 - potential[i, jm1, k])
-                fy_A = invh * (-potential_000 + potential[i, jp1, k])
-                fx_B = invh * (potential_000 - potential[im1, j, k])
-                fx_A = invh * (-potential_000 + potential[ip1, j, k])
-
-                if (
-                    fz_B == zero
-                    or fz_A == zero
-                    or fy_B == zero
-                    or fy_A == zero
-                    or fx_B == zero
-                    or fx_A == zero
-                ):
-                    result[i, j, k] = zero
-                    continue
-                nu_x_A = nu_simple(abs(fx_A) * inv_g0)
-                nu_y_A = nu_simple(abs(fy_A) * inv_g0)
-                nu_z_A = nu_simple(abs(fz_A) * inv_g0)
-                nu_x_B = nu_simple(abs(fx_B) * inv_g0)
-                nu_y_B = nu_simple(abs(fy_B) * inv_g0)
-                nu_z_B = nu_simple(abs(fz_B) * inv_g0)
-
-                result[i, j, k] = invh * (
-                    nu_x_A * fx_A
-                    - nu_x_B * fx_B
-                    + nu_y_A * fy_A
-                    - nu_y_B * fy_B
-                    + nu_z_A * fz_A
-                    - nu_z_B * fz_B
+                # Point A at -h/2, Point B at +h/2 (same convention as Lüghausen et al. 2014)
+                # Ax
+                f_Ax_x = invh * (potential_000 - potential[im1, j, k])
+                f_Ax_y = inv4h * (
+                    potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                    + potential[im1, jp1, k]
+                    - potential[im1, jm1, k]
                 )
-    return result
+                f_Ax_z = inv4h * (
+                    potential[i, j, kp1]
+                    - potential[i, j, km1]
+                    + potential[im1, j, kp1]
+                    - potential[im1, j, km1]
+                )
+                f_Ax = math.sqrt(f_Ax_x**2 + f_Ax_y**2 + f_Ax_z**2)
+                # Bx
+                f_Bx_x = invh * (-potential_000 + potential[ip1, j, k])
+                f_Bx_y = inv4h * (
+                    potential[ip1, jp1, k]
+                    - potential[ip1, jm1, k]
+                    + potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                )
+                f_Bx_z = inv4h * (
+                    potential[ip1, j, kp1]
+                    - potential[ip1, j, km1]
+                    + potential[i, j, kp1]
+                    - potential[i, j, km1]
+                )
+                f_Bx = math.sqrt(f_Bx_x**2 + f_Bx_y**2 + f_Bx_z**2)
+                # Ay
+                f_Ay_y = invh * (potential_000 - potential[i, jm1, k])
+                f_Ay_x = inv4h * (
+                    potential[ip1, j, k]
+                    - potential[im1, j, k]
+                    + potential[ip1, jm1, k]
+                    - potential[im1, jm1, k]
+                )
+                f_Ay_z = inv4h * (
+                    potential[i, j, kp1]
+                    - potential[i, j, km1]
+                    + potential[i, jm1, kp1]
+                    - potential[i, jm1, km1]
+                )
+                f_Ay = math.sqrt(f_Ay_x**2 + f_Ay_y**2 + f_Ay_z**2)
+                # By
+                f_By_y = invh * (-potential_000 + potential[i, jp1, k])
+                f_By_x = inv4h * (
+                    potential[ip1, jp1, k]
+                    - potential[im1, jp1, k]
+                    + potential[ip1, j, k]
+                    - potential[im1, j, k]
+                )
+                f_By_z = inv4h * (
+                    potential[i, jp1, kp1]
+                    - potential[i, jp1, km1]
+                    + potential[i, j, kp1]
+                    - potential[i, j, km1]
+                )
+                f_By = math.sqrt(f_By_x**2 + f_By_y**2 + f_By_z**2)
+                # Az
+                f_Az_z = invh * (potential_000 - potential[i, j, km1])
+                f_Az_x = inv4h * (
+                    potential[ip1, j, k]
+                    - potential[im1, j, k]
+                    + potential[ip1, j, km1]
+                    - potential[im1, j, km1]
+                )
+                f_Az_y = inv4h * (
+                    potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                    + potential[i, jp1, km1]
+                    - potential[i, jm1, km1]
+                )
+                f_Az = math.sqrt(f_Az_x**2 + f_Az_y**2 + f_Az_z**2)
+                # Bz
+                f_Bz_z = invh * (-potential_000 + potential[i, j, kp1])
+                f_Bz_x = inv4h * (
+                    potential[ip1, j, kp1]
+                    - potential[im1, j, kp1]
+                    + potential[ip1, j, k]
+                    - potential[im1, j, k]
+                )
+                f_Bz_y = inv4h * (
+                    potential[i, jp1, kp1]
+                    - potential[i, jm1, kp1]
+                    + potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                )
+                f_Bz = math.sqrt(f_Bz_x**2 + f_Bz_y**2 + f_Bz_z**2)
+
+                nu_Ax = nu_simple(f_Ax * inv_g0)
+                nu_Ay = nu_simple(f_Ay * inv_g0)
+                nu_Az = nu_simple(f_Az * inv_g0)
+                nu_Bx = nu_simple(f_Bx * inv_g0)
+                nu_By = nu_simple(f_By * inv_g0)
+                nu_Bz = nu_simple(f_Bz * inv_g0)
+
+                out[i, j, k] = invh * (
+                    nu_Bx * f_Bx_x
+                    - nu_Ax * f_Ax_x
+                    + nu_By * f_By_y
+                    - nu_Ay * f_Ay_y
+                    + nu_Bz * f_Bz_z
+                    - nu_Az * f_Az_z
+                )
 
 
-@njit(["f4[:,:,::1](f4[:,:,::1], f4, i4)"], fastmath=True, cache=True, parallel=True)
+@njit(
+    ["void(f4[:,:,::1], f4[:,:,::1], f4, i4)"], fastmath=True, cache=True, parallel=True
+)
 def rhs_n(
-    potential: npt.NDArray[np.float32], g0: np.float32, n: int
-) -> npt.NDArray[np.float32]:
+    potential: npt.NDArray[np.float32],
+    out: npt.NDArray[np.float32],
+    g0: np.float32,
+    n: int,
+) -> None:
     """
     This function implements the right-hand side of QUMOND Poisson equation using n-family interpolating function
 
@@ -221,22 +300,18 @@ def rhs_n(
     ----------
     potential : npt.NDArray[np.float32]
         Newtonian Potential field [N, N, N]
+    out : npt.NDArray[np.float32]
+        Output array [N, N, N]
     g0 : np.float32
         Acceleration constant
     n : int
         Exponent of the n-family parameterization
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        MOND Laplacian of Potential field [N_cells_1d, N_cells_1d, N_cells_1d]
     """
-    zero = np.float32(0)
     inv_g0 = np.float32(1.0 / g0)
     ncells_1d = len(potential)
     invh = np.float32(ncells_1d)
+    inv4h = np.float32(0.25 * ncells_1d)
 
-    result = np.empty_like(potential)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -248,46 +323,123 @@ def rhs_n(
                 kp1 = k + 1
 
                 potential_000 = potential[i, j, k]
-                # Point A at h/2, Point B at -h/2
-                fz_B = invh * (potential_000 - potential[i, j, km1])
-                fz_A = invh * (-potential_000 + potential[i, j, kp1])
-                fy_B = invh * (potential_000 - potential[i, jm1, k])
-                fy_A = invh * (-potential_000 + potential[i, jp1, k])
-                fx_B = invh * (potential_000 - potential[im1, j, k])
-                fx_A = invh * (-potential_000 + potential[ip1, j, k])
-
-                if (
-                    fz_B == zero
-                    or fz_A == zero
-                    or fy_B == zero
-                    or fy_A == zero
-                    or fx_B == zero
-                    or fx_A == zero
-                ):
-                    result[i, j, k] = zero
-                    continue
-                nu_x_A = nu_n(abs(fx_A) * inv_g0, n)
-                nu_y_A = nu_n(abs(fy_A) * inv_g0, n)
-                nu_z_A = nu_n(abs(fz_A) * inv_g0, n)
-                nu_x_B = nu_n(abs(fx_B) * inv_g0, n)
-                nu_y_B = nu_n(abs(fy_B) * inv_g0, n)
-                nu_z_B = nu_n(abs(fz_B) * inv_g0, n)
-
-                result[i, j, k] = invh * (
-                    nu_x_A * fx_A
-                    - nu_x_B * fx_B
-                    + nu_y_A * fy_A
-                    - nu_y_B * fy_B
-                    + nu_z_A * fz_A
-                    - nu_z_B * fz_B
+                # Point A at -h/2, Point B at +h/2 (same convention as Lüghausen et al. 2014)
+                # Ax
+                f_Ax_x = invh * (potential_000 - potential[im1, j, k])
+                f_Ax_y = inv4h * (
+                    potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                    + potential[im1, jp1, k]
+                    - potential[im1, jm1, k]
                 )
-    return result
+                f_Ax_z = inv4h * (
+                    potential[i, j, kp1]
+                    - potential[i, j, km1]
+                    + potential[im1, j, kp1]
+                    - potential[im1, j, km1]
+                )
+                f_Ax = math.sqrt(f_Ax_x**2 + f_Ax_y**2 + f_Ax_z**2)
+                # Bx
+                f_Bx_x = invh * (-potential_000 + potential[ip1, j, k])
+                f_Bx_y = inv4h * (
+                    potential[ip1, jp1, k]
+                    - potential[ip1, jm1, k]
+                    + potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                )
+                f_Bx_z = inv4h * (
+                    potential[ip1, j, kp1]
+                    - potential[ip1, j, km1]
+                    + potential[i, j, kp1]
+                    - potential[i, j, km1]
+                )
+                f_Bx = math.sqrt(f_Bx_x**2 + f_Bx_y**2 + f_Bx_z**2)
+                # Ay
+                f_Ay_y = invh * (potential_000 - potential[i, jm1, k])
+                f_Ay_x = inv4h * (
+                    potential[ip1, j, k]
+                    - potential[im1, j, k]
+                    + potential[ip1, jm1, k]
+                    - potential[im1, jm1, k]
+                )
+                f_Ay_z = inv4h * (
+                    potential[i, j, kp1]
+                    - potential[i, j, km1]
+                    + potential[i, jm1, kp1]
+                    - potential[i, jm1, km1]
+                )
+                f_Ay = math.sqrt(f_Ay_x**2 + f_Ay_y**2 + f_Ay_z**2)
+                # By
+                f_By_y = invh * (-potential_000 + potential[i, jp1, k])
+                f_By_x = inv4h * (
+                    potential[ip1, jp1, k]
+                    - potential[im1, jp1, k]
+                    + potential[ip1, j, k]
+                    - potential[im1, j, k]
+                )
+                f_By_z = inv4h * (
+                    potential[i, jp1, kp1]
+                    - potential[i, jp1, km1]
+                    + potential[i, j, kp1]
+                    - potential[i, j, km1]
+                )
+                f_By = math.sqrt(f_By_x**2 + f_By_y**2 + f_By_z**2)
+                # Az
+                f_Az_z = invh * (potential_000 - potential[i, j, km1])
+                f_Az_x = inv4h * (
+                    potential[ip1, j, k]
+                    - potential[im1, j, k]
+                    + potential[ip1, j, km1]
+                    - potential[im1, j, km1]
+                )
+                f_Az_y = inv4h * (
+                    potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                    + potential[i, jp1, km1]
+                    - potential[i, jm1, km1]
+                )
+                f_Az = math.sqrt(f_Az_x**2 + f_Az_y**2 + f_Az_z**2)
+                # Bz
+                f_Bz_z = invh * (-potential_000 + potential[i, j, kp1])
+                f_Bz_x = inv4h * (
+                    potential[ip1, j, kp1]
+                    - potential[im1, j, kp1]
+                    + potential[ip1, j, k]
+                    - potential[im1, j, k]
+                )
+                f_Bz_y = inv4h * (
+                    potential[i, jp1, kp1]
+                    - potential[i, jm1, kp1]
+                    + potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                )
+                f_Bz = math.sqrt(f_Bz_x**2 + f_Bz_y**2 + f_Bz_z**2)
+                nu_Ax = nu_n(f_Ax * inv_g0, n)
+                nu_Ay = nu_n(f_Ay * inv_g0, n)
+                nu_Az = nu_n(f_Az * inv_g0, n)
+                nu_Bx = nu_n(f_Bx * inv_g0, n)
+                nu_By = nu_n(f_By * inv_g0, n)
+                nu_Bz = nu_n(f_Bz * inv_g0, n)
+
+                out[i, j, k] = invh * (
+                    nu_Bx * f_Bx_x
+                    - nu_Ax * f_Ax_x
+                    + nu_By * f_By_y
+                    - nu_Ay * f_Ay_y
+                    + nu_Bz * f_Bz_z
+                    - nu_Az * f_Az_z
+                )
 
 
-@njit(["f4[:,:,::1](f4[:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True)
+@njit(
+    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True
+)
 def rhs_beta(
-    potential: npt.NDArray[np.float32], g0: np.float32, beta: np.float32
-) -> npt.NDArray[np.float32]:
+    potential: npt.NDArray[np.float32],
+    out: npt.NDArray[np.float32],
+    g0: np.float32,
+    beta: np.float32,
+) -> None:
     """
     This function implements the right-hand side of QUMOND Poisson equation using beta-family interpolating function
 
@@ -295,22 +447,18 @@ def rhs_beta(
     ----------
     potential : npt.NDArray[np.float32]
         Newtonian Potential field [N, N, N]
+    out : npt.NDArray[np.float32]
+        Output array [N, N, N]
     g0 : np.float32
         Acceleration constant
     beta : np.float32
         Parameter of the beta-family parameterization
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        MOND Laplacian of Potential field [N_cells_1d, N_cells_1d, N_cells_1d]
     """
-    zero = np.float32(0)
     inv_g0 = np.float32(1.0 / g0)
     ncells_1d = len(potential)
     invh = np.float32(ncells_1d)
+    inv4h = np.float32(0.25 * ncells_1d)
 
-    result = np.empty_like(potential)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -322,46 +470,123 @@ def rhs_beta(
                 kp1 = k + 1
 
                 potential_000 = potential[i, j, k]
-                # Point A at h/2, Point B at -h/2
-                fz_B = invh * (potential_000 - potential[i, j, km1])
-                fz_A = invh * (-potential_000 + potential[i, j, kp1])
-                fy_B = invh * (potential_000 - potential[i, jm1, k])
-                fy_A = invh * (-potential_000 + potential[i, jp1, k])
-                fx_B = invh * (potential_000 - potential[im1, j, k])
-                fx_A = invh * (-potential_000 + potential[ip1, j, k])
-
-                if (
-                    fz_B == zero
-                    or fz_A == zero
-                    or fy_B == zero
-                    or fy_A == zero
-                    or fx_B == zero
-                    or fx_A == zero
-                ):
-                    result[i, j, k] = zero
-                    continue
-                nu_x_A = nu_beta(abs(fx_A) * inv_g0, beta)
-                nu_y_A = nu_beta(abs(fy_A) * inv_g0, beta)
-                nu_z_A = nu_beta(abs(fz_A) * inv_g0, beta)
-                nu_x_B = nu_beta(abs(fx_B) * inv_g0, beta)
-                nu_y_B = nu_beta(abs(fy_B) * inv_g0, beta)
-                nu_z_B = nu_beta(abs(fz_B) * inv_g0, beta)
-
-                result[i, j, k] = invh * (
-                    nu_x_A * fx_A
-                    - nu_x_B * fx_B
-                    + nu_y_A * fy_A
-                    - nu_y_B * fy_B
-                    + nu_z_A * fz_A
-                    - nu_z_B * fz_B
+                # Point A at -h/2, Point B at +h/2 (same convention as Lüghausen et al. 2014)
+                # Ax
+                f_Ax_x = invh * (potential_000 - potential[im1, j, k])
+                f_Ax_y = inv4h * (
+                    potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                    + potential[im1, jp1, k]
+                    - potential[im1, jm1, k]
                 )
-    return result
+                f_Ax_z = inv4h * (
+                    potential[i, j, kp1]
+                    - potential[i, j, km1]
+                    + potential[im1, j, kp1]
+                    - potential[im1, j, km1]
+                )
+                f_Ax = math.sqrt(f_Ax_x**2 + f_Ax_y**2 + f_Ax_z**2)
+                # Bx
+                f_Bx_x = invh * (-potential_000 + potential[ip1, j, k])
+                f_Bx_y = inv4h * (
+                    potential[ip1, jp1, k]
+                    - potential[ip1, jm1, k]
+                    + potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                )
+                f_Bx_z = inv4h * (
+                    potential[ip1, j, kp1]
+                    - potential[ip1, j, km1]
+                    + potential[i, j, kp1]
+                    - potential[i, j, km1]
+                )
+                f_Bx = math.sqrt(f_Bx_x**2 + f_Bx_y**2 + f_Bx_z**2)
+                # Ay
+                f_Ay_y = invh * (potential_000 - potential[i, jm1, k])
+                f_Ay_x = inv4h * (
+                    potential[ip1, j, k]
+                    - potential[im1, j, k]
+                    + potential[ip1, jm1, k]
+                    - potential[im1, jm1, k]
+                )
+                f_Ay_z = inv4h * (
+                    potential[i, j, kp1]
+                    - potential[i, j, km1]
+                    + potential[i, jm1, kp1]
+                    - potential[i, jm1, km1]
+                )
+                f_Ay = math.sqrt(f_Ay_x**2 + f_Ay_y**2 + f_Ay_z**2)
+                # By
+                f_By_y = invh * (-potential_000 + potential[i, jp1, k])
+                f_By_x = inv4h * (
+                    potential[ip1, jp1, k]
+                    - potential[im1, jp1, k]
+                    + potential[ip1, j, k]
+                    - potential[im1, j, k]
+                )
+                f_By_z = inv4h * (
+                    potential[i, jp1, kp1]
+                    - potential[i, jp1, km1]
+                    + potential[i, j, kp1]
+                    - potential[i, j, km1]
+                )
+                f_By = math.sqrt(f_By_x**2 + f_By_y**2 + f_By_z**2)
+                # Az
+                f_Az_z = invh * (potential_000 - potential[i, j, km1])
+                f_Az_x = inv4h * (
+                    potential[ip1, j, k]
+                    - potential[im1, j, k]
+                    + potential[ip1, j, km1]
+                    - potential[im1, j, km1]
+                )
+                f_Az_y = inv4h * (
+                    potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                    + potential[i, jp1, km1]
+                    - potential[i, jm1, km1]
+                )
+                f_Az = math.sqrt(f_Az_x**2 + f_Az_y**2 + f_Az_z**2)
+                # Bz
+                f_Bz_z = invh * (-potential_000 + potential[i, j, kp1])
+                f_Bz_x = inv4h * (
+                    potential[ip1, j, kp1]
+                    - potential[im1, j, kp1]
+                    + potential[ip1, j, k]
+                    - potential[im1, j, k]
+                )
+                f_Bz_y = inv4h * (
+                    potential[i, jp1, kp1]
+                    - potential[i, jm1, kp1]
+                    + potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                )
+                f_Bz = math.sqrt(f_Bz_x**2 + f_Bz_y**2 + f_Bz_z**2)
+                nu_Ax = nu_beta(f_Ax * inv_g0, beta)
+                nu_Ay = nu_beta(f_Ay * inv_g0, beta)
+                nu_Az = nu_beta(f_Az * inv_g0, beta)
+                nu_Bx = nu_beta(f_Bx * inv_g0, beta)
+                nu_By = nu_beta(f_By * inv_g0, beta)
+                nu_Bz = nu_beta(f_Bz * inv_g0, beta)
+
+                out[i, j, k] = invh * (
+                    nu_Bx * f_Bx_x
+                    - nu_Ax * f_Ax_x
+                    + nu_By * f_By_y
+                    - nu_Ay * f_Ay_y
+                    + nu_Bz * f_Bz_z
+                    - nu_Az * f_Az_z
+                )
 
 
-@njit(["f4[:,:,::1](f4[:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True)
+@njit(
+    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True
+)
 def rhs_gamma(
-    potential: npt.NDArray[np.float32], g0: np.float32, gamma: np.float32
-) -> npt.NDArray[np.float32]:
+    potential: npt.NDArray[np.float32],
+    out: npt.NDArray[np.float32],
+    g0: np.float32,
+    gamma: np.float32,
+) -> None:
     """
     This function implements the right-hand side of QUMOND Poisson equation using gamma-family interpolating function
 
@@ -369,22 +594,18 @@ def rhs_gamma(
     ----------
     potential : npt.NDArray[np.float32]
         Newtonian Potential field [N, N, N]
+    out : npt.NDArray[np.float32]
+        Output array [N, N, N]
     g0 : np.float32
         Acceleration constant
     gamma : np.float32
         Parameter of the gamma-family parameterization
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        MOND Laplacian of Potential field [N_cells_1d, N_cells_1d, N_cells_1d]
     """
-    zero = np.float32(0)
     inv_g0 = np.float32(1.0 / g0)
     ncells_1d = len(potential)
     invh = np.float32(ncells_1d)
+    inv4h = np.float32(0.25 * ncells_1d)
 
-    result = np.empty_like(potential)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -396,46 +617,123 @@ def rhs_gamma(
                 kp1 = k + 1
 
                 potential_000 = potential[i, j, k]
-                # Point A at h/2, Point B at -h/2
-                fz_B = invh * (potential_000 - potential[i, j, km1])
-                fz_A = invh * (-potential_000 + potential[i, j, kp1])
-                fy_B = invh * (potential_000 - potential[i, jm1, k])
-                fy_A = invh * (-potential_000 + potential[i, jp1, k])
-                fx_B = invh * (potential_000 - potential[im1, j, k])
-                fx_A = invh * (-potential_000 + potential[ip1, j, k])
-
-                if (
-                    fz_B == zero
-                    or fz_A == zero
-                    or fy_B == zero
-                    or fy_A == zero
-                    or fx_B == zero
-                    or fx_A == zero
-                ):
-                    result[i, j, k] = zero
-                    continue
-                nu_x_A = nu_gamma(abs(fx_A) * inv_g0, gamma)
-                nu_y_A = nu_gamma(abs(fy_A) * inv_g0, gamma)
-                nu_z_A = nu_gamma(abs(fz_A) * inv_g0, gamma)
-                nu_x_B = nu_gamma(abs(fx_B) * inv_g0, gamma)
-                nu_y_B = nu_gamma(abs(fy_B) * inv_g0, gamma)
-                nu_z_B = nu_gamma(abs(fz_B) * inv_g0, gamma)
-
-                result[i, j, k] = invh * (
-                    nu_x_A * fx_A
-                    - nu_x_B * fx_B
-                    + nu_y_A * fy_A
-                    - nu_y_B * fy_B
-                    + nu_z_A * fz_A
-                    - nu_z_B * fz_B
+                # Point A at -h/2, Point B at +h/2 (same convention as Lüghausen et al. 2014)
+                # Ax
+                f_Ax_x = invh * (potential_000 - potential[im1, j, k])
+                f_Ax_y = inv4h * (
+                    potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                    + potential[im1, jp1, k]
+                    - potential[im1, jm1, k]
                 )
-    return result
+                f_Ax_z = inv4h * (
+                    potential[i, j, kp1]
+                    - potential[i, j, km1]
+                    + potential[im1, j, kp1]
+                    - potential[im1, j, km1]
+                )
+                f_Ax = math.sqrt(f_Ax_x**2 + f_Ax_y**2 + f_Ax_z**2)
+                # Bx
+                f_Bx_x = invh * (-potential_000 + potential[ip1, j, k])
+                f_Bx_y = inv4h * (
+                    potential[ip1, jp1, k]
+                    - potential[ip1, jm1, k]
+                    + potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                )
+                f_Bx_z = inv4h * (
+                    potential[ip1, j, kp1]
+                    - potential[ip1, j, km1]
+                    + potential[i, j, kp1]
+                    - potential[i, j, km1]
+                )
+                f_Bx = math.sqrt(f_Bx_x**2 + f_Bx_y**2 + f_Bx_z**2)
+                # Ay
+                f_Ay_y = invh * (potential_000 - potential[i, jm1, k])
+                f_Ay_x = inv4h * (
+                    potential[ip1, j, k]
+                    - potential[im1, j, k]
+                    + potential[ip1, jm1, k]
+                    - potential[im1, jm1, k]
+                )
+                f_Ay_z = inv4h * (
+                    potential[i, j, kp1]
+                    - potential[i, j, km1]
+                    + potential[i, jm1, kp1]
+                    - potential[i, jm1, km1]
+                )
+                f_Ay = math.sqrt(f_Ay_x**2 + f_Ay_y**2 + f_Ay_z**2)
+                # By
+                f_By_y = invh * (-potential_000 + potential[i, jp1, k])
+                f_By_x = inv4h * (
+                    potential[ip1, jp1, k]
+                    - potential[im1, jp1, k]
+                    + potential[ip1, j, k]
+                    - potential[im1, j, k]
+                )
+                f_By_z = inv4h * (
+                    potential[i, jp1, kp1]
+                    - potential[i, jp1, km1]
+                    + potential[i, j, kp1]
+                    - potential[i, j, km1]
+                )
+                f_By = math.sqrt(f_By_x**2 + f_By_y**2 + f_By_z**2)
+                # Az
+                f_Az_z = invh * (potential_000 - potential[i, j, km1])
+                f_Az_x = inv4h * (
+                    potential[ip1, j, k]
+                    - potential[im1, j, k]
+                    + potential[ip1, j, km1]
+                    - potential[im1, j, km1]
+                )
+                f_Az_y = inv4h * (
+                    potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                    + potential[i, jp1, km1]
+                    - potential[i, jm1, km1]
+                )
+                f_Az = math.sqrt(f_Az_x**2 + f_Az_y**2 + f_Az_z**2)
+                # Bz
+                f_Bz_z = invh * (-potential_000 + potential[i, j, kp1])
+                f_Bz_x = inv4h * (
+                    potential[ip1, j, kp1]
+                    - potential[im1, j, kp1]
+                    + potential[ip1, j, k]
+                    - potential[im1, j, k]
+                )
+                f_Bz_y = inv4h * (
+                    potential[i, jp1, kp1]
+                    - potential[i, jm1, kp1]
+                    + potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                )
+                f_Bz = math.sqrt(f_Bz_x**2 + f_Bz_y**2 + f_Bz_z**2)
+                nu_Ax = nu_gamma(f_Ax * inv_g0, gamma)
+                nu_Ay = nu_gamma(f_Ay * inv_g0, gamma)
+                nu_Az = nu_gamma(f_Az * inv_g0, gamma)
+                nu_Bx = nu_gamma(f_Bx * inv_g0, gamma)
+                nu_By = nu_gamma(f_By * inv_g0, gamma)
+                nu_Bz = nu_gamma(f_Bz * inv_g0, gamma)
+
+                out[i, j, k] = invh * (
+                    nu_Bx * f_Bx_x
+                    - nu_Ax * f_Ax_x
+                    + nu_By * f_By_y
+                    - nu_Ay * f_Ay_y
+                    + nu_Bz * f_Bz_z
+                    - nu_Az * f_Az_z
+                )
 
 
-@njit(["f4[:,:,::1](f4[:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True)
+@njit(
+    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True
+)
 def rhs_delta(
-    potential: npt.NDArray[np.float32], g0: np.float32, delta: np.float32
-) -> npt.NDArray[np.float32]:
+    potential: npt.NDArray[np.float32],
+    out: npt.NDArray[np.float32],
+    g0: np.float32,
+    delta: np.float32,
+) -> None:
     """
     This function implements the right-hand side of QUMOND Poisson equation using delta-family interpolating function
 
@@ -443,22 +741,18 @@ def rhs_delta(
     ----------
     potential : npt.NDArray[np.float32]
         Newtonian Potential field [N, N, N]
+    out : npt.NDArray[np.float32]
+        Output array [N, N, N]
     g0 : np.float32
         Acceleration constant
     delta : np.float32
         Parameter of the delta-family parameterization
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        MOND Laplacian of Potential field [N_cells_1d, N_cells_1d, N_cells_1d]
     """
-    zero = np.float32(0)
     inv_g0 = np.float32(1.0 / g0)
     ncells_1d = len(potential)
     invh = np.float32(ncells_1d)
+    inv4h = np.float32(0.25 * ncells_1d)
 
-    result = np.empty_like(potential)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -470,37 +764,109 @@ def rhs_delta(
                 kp1 = k + 1
 
                 potential_000 = potential[i, j, k]
-                # Point A at h/2, Point B at -h/2
-                fz_B = invh * (potential_000 - potential[i, j, km1])
-                fz_A = invh * (-potential_000 + potential[i, j, kp1])
-                fy_B = invh * (potential_000 - potential[i, jm1, k])
-                fy_A = invh * (-potential_000 + potential[i, jp1, k])
-                fx_B = invh * (potential_000 - potential[im1, j, k])
-                fx_A = invh * (-potential_000 + potential[ip1, j, k])
-
-                if (
-                    fz_B == zero
-                    or fz_A == zero
-                    or fy_B == zero
-                    or fy_A == zero
-                    or fx_B == zero
-                    or fx_A == zero
-                ):
-                    result[i, j, k] = zero
-                    continue
-                nu_x_A = nu_delta(abs(fx_A) * inv_g0, delta)
-                nu_y_A = nu_delta(abs(fy_A) * inv_g0, delta)
-                nu_z_A = nu_delta(abs(fz_A) * inv_g0, delta)
-                nu_x_B = nu_delta(abs(fx_B) * inv_g0, delta)
-                nu_y_B = nu_delta(abs(fy_B) * inv_g0, delta)
-                nu_z_B = nu_delta(abs(fz_B) * inv_g0, delta)
-
-                result[i, j, k] = invh * (
-                    nu_x_A * fx_A
-                    - nu_x_B * fx_B
-                    + nu_y_A * fy_A
-                    - nu_y_B * fy_B
-                    + nu_z_A * fz_A
-                    - nu_z_B * fz_B
+                # Point A at -h/2, Point B at +h/2 (same convention as Lüghausen et al. 2014)
+                # Ax
+                f_Ax_x = invh * (potential_000 - potential[im1, j, k])
+                f_Ax_y = inv4h * (
+                    potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                    + potential[im1, jp1, k]
+                    - potential[im1, jm1, k]
                 )
-    return result
+                f_Ax_z = inv4h * (
+                    potential[i, j, kp1]
+                    - potential[i, j, km1]
+                    + potential[im1, j, kp1]
+                    - potential[im1, j, km1]
+                )
+                f_Ax = math.sqrt(f_Ax_x**2 + f_Ax_y**2 + f_Ax_z**2)
+                # Bx
+                f_Bx_x = invh * (-potential_000 + potential[ip1, j, k])
+                f_Bx_y = inv4h * (
+                    potential[ip1, jp1, k]
+                    - potential[ip1, jm1, k]
+                    + potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                )
+                f_Bx_z = inv4h * (
+                    potential[ip1, j, kp1]
+                    - potential[ip1, j, km1]
+                    + potential[i, j, kp1]
+                    - potential[i, j, km1]
+                )
+                f_Bx = math.sqrt(f_Bx_x**2 + f_Bx_y**2 + f_Bx_z**2)
+                # Ay
+                f_Ay_y = invh * (potential_000 - potential[i, jm1, k])
+                f_Ay_x = inv4h * (
+                    potential[ip1, j, k]
+                    - potential[im1, j, k]
+                    + potential[ip1, jm1, k]
+                    - potential[im1, jm1, k]
+                )
+                f_Ay_z = inv4h * (
+                    potential[i, j, kp1]
+                    - potential[i, j, km1]
+                    + potential[i, jm1, kp1]
+                    - potential[i, jm1, km1]
+                )
+                f_Ay = math.sqrt(f_Ay_x**2 + f_Ay_y**2 + f_Ay_z**2)
+                # By
+                f_By_y = invh * (-potential_000 + potential[i, jp1, k])
+                f_By_x = inv4h * (
+                    potential[ip1, jp1, k]
+                    - potential[im1, jp1, k]
+                    + potential[ip1, j, k]
+                    - potential[im1, j, k]
+                )
+                f_By_z = inv4h * (
+                    potential[i, jp1, kp1]
+                    - potential[i, jp1, km1]
+                    + potential[i, j, kp1]
+                    - potential[i, j, km1]
+                )
+                f_By = math.sqrt(f_By_x**2 + f_By_y**2 + f_By_z**2)
+                # Az
+                f_Az_z = invh * (potential_000 - potential[i, j, km1])
+                f_Az_x = inv4h * (
+                    potential[ip1, j, k]
+                    - potential[im1, j, k]
+                    + potential[ip1, j, km1]
+                    - potential[im1, j, km1]
+                )
+                f_Az_y = inv4h * (
+                    potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                    + potential[i, jp1, km1]
+                    - potential[i, jm1, km1]
+                )
+                f_Az = math.sqrt(f_Az_x**2 + f_Az_y**2 + f_Az_z**2)
+                # Bz
+                f_Bz_z = invh * (-potential_000 + potential[i, j, kp1])
+                f_Bz_x = inv4h * (
+                    potential[ip1, j, kp1]
+                    - potential[im1, j, kp1]
+                    + potential[ip1, j, k]
+                    - potential[im1, j, k]
+                )
+                f_Bz_y = inv4h * (
+                    potential[i, jp1, kp1]
+                    - potential[i, jm1, kp1]
+                    + potential[i, jp1, k]
+                    - potential[i, jm1, k]
+                )
+                f_Bz = math.sqrt(f_Bz_x**2 + f_Bz_y**2 + f_Bz_z**2)
+                nu_Ax = nu_delta(f_Ax * inv_g0, delta)
+                nu_Ay = nu_delta(f_Ay * inv_g0, delta)
+                nu_Az = nu_delta(f_Az * inv_g0, delta)
+                nu_Bx = nu_delta(f_Bx * inv_g0, delta)
+                nu_By = nu_delta(f_By * inv_g0, delta)
+                nu_Bz = nu_delta(f_Bz * inv_g0, delta)
+
+                out[i, j, k] = invh * (
+                    nu_Bx * f_Bx_x
+                    - nu_Ax * f_Ax_x
+                    + nu_By * f_By_y
+                    - nu_Ay * f_Ay_y
+                    + nu_Bz * f_Bz_z
+                    - nu_Az * f_Az_z
+                )

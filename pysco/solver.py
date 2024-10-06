@@ -406,15 +406,15 @@ def rhs_poisson(
         MOND_FUNCTION = param["mond_function"].casefold()
         match MOND_FUNCTION:
             case "simple":
-                density[:] = mond.rhs_simple(additional_field, g0)
+                mond.rhs_simple(additional_field, density, g0)
             case "n":
-                density[:] = mond.rhs_n(additional_field, g0, n=alpha)
+                mond.rhs_n(additional_field, density, g0, n=alpha)
             case "beta":
-                density[:] = mond.rhs_beta(additional_field, g0, beta=alpha)
+                mond.rhs_beta(additional_field, density, g0, beta=alpha)
             case "gamma":
-                density[:] = mond.rhs_gamma(additional_field, g0, gamma=alpha)
+                mond.rhs_gamma(additional_field, density, g0, gamma=alpha)
             case "delta":
-                density[:] = mond.rhs_delta(additional_field, g0, delta=alpha)
+                mond.rhs_delta(additional_field, density, g0, delta=alpha)
             case _:
                 raise NotImplementedError(
                     f"{MOND_FUNCTION=}, should be 'simple', 'n', 'beta', 'gamma' or 'delta'"
