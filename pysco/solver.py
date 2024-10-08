@@ -104,15 +104,15 @@ def pm(
         conversion = np.float32(ncells_1d**3 / param["npart"])
         utils.prod_vector_scalar_inplace(density, conversion)
 
-    save_pk = False
+    param["save_pk"] = False
     if param["save_power_spectrum"].casefold() == "yes".casefold() or (
         param["save_power_spectrum"].casefold() == "z_out".casefold()
         and param["write_snapshot"]
     ):
-        save_pk = True
+        param["save_pk"] = True
 
     LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
-    if save_pk and "multigrid" == LINEAR_NEWTON_SOLVER:
+    if param["save_pk"] and "multigrid" == LINEAR_NEWTON_SOLVER:
         density_fourier = fourier.fft_3D_real(density, param["nthreads"])
         k, Pk, Nmodes = fourier.fourier_grid_to_Pk(density_fourier, param["MAS_index"])
         density_fourier = 0
@@ -135,7 +135,7 @@ def pm(
             potential = multigrid.linear(potential, rhs, h, param)
             rhs = 0
         case "fft" | "fft_7pt":
-            potential = fft(rhs, param, save_pk)
+            potential = fft(rhs, param)
             rhs = 0
         case "full_fft":
             pass
@@ -159,7 +159,7 @@ def pm(
             ** 2
         )  # m -> km -> BU
         if LINEAR_NEWTON_SOLVER == "full_fft":
-            force = fft_force(rhs, param, save_pk)
+            force = fft_force(rhs, param, param["save_pk"])
             rhs = 0
             mesh.add_derivative_fR(
                 force,
@@ -178,7 +178,7 @@ def pm(
             )
     else:
         if LINEAR_NEWTON_SOLVER == "full_fft":
-            force = fft_force(rhs, param, save_pk)
+            force = fft_force(rhs, param, param["save_pk"])
             rhs = 0
         else:
             force = mesh.derivative(potential, param["gradient_stencil_order"])
@@ -347,14 +347,18 @@ def get_additional_field(
             return u_scalaron
         case "mond":
             rhs_poisson(density, additional_field, param)
-            additional_field = initialise_potential(
-                additional_field, density, h, param, tables
-            )
             LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
             if LINEAR_NEWTON_SOLVER == "multigrid":
+                additional_field = initialise_potential(
+                    additional_field, density, h, param, tables
+                )
                 additional_field = multigrid.linear(additional_field, density, h, param)
-            elif LINEAR_NEWTON_SOLVER == "fft":
+            elif LINEAR_NEWTON_SOLVER == "fft_7pt":
                 additional_field = fft(density, param)
+            else:
+                raise ValueError(
+                    f"{param['linear_newton_solver']=}, should be 'multigrid' or 'fft_7pt'"
+                )
             return additional_field
         case _:
             raise ValueError(
@@ -373,9 +377,9 @@ def rhs_poisson(
     Parameters
     ----------
     density : npt.NDArray[np.float32]
-        Density field
+        Density field (mutable)
     additional_field : npt.NDArray[np.float32]
-        Additional field
+        Additional field (immutable)
     param : pd.Series
         Parameter container
 
@@ -389,17 +393,18 @@ def rhs_poisson(
     >>> param = pd.Series({"aexp": 1.0, "Om_m": 0.3})
     >>> rhs_poisson(density, additional_field, param)
     """
-    if (
+    compute_MOND_potential = (
         param["compute_additional_field"] is False
         and "mond" == param["theory"].casefold()
-    ):
+    )
+    if compute_MOND_potential:
         g0 = (
             param["mond_g0"]
             * 1e-3
             * 1e-10
             * param["unit_t"] ** 2
             / param["unit_l"]
-            * param["aexp"] ** param["mond_scale_factor_exponent"]
+            * param["aexp"] ** (1 + param["mond_scale_factor_exponent"])
         )
         alpha = param["mond_alpha"]
 
@@ -431,7 +436,6 @@ def rhs_poisson(
 def fft(
     rhs: npt.NDArray[np.float32],
     param: pd.Series,
-    save_pk: bool = False,
 ) -> npt.NDArray[np.float32]:
     """Solves the Newtonian linear Poisson equation using Fast Fourier Transforms
 
@@ -441,8 +445,6 @@ def fft(
         Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
     param : pd.Series
         Parameter container
-    save_pk : bool
-        Save or not the Power spectrum, by default False
 
     Returns
     -------
@@ -461,15 +463,22 @@ def fft(
     MAS_index = param["MAS_index"]
     rhs_fourier = fourier.fft_3D_real(rhs, param["nthreads"])
     LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
-    if save_pk:
-        k, Pk, Nmodes = fourier.fourier_grid_to_Pk(rhs_fourier, MAS_index)
-        Pk *= (
-            (param["boxlen"] / len(rhs) ** 2) ** 3
-            / (1.5 * param["aexp"] * param["Om_m"]) ** 2
-            / param["parametrized_mu_z"] ** 2
-        )
-        k *= 2 * np.pi / param["boxlen"]
-        iostream.write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
+    compute_MOND_potential = (
+        param["compute_additional_field"] is False
+        and param["theory"] == "mond".casefold()
+    )
+
+    if "save_pk" in param:
+        # For MOND, must save pk for Newtonian RHS, not MONDian RHS.
+        if param["save_pk"] and not compute_MOND_potential:
+            k, Pk, Nmodes = fourier.fourier_grid_to_Pk(rhs_fourier, MAS_index)
+            Pk *= (
+                (param["boxlen"] / len(rhs) ** 2) ** 3
+                / (1.5 * param["aexp"] * param["Om_m"]) ** 2
+                / param["parametrized_mu_z"] ** 2
+            )
+            k *= 2 * np.pi / param["boxlen"]
+            iostream.write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
 
     match LINEAR_NEWTON_SOLVER:
         case "fft":
@@ -489,7 +498,6 @@ def fft(
 def fft_force(
     rhs: npt.NDArray[np.float32],
     param: pd.Series,
-    save_pk: bool = False,
 ) -> npt.NDArray[np.float32]:
     """Solves the Newtonian linear Poisson equation using Fast Fourier Transforms and outputs Force
 
@@ -499,8 +507,6 @@ def fft_force(
         Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
     param : pd.Series
         Parameter container
-    save_pk : bool
-        Save or not the Power spectrum, by default False
 
     Returns
     -------
@@ -524,16 +530,17 @@ def fft_force(
     else:
         force = fourier.gradient_inverse_laplacian_compensated(rhs_fourier, MAS_index)
 
-    if save_pk:
-        k, Pk, Nmodes = fourier.fourier_grid_to_Pk(rhs_fourier, MAS_index)
-        rhs_fourier = 0
-        Pk *= (
-            (param["boxlen"] / len(rhs) ** 2) ** 3
-            / (1.5 * param["aexp"] * param["Om_m"]) ** 2
-            / param["parametrized_mu_z"] ** 2
-        )
-        k *= 2 * np.pi / param["boxlen"]
-        iostream.write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
+    if "save_pk" in param:
+        if param["save_pk"]:
+            k, Pk, Nmodes = fourier.fourier_grid_to_Pk(rhs_fourier, MAS_index)
+            rhs_fourier = 0
+            Pk *= (
+                (param["boxlen"] / len(rhs) ** 2) ** 3
+                / (1.5 * param["aexp"] * param["Om_m"]) ** 2
+                / param["parametrized_mu_z"] ** 2
+            )
+            k *= 2 * np.pi / param["boxlen"]
+            iostream.write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
     rhs_fourier = 0
     return fourier.ifft_3D_real_grad(force, param["nthreads"])
 
