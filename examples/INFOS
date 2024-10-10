@@ -1,6 +1,6 @@
 In example/ you will find several example files which can be used by PySCo.
 
-The cosmology is ΛCDM (see arXiv:2111.08745 for more details) with paramters:
+The cosmology is ΛCDM (see arXiv:2111.08745 for more details) with parameters:
 
 h = 0.72000000
 Ωm = 0.257330000
@@ -16,13 +16,3 @@ ns = 0.96300000
 # Power spectrum
 file: pk_lcdmw7v2.dat
 COLUMNS: k [h/Mpc], P(k) [Mpc/h]^3
-
-# Mpgrafic Cosmological tables [format: ASCII]
-file: mpgrafic2ndorder_input_lcdmw7v2.dat
-COLUMNS: a, d ln a /dτsupercomoving/(H0/100), D+, d ln D+/ d ln a, D+(2), d ln D+(2) 
-/d ln a with τsupercomoving is the integral of dt/a2, D+ the linear growth rate (not normalised to 1 at z = 0), D+(2) the second order growth factor, and d ln D+(2) /d ln a its logarithmic derivative with respect to ln a.
-
-# RAMSES Cosmological Evolution tables [format: ASCII]
-file: ramses_input_lcdmw7v2.dat
-COLUMNS: a, H/H0,τsupercomoving· H0,tlookback·H0, tproper·H0 
-with a = 1 at z = 0 (today), t and τ = 0 at z = 0, a is the expansion factor, H the Hubble constant defined as hexp=1/a da/dτsupercomovin,τsupercomoving the supercomoving conformal time (integral of dt/a2), tlookback is the look-back time, tproper is integral of dt/a and so the comoving distance is given by -(c/H0) · (tproper·H0).

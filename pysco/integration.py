@@ -45,7 +45,7 @@ def integrate(
     additional_field : npt.NDArray[np.float32]
         Additional potential [N_cells_1d, N_cells_1d, N_cells_1d]
     tables : List[interp1d]
-        Interpolated functions [a(t), t(a), Dplus(a), H(a)]
+        Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
     param : pd.Series
         Parameter container
     t_snap_next : np.float32
@@ -72,7 +72,7 @@ def integrate(
     >>> acceleration = np.random.random((32, 32, 32)).astype(np.float32)
     >>> potential = np.random.random((32, 32, 32)).astype(np.float32)
     >>> additional_field = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100))]*4
+    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100))]*13
     >>> param = pd.Series({"H0": 100, "boxlen": 500, "Om_m": 0.3, "npart": 64, "save_power_spectrum": "no", "nthreads": 1, "theory": "newton", "linear_newton_solver": "fft", "epsrel": 1e-2, "Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
     >>> pos, vel, acc, potential, additional_field = integrate(position, velocity, acceleration, potential, additional_field, tables, param)
     """
@@ -87,33 +87,35 @@ def integrate(
     else:
         param["write_snapshot"] = False
 
-    logging.warning(
+    logging.info(
         f"Conditions: velocity {dt1=}, acceleration {dt2=}, scale factor {dt3=}"
     )
-    if param.integrator == "leapfrog":
-        return leapfrog(
-            position,
-            velocity,
-            acceleration,
-            potential,
-            additional_field,
-            dt,
-            tables,
-            param,
-        )
-    elif param.integrator == "euler":
-        return euler(
-            position,
-            velocity,
-            acceleration,
-            potential,
-            additional_field,
-            dt,
-            tables,
-            param,
-        )
-    else:
-        raise ValueError("ERROR: Integrator must be 'leapfrog' or 'euler'")
+    INTEGRATOR = param["integrator"].casefold()
+    match INTEGRATOR:
+        case "leapfrog":
+            return leapfrog(
+                position,
+                velocity,
+                acceleration,
+                potential,
+                additional_field,
+                dt,
+                tables,
+                param,
+            )
+        case "euler":
+            return euler(
+                position,
+                velocity,
+                acceleration,
+                potential,
+                additional_field,
+                dt,
+                tables,
+                param,
+            )
+        case _:
+            raise ValueError("ERROR: Integrator must be 'leapfrog' or 'euler'")
 
 
 def euler(
@@ -149,7 +151,7 @@ def euler(
     dt : np.float32
         Time step
     tables : List[interp1d]
-        Interpolated functions [a(t), t(a), Dplus(a), H(a)]
+        Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
     param : pd.Series
         Parameter container
 
@@ -177,10 +179,10 @@ def euler(
     utils.add_vector_scalar_inplace(position, velocity, dt)
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
-    param["aexp"] = tables[0](param["t"])
+    param["aexp"] = np.exp(tables[0](param["t"]))
     utils.set_units(param)
     utils.periodic_wrap(position)
-    utils.add_vector_scalar_inplace(velocity, acceleration, dt)
+    utils.add_vector_scalar_inplace(velocity, acceleration, -dt)
     acceleration, potential, additional_field = solver.pm(
         position, param, potential, additional_field, tables
     )
@@ -220,7 +222,7 @@ def leapfrog(
     dt : np.float32
         Time step
     tables : List[interp1d]
-        Interpolated functions [a(t), t(a), Dplus(a), H(a)]
+        Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
     param : pd.Series
         Parameter container
 
@@ -246,18 +248,18 @@ def leapfrog(
     >>> pos, vel, acc, potential, additional_field = leapfrog(position, velocity, acceleration, potential, additional_field, dt, tables, param)
     """
     half_dt = np.float32(0.5 * dt)
-    utils.add_vector_scalar_inplace(velocity, acceleration, half_dt)
+    utils.add_vector_scalar_inplace(velocity, acceleration, -half_dt)
     utils.add_vector_scalar_inplace(position, velocity, dt)
     param["t"] += dt
     param["aexp_old"] = param["aexp"]
-    param["aexp"] = tables[0](param["t"])
+    param["aexp"] = np.exp(tables[0](param["t"]))
     logging.info(f"{param['t']=} {param['aexp']=}")
     utils.set_units(param)
     utils.periodic_wrap(position)
     acceleration, potential, additional_field = solver.pm(
         position, param, potential, additional_field, tables
     )
-    utils.add_vector_scalar_inplace(velocity, acceleration, half_dt)
+    utils.add_vector_scalar_inplace(velocity, acceleration, -half_dt)
 
     return position, velocity, acceleration, potential, additional_field
 
@@ -350,4 +352,7 @@ def dt_weak_variation(
     >>> param = pd.Series({"aexp": 0.5})
     >>> dt = dt_weak_variation(func_t_a, param)
     """
-    return np.float32(func_t_a(1.1 * param["aexp"]) - func_t_a(param["aexp"]))
+    aexp_factor = 1.0 + 0.01 * param["max_aexp_stepping"]
+    return np.float32(
+        func_t_a(np.log(aexp_factor * param["aexp"])) - func_t_a(np.log(param["aexp"]))
+    )

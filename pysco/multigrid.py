@@ -58,23 +58,34 @@ def linear(
     >>> # Call the linear multigrid solver
     >>> result = linear(x_initial, rhs, grid_size, parameters)
     """
-    if param["compute_additional_field"]:
-        tolerance = 1e-20  # For additional field do not use any tolerance threshold but rather a convergence of residual
+    THEORY = param["theory"].casefold()
+    if param["compute_additional_field"] and "fr" == THEORY:
+        tolerance = 1e-20  # For scalaron field do not use any tolerance threshold but rather a convergence of residual
     else:
         if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
             logging.info("Compute Truncation error")
-            param["tolerance"] = param["epsrel"] * truncation_error(x, h, param, rhs)
-        tolerance = param["tolerance"]
+            if not param["compute_additional_field"] and "mond" == THEORY:
+                param["tolerance_mond"] = param["epsrel"] * truncation_error(
+                    x, h, param, rhs
+                )
+            else:
+                param["tolerance"] = param["epsrel"] * truncation_error(
+                    x, h, param, rhs
+                )
+        if not param["compute_additional_field"] and "mond" == THEORY:
+            tolerance = param["tolerance_mond"]
+        else:
+            tolerance = param["tolerance"]
 
     logging.info("Start linear Multigrid")
-    residual_error = 1e30
-    while residual_error > tolerance:
+    residual_err = 1e30
+    while residual_err > tolerance:
         V_cycle(x, rhs, param)
-        residual_error_tmp = residual_error_half(x, rhs, h, param)
+        residual_error_tmp = residual_error(x, rhs, h, param)
         logging.info(f"{residual_error_tmp=} {tolerance=}")
-        if residual_error_tmp < tolerance or residual_error / residual_error_tmp < 2:
+        if residual_error_tmp < tolerance or residual_err / residual_error_tmp < 2:
             break
-        residual_error = residual_error_tmp
+        residual_err = residual_error_tmp
     return x
 
 
@@ -130,7 +141,7 @@ def FAS(
     # Main procedure: Multigrid
     logging.info("Start Full-Approximation Storage Multigrid")
     F_cycle_FAS(x, b, param)
-    residual_error_tmp = residual_error_half(x, b, h, param)
+    residual_error_tmp = residual_error(x, b, h, param)
     logging.info(f"{residual_error_tmp=} {tolerance=}")
     return x
 
@@ -176,7 +187,7 @@ def truncation_error(
     >>> # Call the truncation error estimator
     >>> error_estimate = truncation_error(potential, grid_size, parameters)
     """
-    if param["compute_additional_field"]:
+    if param["compute_additional_field"] and "fr" == param["theory"].casefold():
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
             return cubic.truncation_error(x, b, h, q)
@@ -191,13 +202,13 @@ def truncation_error(
 
 
 @utils.time_me
-def residual_error_half(
+def residual_error(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     h: np.float32,
     param: pd.Series,
 ) -> np.float32:
-    """Error on half of the residual (the other half is zero by construction)\\
+    """Error on the residual \\
     For residuals, we use the opposite convention compared to Numerical Recipes\\
     residual = f_h - L(u_h)
 
@@ -232,7 +243,10 @@ def residual_error_half(
     >>> # Call the function
     >>> error = residual_error_half(potential, density, grid_size, parameters)
     """
-    if param["compute_additional_field"]:
+    if (
+        param["compute_additional_field"]
+        and "fr".casefold() == param["theory"].casefold()
+    ):
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
             return cubic.residual_error_half(x, b, h, q)
@@ -244,7 +258,8 @@ def residual_error_half(
             )
 
     else:
-        return laplacian.residual_error_half(x, b, h)
+        # return laplacian.residual_error_half(x, b, h)
+        return laplacian.residual_error(x, b, h)
 
 
 def restrict_residual(
@@ -286,18 +301,22 @@ def restrict_residual(
     >>> # Call the function
     >>> restricted_residual = restrict_residual(potential, density, grid_size, parameters)
     """
-    if param["compute_additional_field"]:
+    if (
+        param["compute_additional_field"]
+        and "fr".casefold() == param["theory"].casefold()
+    ):
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
-            return -mesh.restriction(cubic.operator(x, b, h, q))
+            return mesh.minus_restriction(cubic.operator(x, b, h, q))
         elif param["fR_n"] == 2:
-            return -mesh.restriction(quartic.operator(x, b, h, q))
+            return mesh.minus_restriction(quartic.operator(x, b, h, q))
         else:
             raise NotImplemented(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
             )
     else:
-        return laplacian.restrict_residual_half(x, b, h)
+        return laplacian.restrict_residual(x, b, h)
+        # return laplacian.restrict_residual_half(x, b, h)
 
 
 def smoothing(
@@ -343,7 +362,7 @@ def smoothing(
     >>> # Call the function
     >>> smoothing(potential, density, grid_size, smoothing_iterations, parameters)
     """
-    if param["compute_additional_field"]:
+    if param["compute_additional_field"] and "fr" == param["theory"].casefold():
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
             if len(rhs) == 0:
@@ -415,7 +434,7 @@ def operator(
     >>> param = pd.Series({"compute_additional_field": False})
     >>> operator_result = operator(x, h, param)
     """
-    if param["compute_additional_field"]:
+    if param["compute_additional_field"] and "fr" == param["theory"].casefold():
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
             return cubic.operator(x, b, h, q)
@@ -470,12 +489,12 @@ def V_cycle(
     res_c = restrict_residual(x, b, h, param)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
 
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
         V_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npost"], param)
 
@@ -528,7 +547,7 @@ def V_cycle_FAS(
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
 
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
         V_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
@@ -582,23 +601,23 @@ def F_cycle(
     res_c = restrict_residual(x, b, h, param)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
 
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
         F_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npre"], param)
 
     res_c = restrict_residual(x, b, h, param)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
         V_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npost"], param)
 
@@ -650,7 +669,7 @@ def F_cycle_FAS(
     L_c = operator(x_c, two * h, param, b_c)
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
         F_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
@@ -667,7 +686,7 @@ def F_cycle_FAS(
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
 
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
         V_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
@@ -719,23 +738,23 @@ def W_cycle(
     smoothing(x, b, h, param["Npre"], param)
     res_c = restrict_residual(x, b, h, param)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
         W_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npre"], param)
 
     res_c = restrict_residual(x, b, h, param)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
     else:
         W_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npost"], param)
 
@@ -788,7 +807,7 @@ def W_cycle_FAS(
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
 
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
         W_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
@@ -806,7 +825,7 @@ def W_cycle_FAS(
     utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
     L_c = 0
 
-    if nlevel >= (param["ncoarse"] - 2):
+    if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
     else:
         W_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)

@@ -1,6 +1,7 @@
 """
 This module defines functions for solving a discretized three-dimensional Poisson equation using numerical methods.
 """
+
 import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange
@@ -127,6 +128,116 @@ def residual(
     cache=True,
     parallel=True,
 )
+def restrict_residual(
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
+) -> npt.NDArray[np.float32]:
+    """Restriction operator on half of the residual of Laplacian operator \\
+    residual = -(Ax - b)  \\
+    This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
+    in this case we can compute the residual and restriction for only half the points.
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import restrict_residual
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> result = restrict_residual(x, b, h)
+    """
+    inveight = np.float32(0.125)
+    three = np.float32(3.0)
+    invh2 = np.float32(h ** (-2))
+    ncells_1d = x.shape[0] >> 1
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    for i in prange(-1, ncells_1d - 1):
+        ii = 2 * i
+        iim1 = ii - 1
+        iip1 = ii + 1
+        iip2 = iip1 + 1
+        for j in prange(-1, ncells_1d - 1):
+            jj = 2 * j
+            jjm1 = jj - 1
+            jjp1 = jj + 1
+            jjp2 = jjp1 + 1
+            for k in prange(-1, ncells_1d - 1):
+                kk = 2 * k
+                kkm1 = kk - 1
+                kkp1 = kk + 1
+                kkp2 = kkp1 + 1
+
+                result[i, j, k] = inveight * (
+                    -(
+                        +x[iim1, jj, kk]
+                        + x[iim1, jj, kkp1]
+                        + x[iim1, jjp1, kk]
+                        + x[iim1, jjp1, kkp1]
+                        + x[ii, jjm1, kk]
+                        + x[ii, jjm1, kkp1]
+                        + x[ii, jj, kkm1]
+                        + x[ii, jj, kkp2]
+                        + x[ii, jjp1, kkm1]
+                        + x[ii, jjp1, kkp2]
+                        + x[ii, jjp2, kk]
+                        + x[ii, jjp2, kkp1]
+                        + x[iip1, jjm1, kk]
+                        + x[iip1, jjm1, kkp1]
+                        + x[iip1, jj, kkm1]
+                        + x[iip1, jj, kkp2]
+                        + x[iip1, jjp1, kkm1]
+                        + x[iip1, jjp1, kkp2]
+                        + x[iip1, jjp2, kk]
+                        + x[iip1, jjp2, kkp1]
+                        + x[iip2, jj, kk]
+                        + x[iip2, jj, kkp1]
+                        + x[iip2, jjp1, kk]
+                        + x[iip2, jjp1, kkp1]
+                        - three
+                        * (
+                            x[ii, jj, kk]
+                            + x[ii, jj, kkp1]
+                            + x[ii, jjp1, kk]
+                            + x[ii, jjp1, kkp1]
+                            + x[iip1, jj, kk]
+                            + x[iip1, jj, kkp1]
+                            + x[iip1, jjp1, kk]
+                            + x[iip1, jjp1, kkp1]
+                        )
+                    )
+                    * invh2
+                    + b[ii, jj, kk]
+                    + b[ii, jj, kkp1]
+                    + b[ii, jjp1, kk]
+                    + b[ii, jjp1, kkp1]
+                    + b[iip1, jj, kk]
+                    + b[iip1, jj, kkp1]
+                    + b[iip1, jjp1, kk]
+                    + b[iip1, jjp1, kkp1]
+                )
+
+    return result
+
+
+@njit(
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
 def restrict_residual_half(
     x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
 ) -> npt.NDArray[np.float32]:
@@ -216,6 +327,67 @@ def restrict_residual_half(
                 )
 
     return result
+
+
+@njit(["f4(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
+def residual_error(
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
+) -> np.float32:
+    """Error on the residual of Laplacian operator  \\
+    residual = b - Ax  \\
+    error = sqrt[sum(residual**2)] \\
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+
+    Returns
+    -------
+    np.float32
+        Residual error
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import residual_error_half
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> h = np.float32(1./32)
+    >>> result = residual_error_half(x, b, h)
+    """
+    six = np.float32(6.0)
+    invh2 = np.float32(h ** (-2))
+    result = np.float32(0)
+    ncells_1d = x.shape[0]
+    for i in prange(-1, ncells_1d - 1):
+        im1 = i - 1
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jm1 = j - 1
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                km1 = k - 1
+                kp1 = k + 1
+                result += (
+                    -(
+                        +x[im1, j, k]
+                        + x[i, j, km1]
+                        + x[i, j, kp1]
+                        + x[i, jm1, k]
+                        - six * x[i, j, k]
+                        + x[i, jp1, k]
+                        + x[ip1, j, k]
+                    )
+                    * invh2
+                    + b[i, j, k]
+                ) ** 2
+
+    return np.sqrt(result)
 
 
 @njit(["f4(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
@@ -711,69 +883,57 @@ def gauss_seidel(
                 x010 = x[iim1, jj, kkm1]
                 x100 = x[ii, jjm1, kkm1]
                 x111 = x[ii, jj, kk]
-                x[iim1, jjm1, kkm1] += (
-                    f_relax
-                    * (
-                        (
-                            +x001
-                            + x010
-                            + x100
-                            + x[iim2, jjm1, kkm1]
-                            + x[iim1, jjm2, kkm1]
-                            + x[iim1, jjm1, kkm2]
-                            - h2 * b[iim1, jjm1, kkm1]
-                        )
-                        * invsix
+                x[iim1, jjm1, kkm1] += f_relax * (
+                    (
+                        +x001
+                        + x010
+                        + x100
+                        + x[iim2, jjm1, kkm1]
+                        + x[iim1, jjm2, kkm1]
+                        + x[iim1, jjm1, kkm2]
+                        - h2 * b[iim1, jjm1, kkm1]
                     )
-                    - f_relax * x[iim1, jjm1, kkm1]
+                    * invsix
+                    - x[iim1, jjm1, kkm1]
                 )
-                x[iim1, jj, kk] += (
-                    f_relax
-                    * (
-                        (
-                            +x001
-                            + x010
-                            + x111
-                            + x[iim2, jj, kk]
-                            - h2 * b[iim1, jj, kk]
-                            + x[iim1, jj, kkp1]
-                            + x[iim1, jjp1, kk]
-                        )
-                        * invsix
+                x[iim1, jj, kk] += f_relax * (
+                    (
+                        +x001
+                        + x010
+                        + x111
+                        + x[iim2, jj, kk]
+                        - h2 * b[iim1, jj, kk]
+                        + x[iim1, jj, kkp1]
+                        + x[iim1, jjp1, kk]
                     )
-                    - f_relax * x[iim1, jj, kk]
+                    * invsix
+                    - x[iim1, jj, kk]
                 )
-                x[ii, jjm1, kk] += (
-                    f_relax
-                    * (
-                        (
-                            x001
-                            + x111
-                            + x100
-                            + x[iip1, jjm1, kk]
-                            + x[ii, jjm2, kk]
-                            + x[ii, jjm1, kkp1]
-                            - h2 * b[ii, jjm1, kk]
-                        )
-                        * invsix
+                x[ii, jjm1, kk] += f_relax * (
+                    (
+                        x001
+                        + x111
+                        + x100
+                        + x[iip1, jjm1, kk]
+                        + x[ii, jjm2, kk]
+                        + x[ii, jjm1, kkp1]
+                        - h2 * b[ii, jjm1, kk]
                     )
-                    - f_relax * x[ii, jjm1, kk]
+                    * invsix
+                    - x[ii, jjm1, kk]
                 )
-                x[ii, jj, kkm1] += (
-                    f_relax
-                    * (
-                        (
-                            x010
-                            + x100
-                            + x111
-                            + x[ii, jj, kkm2]
-                            - h2 * b[ii, jj, kkm1]
-                            + x[ii, jjp1, kkm1]
-                            + x[iip1, jj, kkm1]
-                        )
-                        * invsix
+                x[ii, jj, kkm1] += f_relax * (
+                    (
+                        x010
+                        + x100
+                        + x111
+                        + x[ii, jj, kkm2]
+                        - h2 * b[ii, jj, kkm1]
+                        + x[ii, jjp1, kkm1]
+                        + x[iip1, jj, kkm1]
                     )
-                    - f_relax * x[ii, jj, kkm1]
+                    * invsix
+                    - x[ii, jj, kkm1]
                 )
 
     # Computation Black
@@ -797,69 +957,57 @@ def gauss_seidel(
                 x011 = x[iim1, jj, kk]
                 x101 = x[ii, jjm1, kk]
                 x110 = x[ii, jj, kkm1]
-                x[iim1, jjm1, kk] += (
-                    f_relax
-                    * (
-                        (
-                            +x000
-                            + x011
-                            + x101
-                            + x[iim2, jjm1, kk]
-                            + x[iim1, jjm2, kk]
-                            - h2 * b[iim1, jjm1, kk]
-                            + x[iim1, jjm1, kkp1]
-                        )
-                        * invsix
+                x[iim1, jjm1, kk] += f_relax * (
+                    (
+                        +x000
+                        + x011
+                        + x101
+                        + x[iim2, jjm1, kk]
+                        + x[iim1, jjm2, kk]
+                        - h2 * b[iim1, jjm1, kk]
+                        + x[iim1, jjm1, kkp1]
                     )
-                    - f_relax * x[iim1, jjm1, kk]
+                    * invsix
+                    - x[iim1, jjm1, kk]
                 )
-                x[iim1, jj, kkm1] += (
-                    f_relax
-                    * (
-                        (
-                            +x000
-                            + x011
-                            + x110
-                            + x[iim2, jj, kkm1]
-                            + x[iim1, jj, kkm2]
-                            - h2 * b[iim1, jj, kkm1]
-                            + x[iim1, jjp1, kkm1]
-                        )
-                        * invsix
+                x[iim1, jj, kkm1] += f_relax * (
+                    (
+                        +x000
+                        + x011
+                        + x110
+                        + x[iim2, jj, kkm1]
+                        + x[iim1, jj, kkm2]
+                        - h2 * b[iim1, jj, kkm1]
+                        + x[iim1, jjp1, kkm1]
                     )
-                    - f_relax * x[iim1, jj, kkm1]
+                    * invsix
+                    - x[iim1, jj, kkm1]
                 )
-                x[ii, jjm1, kkm1] += (
-                    f_relax
-                    * (
-                        (
-                            x000
-                            + x101
-                            + x110
-                            + x[ii, jjm2, kkm1]
-                            + x[ii, jjm1, kkm2]
-                            - h2 * b[ii, jjm1, kkm1]
-                            + x[iip1, jjm1, kkm1]
-                        )
-                        * invsix
+                x[ii, jjm1, kkm1] += f_relax * (
+                    (
+                        x000
+                        + x101
+                        + x110
+                        + x[ii, jjm2, kkm1]
+                        + x[ii, jjm1, kkm2]
+                        - h2 * b[ii, jjm1, kkm1]
+                        + x[iip1, jjm1, kkm1]
                     )
-                    - f_relax * x[ii, jjm1, kkm1]
+                    * invsix
+                    - x[ii, jjm1, kkm1]
                 )
-                x[ii, jj, kk] += (
-                    f_relax
-                    * (
-                        (
-                            x011
-                            + x101
-                            + x110
-                            - h2 * b[ii, jj, kk]
-                            + x[ii, jj, kkp1]
-                            + x[ii, jjp1, kk]
-                            + x[iip1, jj, kk]
-                        )
-                        * invsix
+                x[ii, jj, kk] += f_relax * (
+                    (
+                        x011
+                        + x101
+                        + x110
+                        - h2 * b[ii, jj, kk]
+                        + x[ii, jj, kkp1]
+                        + x[ii, jjp1, kk]
+                        + x[iip1, jj, kk]
                     )
-                    - f_relax * x[ii, jj, kk]
+                    * invsix
+                    - x[ii, jj, kk]
                 )
 
 
@@ -1044,12 +1192,17 @@ def smoothing(
     >>> n_smoothing = 5
     >>> smoothing(x, b, h, n_smoothing)
     """
-    # No over-relaxation because half prolongated
-    gauss_seidel_no_overrelaxation(x, b, h)
+
+    # Uncomment these lines if you want to use F or W cycles instead
+    """ gauss_seidel_no_overrelaxation(x, b, h)
     # gauss_seidel_no_overrelaxation.parallel_diagnostics(level=4)
     if n_smoothing > 1:
         f_relax = np.float32(1.3)
         for _ in range(n_smoothing - 2):
             gauss_seidel(x, b, h, f_relax)
         # No over-relaxation because half-residual / restriction
-        gauss_seidel_no_overrelaxation(x, b, h)
+        gauss_seidel_no_overrelaxation(x, b, h) """
+
+    f_relax = np.float32(1.25)  # As in Kravtsov et al. 1997
+    for _ in range(n_smoothing):
+        gauss_seidel(x, b, h, f_relax)
