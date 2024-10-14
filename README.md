@@ -172,6 +172,10 @@ A example parameter file is available in `examples/param.ini`. **All strings (ex
 
 ```sh
 # examples/param.ini
+# Run this test from the pysco directory, as
+# python pysco/main.py -c examples/param.ini
+# All strings (except paths and filenames) are case insensitive
+##################################################
 nthreads = 1  # Number of threads to use in the simulation. For nthreads <= 0 use all threads
 # Theoretical model
 theory= newton # Cosmological theory to use, either "Newton", "fR", "mond" or "parametrized"
@@ -186,14 +190,14 @@ mond_alpha = 1 #  Interpolating function parameter
 ## Parametrized
 parametrized_mu0 = -0.1 # If null, then is equivalent to GR. Model from Abbott et al. (2019)
 # Cosmology -- Put more parameters later
-H0 = 68  # Hubble constant at redshift z=0 (in km/s/Mpc).
-Om_m = 0.31   # Matter density parameter
+H0 = 72  # Hubble constant at redshift z=0 (in km/s/Mpc).
+Om_m = 0.25733   # Matter density parameter
 T_cmb = 2.726 # CMB temperature parameter
 N_eff = 3.044 # Effective number of neutrino species (by default 3.044)
 w0 = -1.0 # Equation of state for dark energy
 wa = 0.0 # Evolution parameter for dark energy equation of state
 # Simulation dimension
-boxlen = 500  # Simulation box length (in Mpc/h)
+boxlen = 100  # Simulation box length (in Mpc/h)
 ncoarse = 7 # Coarse level. Total number of cells = 2**(3*ncoarse)
 npart = 128**3 # Number of particles in the simulation
 # Initial conditions
@@ -203,35 +207,35 @@ position_ICS = center # Initial particle position on uniform grid. Put "center" 
 fixed_ICS = False # Use fixed initial conditions (Gaussian Random Field). If True, fixes the amplitude to match exactly the input P(k)
 paired_ICS = False # Use paired initial conditions. If True, add π to the random phases (works only with fixed_ICS = True)
 dealiased_ICS = False # Dealiasing 2LPT and 3LPT components using Orszag 3/2 rule
-power_spectrum_file = /home/user/pysco/examples/pk_lcdmw7v2.dat # File path to the power spectrum data
-initial_conditions = 3LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or .h5 RayGal file, or snapshot number (for restart). Else, assumes Gadget format
+power_spectrum_file = examples/pk_lcdmw7v2.dat # File path to the power spectrum data
+initial_conditions = 2LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or or snapshot number (for restart), or .h5 RayGal file. Else, assumes Gadget format
 # Outputs
-base=/home/user/boxlen500_n128_lcdm/ # Base directory for storing simulation data
-z_out = [10, 5, 2, 1, 0.5, 0] # List of redshifts for output snapshots
+base = examples/boxlen100_n128_lcdmw7v2_00000/ # Base directory for storing simulation data
 output_snapshot_format = HDF5 # Particle snapshot format. "parquet" or "HDF5"
-save_power_spectrum = all # Save power spectra. Either 'no', 'z_out' for specific redshifts given by z_out or 'yes' to compute at every time step
+z_out = [10, 5, 2, 1, 0.5, 0]  # List of redshifts for output snapshots
+save_power_spectrum = yes # Save power spectra. Either 'no', 'z_out' for specific redshifts given by z_out or 'yes' to compute at every time step
 # Particles
 integrator = leapfrog # Integration scheme for time-stepping "Leapfrog" or "Euler"
 mass_scheme = TSC # CIC or TSC
 n_reorder = 50  # Re-order particles every n_reorder steps
 # Time stepping
-Courant_factor = 0.8 # Cell fraction for time stepping based on velocity/acceleration (Courant_factor < 1 means more time steps)
-max_aexp_stepping = 5 # Maximum percentage [%] of scale factor that cannot be exceeded by a time step
+Courant_factor = 1.0 # Cell fraction for time stepping based on velocity/acceleration (Courant_factor < 1 means more time steps)
+max_aexp_stepping = 10 # Maximum percentage [%] of scale factor that cannot be exceeded by a time step
 # Newtonian solver
-linear_newton_solver = multigrid # Linear solver for Newton's method: "multigrid", "fft" or "full_fft"
+linear_newton_solver = multigrid # Linear solver for Newton's method: "multigrid", "fft", "fft_7pt" or "full_fft"
 gradient_stencil_order = 5 # n-point stencil with n = 2, 3, 5 or 7
 # Multigrid
 Npre = 2  # Number of pre-smoothing Gauss-Seidel iterations
 Npost = 1  # Number of post-smoothing Gauss-Seidel iterations
 epsrel = 1e-2  # Maximum relative error on the residual norm
 # Verbose
-verbose = 2 # Verbose level. 0 : silent, 1 : basic infos, 2 : full timings
+verbose = 1 # Verbose level. 0 : silent, 1 : basic infos, 2 : full timings
 ```
 
 Run the command line
 
 ```sh
-python main.py -c param.ini
+python pysco/main.py -c examples/param.ini
 ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
@@ -242,7 +246,10 @@ To obtain the same as above, one first need to import the pysco module, then bui
 
 ```python
 # examples/example.py
+from pathlib import Path
 import pysco
+
+path = Path(__file__).parent.absolute()
 
 param = {
     "nthreads": 1,
@@ -260,7 +267,7 @@ param = {
     "N_eff": 3.044,
     "w0": -1.0,
     "wa": 0.0,
-    "boxlen": 500,
+    "boxlen": 100,
     "ncoarse": 7,
     "npart": 128**3,
     "z_start": 49,
@@ -269,23 +276,23 @@ param = {
     "fixed_ICS": False,
     "paired_ICS": False,
     "dealiased_ICS": False,
-    "power_spectrum_file": "/home/user/pysco/examples/pk_lcdmw7v2.dat",
-    "initial_conditions": "3LPT",
-    "base": "/home/user/boxlen500_n128_lcdm_00000/",
+    "power_spectrum_file": f"{path}/pk_lcdmw7v2.dat",
+    "initial_conditions": "2LPT",
+    "base": f"{path}/boxlen100_n128_lcdmw7v2_00000/",
     "z_out": "[10, 5, 2, 1, 0.5, 0]",
     "output_snapshot_format": "HDF5",
     "save_power_spectrum": "yes",
     "integrator": "leapfrog",
     "n_reorder": 50,
     "mass_scheme": "TSC",
-    "Courant_factor": 0.8,
-    "max_aexp_stepping", 5,
+    "Courant_factor": 1.0,
+    "max_aexp_stepping": 10,
     "linear_newton_solver": "multigrid",
     "gradient_stencil_order": 5,
     "Npre": 2,
     "Npost": 1,
     "epsrel": 1e-2,
-    "verbose": 2,
+    "verbose": 1,
 }
 
 # Run simulation
@@ -424,6 +431,10 @@ density = np.random.rand(64, 64, 64).astype(np.float32)
 density_k = fft_3D_real(density, nthreads)
 MAS = 0 # Mass assignment scheme. # None = 0, NGP = 1, CIC = 2, TSC = 3
 k, pk, modes = fourier_grid_to_Pk(density_k, MAS)
+# For cosmological densities, need additional conversion factors
+boxlen = 100 # Box length, in Mpc/h
+pk *= (boxlen / len(density) ** 2) ** 3
+k *= 2 * np.pi / boxlen
 ```
 
 _Please check the full API at linktoreadthedocs to see all the available functions_ (in progress)

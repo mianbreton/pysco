@@ -4,7 +4,10 @@ It provides a convenient way to set simulation parameters and run simulations fo
 of large-scale structures in the universe.
 """
 
+from pathlib import Path
 import pysco
+
+path = Path(__file__).parent.absolute()
 
 param = {
     "nthreads": 1,
@@ -22,23 +25,23 @@ param = {
     "N_eff": 3.044,
     "w0": -1.0,
     "wa": 0.0,
-    "boxlen": 500,
+    "boxlen": 100,
     "ncoarse": 7,
     "npart": 128**3,
     "z_start": 49,
     "seed": 42,
-    "position_ICS": "edge",
+    "position_ICS": "center",
     "fixed_ICS": False,
     "paired_ICS": False,
     "dealiased_ICS": False,
-    "power_spectrum_file": "/home/user/pysco/examples/pk_lcdmw7v2.dat",
-    "initial_conditions": "3LPT",
-    "base": "/home/user/boxlen500_n128_lcdm_00000/",
+    "power_spectrum_file": f"{path}/pk_lcdmw7v2.dat",
+    "initial_conditions": "2LPT",
+    "base": f"{path}/boxlen100_n128_lcdmw7v2_00000/",
     "z_out": "[10, 5, 2, 1, 0.5, 0]",
     "output_snapshot_format": "HDF5",
     "save_power_spectrum": "yes",
     "integrator": "leapfrog",
-    "n_reorder": 25,
+    "n_reorder": 50,
     "mass_scheme": "TSC",
     "Courant_factor": 1.0,
     "max_aexp_stepping": 10,
@@ -47,7 +50,7 @@ param = {
     "Npre": 2,
     "Npost": 1,
     "epsrel": 1e-2,
-    "verbose": 2,
+    "verbose": 1,
 }
 
 # Run simulation
