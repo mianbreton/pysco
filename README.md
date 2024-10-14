@@ -82,6 +82,8 @@ It is then possible to access other branches. If one wants to use the `feature/A
 python -m pip install git+https://github.com/mianbreton/pysco.git@feature/AwesomeNewFeature
 ```
 
+> :warning: **if the first method does not work because of a dependency issue** (for example, PyFFTW and icc-rt might not work for on mac): use the second method, and comment the lines referring to the problematic dependencies in pyproject.toml
+
 ### Prerequisites
 
 All dependencies will be automatically installed when using pip install (see [Installation](#installation)) so you can skip the remainder of this section.

@@ -26,9 +26,9 @@ dependencies = [
     "pyarrow",
     "h5py",
     "rich",
-    "Pylians",
-    "icc-rt",
-    "pyfftw",
+    "Pylians", # Only for reading Gadget snapshots
+    "icc-rt", # Optional
+    "pyfftw", # Optional
 ]
 
 [project.urls]
