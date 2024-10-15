@@ -162,7 +162,7 @@ There are two ways to use Pysco, either as command line with parameter file, or 
 
 #### As command line
 
-_To run PySCo with command line it is not necessary to pip install the package._
+_To run PySCo with command line it is not necessary to pip install the package. However, one must still at least install the depdendecies (see [Prerequisites](#prerequisites))_
 
 Move to the Pysco sub-directory
 
@@ -215,7 +215,7 @@ initial_conditions = 2LPT # Type of initial conditions. 1LPT, 2LPT, 3LPT or or s
 base = examples/boxlen100_n128_lcdmw7v2_00000/ # Base directory for storing simulation data
 output_snapshot_format = HDF5 # Particle snapshot format. "parquet" or "HDF5"
 z_out = [10, 5, 2, 1, 0.5, 0]  # List of redshifts for output snapshots
-save_power_spectrum = yes # Save power spectra. Either 'no', 'z_out' for specific redshifts given by z_out or 'yes' to compute at every time step
+save_power_spectrum = yes # Save power spectra. Either 'no', 'z_out' for specific redshifts given by z_out or 'yes' to compute at every time step. Uses same mass scheme and grid size (ncoarse) as for the PM solver
 # Particles
 integrator = leapfrog # Integration scheme for time-stepping "Leapfrog" or "Euler"
 mass_scheme = TSC # CIC or TSC
@@ -438,8 +438,6 @@ boxlen = 100 # Box length, in Mpc/h
 pk *= (boxlen / len(density) ** 2) ** 3
 k *= 2 * np.pi / boxlen
 ```
-
-_Please check the full API at linktoreadthedocs to see all the available functions_ (in progress)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
