@@ -523,7 +523,7 @@ def inverse_laplacian_compensated(x: npt.NDArray[np.complex64], p: int) -> None:
     """
     minus_inv_fourpi2 = np.float32(-0.25 / np.pi**2)
     ncells_1d = len(x)
-    prefactor = np.float32(1.0 / ncells_1d)
+    h = np.float32(1.0 / ncells_1d)
     minus_twop = -2 * p
     middle = ncells_1d // 2
     for i in prange(ncells_1d):
@@ -532,17 +532,17 @@ def inverse_laplacian_compensated(x: npt.NDArray[np.complex64], p: int) -> None:
         else:
             kx = np.float32(i)
         kx2 = kx**2
-        w_x = np.sinc(kx * prefactor)
+        w_x = np.sinc(kx * h)
         for j in prange(ncells_1d):
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
-            w_xy = w_x * np.sinc(ky * prefactor)
+            w_xy = w_x * np.sinc(ky * h)
             kx2_ky2 = kx2 + ky**2
             for k in prange(middle + 1):
                 kz = np.float32(k)
-                w_xyz = w_xy * np.sinc(kz * prefactor)
+                w_xyz = w_xy * np.sinc(kz * h)
                 invk2 = minus_inv_fourpi2 / (kx2_ky2 + kz**2)
                 x[i, j, k] *= w_xyz**minus_twop * invk2
     x[0, 0, 0] = 0
@@ -573,32 +573,28 @@ def inverse_laplacian_7pt(
     >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
     >>> inverse_laplacian_7pt(complex_field)
     """
-    invpi = np.float32(0.5 / np.pi)
-    twopi = np.float32(2 * np.pi)
     ncells_1d = len(x)
+    pi_h = np.float32(np.pi / ncells_1d)
     h = np.float32(1.0 / ncells_1d)
-    minus_h2 = -(h**2)
+    minus_h2_inv4 = -(0.25 * h**2)
     middle = ncells_1d // 2
     for i in prange(ncells_1d):
         if i >= middle:
             kx = np.float32(i - ncells_1d)
         else:
             kx = np.float32(i)
-        w_x = twopi * kx * h
-        f_x = (w_x * np.sinc(invpi * w_x)) ** 2
+        f_x = math.sin(pi_h * kx) ** 2
         for j in prange(ncells_1d):
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
-            w_y = twopi * ky * h
-            f_y = (w_y * np.sinc(invpi * w_y)) ** 2
+            f_y = math.sin(pi_h * ky) ** 2
             f_xy = f_x + f_y
             for k in prange(middle + 1):
                 kz = np.float32(k)
-                w_z = twopi * kz * h
-                f_z = (w_z * np.sinc(invpi * w_z)) ** 2
-                inv_f_xyz = minus_h2 / (f_xy + f_z)
+                f_z = math.sin(pi_h * kz) ** 2
+                inv_f_xyz = minus_h2_inv4 / (f_xy + f_z)
                 x[i, j, k] *= inv_f_xyz
     x[0, 0, 0] = 0
 
@@ -697,7 +693,7 @@ def gradient_inverse_laplacian_compensated(
     minus_ii = np.complex64(-1j)
     invtwopi = np.float32(0.5 / np.pi)
     ncells_1d = len(x)
-    prefactor = np.float32(1.0 / ncells_1d)
+    h = np.float32(1.0 / ncells_1d)
     minus_twop = -2 * p
     middle = ncells_1d // 2
     result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
@@ -707,17 +703,17 @@ def gradient_inverse_laplacian_compensated(
         else:
             kx = np.float32(i)
         kx2 = kx**2
-        w_x = np.sinc(kx * prefactor)
+        w_x = np.sinc(kx * h)
         for j in prange(ncells_1d):
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
             kx2_ky2 = kx2 + ky**2
-            w_xy = w_x * np.sinc(ky * prefactor)
+            w_xy = w_x * np.sinc(ky * h)
             for k in prange(middle + 1):
                 kz = np.float32(k)
-                w_xyz = w_xy * np.sinc(kz * prefactor)
+                w_xyz = w_xy * np.sinc(kz * h)
                 invk2 = invtwopi / (kx2_ky2 + kz**2)
                 x_k2_tmp = minus_ii * w_xyz**minus_twop * invk2 * x[i, j, k]
                 result[i, j, k, 0] = x_k2_tmp * kx

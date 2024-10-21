@@ -104,18 +104,18 @@ def pm(
         conversion = np.float32(ncells_1d**3 / param["npart"])
         utils.prod_vector_scalar_inplace(density, conversion)
 
-    param["save_pk"] = False
-    if param["save_power_spectrum"].casefold() == "no".casefold():
-        pass
-    elif param["save_power_spectrum"].casefold() == "yes".casefold() or (
-        param["save_power_spectrum"].casefold() == "z_out".casefold()
-        and param["write_snapshot"]
-    ):
+    SAVE_POWER_SPECTRUM = param["save_power_spectrum"].casefold()
+    if SAVE_POWER_SPECTRUM == "yes":
         param["save_pk"] = True
+    elif SAVE_POWER_SPECTRUM == "z_out":
+        if param["write_snapshot"]:
+            param["save_pk"] = True
+        else:
+            param["save_pk"] = False
+    elif SAVE_POWER_SPECTRUM == "no":
+        param["save_pk"] = False
     else:
-        raise ValueError(
-            f"{param['save_power_spectrum']=}, should be 'no', 'yes' or 'z_out'"
-        )
+        raise ValueError(f"{SAVE_POWER_SPECTRUM=}, should be 'yes', 'z_out' or 'no'")
 
     LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
     if param["save_pk"] and "multigrid" == LINEAR_NEWTON_SOLVER:

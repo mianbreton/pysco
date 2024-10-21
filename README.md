@@ -164,7 +164,7 @@ There are two ways to use Pysco, either as command line with parameter file, or 
 
 _To run PySCo with command line it is not necessary to pip install the package. However, one must still at least install the depdendecies (see [Prerequisites](#prerequisites))_
 
-Move to the Pysco sub-directory
+Move to the main Pysco directory
 
 ```sh
 cd pysco/
