@@ -59,7 +59,16 @@ def pm(
     >>> import pandas as pd
     >>> from pysco.solver import pm
     >>> position = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype=np.float32)
-    >>> param = pd.Series({"ncoarse": 6, "save_power_spectrum": "yes", "nthreads": 4})
+    >>> param = pd.Series({"mass_scheme": "TSC",
+        "theory":"newton",
+        "npart": 32**3,
+        "Om_m": 0.3,
+        "ncoarse": 6,
+        "linear_newton_solver": "fft",
+        "gradient_stencil_order": 5,
+        "save_power_spectrum": "no",
+        "aexp": 0.5,
+        "nthreads": 4})
     >>> acceleration, potential, additional_field = pm(position, param)
     """
     ncells_1d = 2 ** (param["ncoarse"])
@@ -396,7 +405,12 @@ def rhs_poisson(
     >>> from pysco.solver import rhs_poisson
     >>> density = np.random.rand(32, 32, 32).astype(np.float32)
     >>> additional_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> param = pd.Series({"aexp": 1.0, "Om_m": 0.3})
+    >>> param = pd.Series({
+        "theory": "newton", 
+        "aexp": 1.0, 
+        "Om_m": 0.3, 
+        "parametrized_mu_z":1, 
+        "compute_additional_field": False})
     >>> rhs_poisson(density, additional_field, param)
     """
     compute_MOND_potential = (
@@ -463,7 +477,16 @@ def fft(
     >>> import pandas as pd
     >>> from pysco.solver import fft
     >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> param = pd.Series({"nthreads": 4, "boxlen": 100.0, "npart": 1000000, "aexp": 1.0, "Om_m": 0.3})
+    >>> param = pd.Series({
+        "theory": "newton",
+        "nthreads": 4,
+        "boxlen": 100.0,
+        "npart": 1000000,
+        "linear_newton_solver": "fft",
+        "compute_additional_field":False,
+        "aexp": 1.0,
+        "Om_m": 0.3,
+        'MAS_index':0})
     >>> potential = fft(rhs, param)
     """
     MAS_index = param["MAS_index"]
@@ -525,7 +548,13 @@ def fft_force(
     >>> import pandas as pd
     >>> from pysco.solver import fft_force
     >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> param = pd.Series({"nthreads": 4, "boxlen": 100.0, "npart": 1000000, "aexp": 1.0, "Om_m": 0.3})
+    >>> param = pd.Series({
+        "nthreads": 4,
+        "boxlen": 100.0,
+        "npart": 1000000,
+        "aexp": 1.0,
+        "Om_m": 0.3,
+        'MAS_index':0})
     >>> force = fft_force(rhs, param)
     """
     MAS_index = param["MAS_index"]
@@ -575,7 +604,17 @@ def force_3d(
     >>> import pandas as pd
     >>> from pysco.solver import force_3d
     >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> param = pd.Series({"nthreads": 4, "boxlen": 100.0, "npart": 1000000, "aexp": 1.0, "Om_m": 0.3})
+    >>> param = pd.Series({
+        "nthreads": 2,
+        "boxlen": 100.0,
+        "npart": 16**3,
+        "theory": "newton",
+        "linear_newton_solver": "fft",
+        "gradient_stencil_order": 2,
+        "compute_additional_field": False,
+        "aexp": 1.0,
+        "Om_m": 0.3,
+        'MAS_index':0})
     >>> result = force_3d(rhs, param)
     """
 
@@ -592,11 +631,11 @@ def force_3d(
             force = mesh.derivative(potential, param["gradient_stencil_order"])
             potential = 0
         case "fft" | "fft_7pt":
-            potential = fft(rhs, param, 0)
+            potential = fft(rhs, param)
             force = mesh.derivative(potential, param["gradient_stencil_order"])
             potential = 0
         case "full_fft":
-            force = fft_force(rhs, param, 0)
+            force = fft_force(rhs, param)
         case _:
             raise ValueError(f"Unsupported {LINEAR_NEWTON_SOLVER=}")
     return force

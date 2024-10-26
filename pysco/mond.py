@@ -26,6 +26,11 @@ def nu_simple(y: np.float32) -> np.float32:
     -------
     np.float32
         Nu function
+
+    Examples
+    --------
+    >>> from pysco.mond import nu_simple
+    >>> nu_simple(1)
     """
     half = np.float32(0.5)
     invfour = np.float32(0.25)
@@ -52,6 +57,11 @@ def nu_n(y: np.float32, n: int) -> np.float32:
     -------
     np.float32
         Nu function
+
+    Examples
+    --------
+    >>> from pysco.mond import nu_n
+    >>> nu_n(1, 1)
     """
     half = np.float32(0.5)
     invfour = np.float32(0.25)
@@ -76,6 +86,11 @@ def nu_beta(y: np.float32, beta: np.float32) -> np.float32:
     -------
     np.float32
         Nu function
+
+    Examples
+    --------
+    >>> from pysco.mond import nu_beta
+    >>> nu_beta(1, 1)
     """
     minus_half = np.float32(-0.5)
     one = np.float32(1)
@@ -103,6 +118,11 @@ def nu_gamma(y: np.float32, gamma: np.float32) -> np.float32:
     -------
     np.float32
         Nu function
+
+    Examples
+    --------
+    >>> from pysco.mond import nu_gamma
+    >>> nu_gamma(1, 1)
     """
     one = np.float32(1)
     half_gamma = np.float32(0.5 * gamma)
@@ -130,6 +150,11 @@ def nu_delta(y: np.float32, delta: np.float32) -> np.float32:
     -------
     np.float32
         Nu function
+
+    Examples
+    --------
+    >>> from pysco.mond import nu_delta
+    >>> nu_delta(1, 1)
     """
     one = np.float32(1)
     half_delta = np.float32(0.5 * delta)
@@ -158,6 +183,13 @@ def rhs_simple(
         Output array [N, N, N]
     g0 : np.float32
         Acceleration constant
+
+    Examples
+    --------
+    >>> from pysco.mond import rhs_simple
+    >>> phi = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> out = np.empty_like(phi)
+    >>> rhs_simple(phi, out, 0.5)
     """
     inv_g0 = np.float32(1.0 / g0)
     ncells_1d = len(potential)
@@ -306,6 +338,13 @@ def rhs_n(
         Acceleration constant
     n : int
         Exponent of the n-family parameterization
+
+    Examples
+    --------
+    >>> from pysco.mond import rhs_n
+    >>> phi = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> out = np.empty_like(phi)
+    >>> rhs_n(phi, out, 0.5, 1)
     """
     inv_g0 = np.float32(1.0 / g0)
     ncells_1d = len(potential)
@@ -453,6 +492,13 @@ def rhs_beta(
         Acceleration constant
     beta : np.float32
         Parameter of the beta-family parameterization
+
+    Examples
+    --------
+    >>> from pysco.mond import rhs_beta
+    >>> phi = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> out = np.empty_like(phi)
+    >>> rhs_beta(phi, out, 0.5, 1)
     """
     inv_g0 = np.float32(1.0 / g0)
     ncells_1d = len(potential)
@@ -600,6 +646,13 @@ def rhs_gamma(
         Acceleration constant
     gamma : np.float32
         Parameter of the gamma-family parameterization
+
+    Examples
+    --------
+    >>> from pysco.mond import rhs_gamma
+    >>> phi = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> out = np.empty_like(phi)
+    >>> rhs_gamma(phi, out, 0.5, 1)
     """
     inv_g0 = np.float32(1.0 / g0)
     ncells_1d = len(potential)
@@ -747,6 +800,13 @@ def rhs_delta(
         Acceleration constant
     delta : np.float32
         Parameter of the delta-family parameterization
+
+    Examples
+    --------
+    >>> from pysco.mond import rhs_delta
+    >>> phi = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> out = np.empty_like(phi)
+    >>> rhs_delta(phi, out, 0.5, 1)
     """
     inv_g0 = np.float32(1.0 / g0)
     ncells_1d = len(potential)

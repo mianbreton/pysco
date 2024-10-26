@@ -331,11 +331,11 @@ def add_vector_vector_inplace(
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.utils import add_vector_scalar_inplace
+    >>> from pysco.utils import add_vector_vector_inplace
     >>> y_array = np.array([1.0, 2.0, 3.0])
     >>> a_array = np.array([4.0, 5.0, 6.0])
     >>> b_array = np.array([4.0, 5.0, 6.0])
-    >>> add_vector_scalar_inplace(y_array, a_array, b_array)
+    >>> add_vector_vector_inplace(y_array, 2, a_array, b_array)
     """
     y_ravel = y.ravel()
     a_ravel = a.ravel()
@@ -371,12 +371,12 @@ def add_vector_vector_vector_inplace(
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.utils import add_vector_scalar_inplace
+    >>> from pysco.utils import add_vector_vector_vector_inplace
     >>> y_array = np.array([1.0, 2.0, 3.0])
     >>> a_array = np.array([4.0, 5.0, 6.0])
     >>> b_array = np.array([4.0, 5.0, 6.0])
     >>> c_array = np.array([4.0, 5.0, 6.0])
-    >>> add_vector_scalar_inplace(y_array, a_array, b_array, c_array)
+    >>> add_vector_vector_vector_inplace(y_array, 2, a_array, b_array, c_array)
     """
     y_ravel = y.ravel()
     a_ravel = a.ravel()
@@ -579,7 +579,6 @@ def prod_add_vector_scalar_vector(
     >>> a_scalar = 2.0
     >>> b_array = np.array([3.0, 4.0, 5.0])
     >>> prod_add_vector_scalar_vector(x_array, a_scalar, b_array)
-    array([ 5.,  8., 11.])
     """
     result = np.empty_like(x)
     result_ravel = result.ravel()
@@ -632,8 +631,8 @@ def linear_operator(
     Example: Normalise density counts to right-hand side of Poisson equation
     
     x = density \\
-    f1 = 1.5 * aexp * Om_m * mpart * ncells_1d**3 / (unit_l ** 3 * unit_d)\\
-    f2 = - 1.5 * aexp * Om_m
+    f1 = 1.5 * aexp * Om_m \\
+    f2 = -f1
 
     Parameters
     ----------
@@ -792,8 +791,8 @@ def injection_to_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
     --------
     >>> import numpy as np
     >>> from pysco.utils import injection_to_gradient
-    >>> a = np.random.rand(64, 3)
-    >>> b = np.random.rand(64)
+    >>> a = np.random.rand(32, 32, 32, 3)
+    >>> b = np.random.rand(32, 32, 32)
     >>> injection_to_gradient(a, b, 1)
     """
     ii, jj, kk = b.shape
@@ -821,10 +820,10 @@ def injection_from_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
     Examples
     --------
     >>> import numpy as np
-    >>> from pysco.utils import injection
-    >>> a = np.random.rand(64)
-    >>> b = np.random.rand(64, 3)
-    >>> injection(a, b, 1)
+    >>> from pysco.utils import injection_from_gradient
+    >>> a = np.random.rand(32, 32, 32)
+    >>> b = np.random.rand(32, 32, 32, 3)
+    >>> injection_from_gradient(a, b, 1)
     """
     ii, jj, kk = a.shape
     for i in prange(ii):
@@ -999,11 +998,21 @@ def reorder_particles(
         arg = argsort_par(index, nthreads)
     else:
         arg = np.argsort(index)
-
+    index = 0
     if acceleration is not None:
-        return injection_with_indices3(arg, position, velocity, acceleration)
+        position = injection_with_indices(arg, position)
+        velocity = injection_with_indices(arg, velocity)
+        acceleration = injection_with_indices(arg, acceleration)
+        # FIXME: seems to be a memory leak here (Numba bug?).
+        #        If memory is an issue, uncomment the following lines instead (not parallel though)
+        # position[:] = position[arg, :]
+        # velocity[:] = velocity[arg, :]
+        # acceleration[:] = acceleration[arg, :]
+        return position, velocity, acceleration
     elif velocity is not None:
-        return injection_with_indices2(arg, position, velocity)
+        position = injection_with_indices(arg, position)
+        velocity = injection_with_indices(arg, velocity)
+        return position, velocity
     else:
         return injection_with_indices(arg, position)
 
@@ -1030,7 +1039,7 @@ def argsort_par(indices: npt.NDArray[np.int64], nthreads: int) -> npt.NDArray[np
     >>> import numpy as np
     >>> from pysco.utils import argsort_par
     >>> indices = np.random.randint(0, 100, 64)
-    >>> sorted = argsort_par(indices)
+    >>> sorted = argsort_par(indices, 2)
     """
     size = len(indices)
     group, remainder = np.divmod(size, nthreads)

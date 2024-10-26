@@ -58,6 +58,7 @@ def restriction(
                 )
     return result
 
+
 @njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
 def minus_restriction(
     x: npt.NDArray[np.float32],
@@ -572,7 +573,7 @@ def divergence2(
     >>> import numpy as np
     >>> from pysco.mesh import divergence2
     >>> vector_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
-    >>> field_divergence = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    >>> field_divergence = np.empty((32, 32, 32), dtype=np.float32)
     >>> divergence2(vector_field, field_divergence)
     """
     ncells_1d = a.shape[0]
@@ -612,7 +613,7 @@ def divergence3(
     >>> import numpy as np
     >>> from pysco.mesh import divergence3
     >>> vector_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
-    >>> field_divergence = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    >>> field_divergence = np.empty((32, 32, 32), dtype=np.float32)
     >>> divergence3(vector_field, field_divergence)
     """
     ncells_1d = a.shape[0]
@@ -885,8 +886,10 @@ def derivative2_fR_n1(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import derivative2_fR_n1
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> deriv = derivative2_fR_n1(scalar_field)
+    >>> a = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> n = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> f = np.float32(2)
+    >>> deriv = derivative2_fR_n1(a, b, f)
     """
     ncells_1d = a.shape[0]
     invh = np.float32(ncells_1d)
@@ -947,8 +950,10 @@ def derivative3_fR_n1(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import derivative3_fR_n1
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> deriv = derivative3_fR_n1(scalar_field)
+    >>> a = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> f = np.float32(2)
+    >>> deriv = derivative3_fR_n1(a, b, f)
     """
     ncells_1d = a.shape[0]
     inv2h = np.float32(0.5 * ncells_1d)
@@ -1022,8 +1027,10 @@ def derivative5_fR_n1(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import derivative5_fR_n1
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> deriv = derivative5_fR_n1(scalar_field)
+    >>> a = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> f = np.float32(2)
+    >>> deriv = derivative5_fR_n1(a, b, f)
     """
     eight = np.float32(8)
     ncells_1d = a.shape[0]
@@ -1116,8 +1123,10 @@ def derivative7_fR_n1(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import derivative7_fR_n1
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> deriv = derivative7_fR_n1(scalar_field)
+    >>> a = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> f = np.float32(2)
+    >>> deriv = derivative7_fR_n1(a, b, f)
     """
     nine = np.float32(9)
     fortyfive = np.float32(45)
@@ -1232,9 +1241,10 @@ def add_derivative2_fR_n1(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import add_derivative2_fR_n1
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
-    >>> add_derivative2_fR_n1(deriv_field, scalar_field)
+    >>> f = np.float32(2)
+    >>> add_derivative2_fR_n1(deriv_field, b, f)
     """
     ncells_1d = b.shape[0]
     invh_f = np.float32(ncells_1d * f)
@@ -1281,9 +1291,10 @@ def add_derivative3_fR_n1(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import add_derivative3_fR_n1
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
-    >>> add_derivative3_fR_n1(deriv_field, scalar_field)
+    >>> f = np.float32(2)
+    >>> add_derivative3_fR_n1(deriv_field, b, f)
     """
     ncells_1d = b.shape[0]
     inv2h_f = np.float32(0.5 * ncells_1d * f)
@@ -1332,9 +1343,10 @@ def add_derivative5_fR_n1(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import add_derivative5_fR_n1
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
-    >>> add_derivative5_fR_n1(deriv_field, scalar_field)
+    >>> f = np.float32(2)
+    >>> add_derivative5_fR_n1(deriv_field, b, f)
     """
     eight = np.float32(8)
     ncells_1d = b.shape[0]
@@ -1402,9 +1414,10 @@ def add_derivative7_fR_n1(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import add_derivative7_fR_n1
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
-    >>> add_derivative7_fR_n1(deriv_field, scalar_field)
+    >>> f = np.float32(2)
+    >>> add_derivative7_fR_n1(deriv_field, b, f)
     """
     nine = np.float32(9)
     fortyfive = np.float32(45.0)
@@ -1487,8 +1500,10 @@ def derivative2_fR_n2(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import derivative2_fR_n2
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> deriv = derivative2_fR_n2(scalar_field)
+    >>> a = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> f = np.float32(2)
+    >>> deriv = derivative2_fR_n2(a, b, f)
     """
     ncells_1d = a.shape[0]
     invh = np.float32(ncells_1d)
@@ -1549,8 +1564,10 @@ def derivative3_fR_n2(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import derivative3_fR_n2
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> deriv = derivative3_fR_n2(scalar_field)
+    >>> a = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> f = np.float32(2)
+    >>> deriv = derivative3_fR_n2(a, b, f)
     """
     ncells_1d = a.shape[0]
     inv2h = np.float32(0.5 * ncells_1d)
@@ -1618,8 +1635,10 @@ def derivative5_fR_n2(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import derivative5_fR_n2
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> deriv = derivative5_fR_n2(scalar_field)
+    >>> a = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> f = np.float32(2)
+    >>> deriv = derivative5_fR_n2(a, b, f)
     """
     eight = np.float32(8)
     ncells_1d = a.shape[0]
@@ -1712,8 +1731,10 @@ def derivative7_fR_n2(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import derivative7_fR_n2
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> deriv = derivative7_fR_n2(scalar_field)
+    >>> a = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> f = np.float32(2)
+    >>> deriv = derivative7_fR_n2(a, b, f)
     """
     nine = np.float32(9)
     fortyfive = np.float32(45)
@@ -1828,9 +1849,10 @@ def add_derivative2_fR_n2(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import add_derivative5_fR_n2
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
-    >>> add_derivative5_fR_n2(deriv_field, scalar_field)
+    >>> f = np.float32(2)
+    >>> add_derivative5_fR_n2(deriv_field, b, f)
     """
     ncells_1d = b.shape[0]
     invh_f = np.float32(ncells_1d * f)
@@ -1877,9 +1899,10 @@ def add_derivative3_fR_n2(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import add_derivative3_fR_n2
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
-    >>> add_derivative3_fR_n2(deriv_field, scalar_field)
+    >>> f = np.float32(2)
+    >>> add_derivative3_fR_n2(deriv_field, b, f)
     """
     ncells_1d = b.shape[0]
     inv2h_f = np.float32(0.5 * ncells_1d * f)
@@ -1928,9 +1951,10 @@ def add_derivative5_fR_n2(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import add_derivative5_fR_n2
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
-    >>> add_derivative5_fR_n2(deriv_field, scalar_field)
+    >>> f = np.float32(2)
+    >>> add_derivative5_fR_n2(deriv_field, b, f)
     """
     eight = np.float32(8)
     ncells_1d = b.shape[0]
@@ -1995,9 +2019,10 @@ def add_derivative7_fR_n2(
     --------
     >>> import numpy as np
     >>> from pysco.mesh import add_derivative7_fR_n2
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> deriv_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
-    >>> add_derivative7_fR_n2(deriv_field, scalar_field)
+    >>> f = np.float32(2)
+    >>> add_derivative7_fR_n2(deriv_field, b, f)
     """
     nine = np.float32(9)
     fortyfive = np.float32(45.0)

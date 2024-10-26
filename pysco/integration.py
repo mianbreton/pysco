@@ -73,7 +73,7 @@ def integrate(
     >>> potential = np.random.random((32, 32, 32)).astype(np.float32)
     >>> additional_field = np.random.random((32, 32, 32)).astype(np.float32)
     >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100))]*13
-    >>> param = pd.Series({"H0": 100, "boxlen": 500, "Om_m": 0.3, "npart": 64, "save_power_spectrum": "no", "nthreads": 1, "theory": "newton", "linear_newton_solver": "fft", "epsrel": 1e-2, "Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
+    >>> param = pd.Series({"H0": 100, "boxlen": 500, "Om_m": 0.3, "npart": 64, "save_power_spectrum": "no", "nthreads": 1, "theory": "newton", "mass_scheme": "TSC", "gradient_stencil_order": 5, "max_aexp_stepping": 5, "linear_newton_solver": "fft", "epsrel": 1e-2, "Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
     >>> pos, vel, acc, potential, additional_field = integrate(position, velocity, acceleration, potential, additional_field, tables, param)
     """
     dt1 = dt_CFL_maxacc(acceleration, param)
@@ -173,7 +173,7 @@ def euler(
     >>> additional_field = np.random.random((32, 32, 32)).astype(np.float32)
     >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100))]*4
     >>> dt = 0.1
-    >>> param = pd.Series({"H0": 100, "boxlen": 500, "Om_m": 0.3, "npart": 64, "save_power_spectrum": "no", "nthreads": 1, "theory": "newton", "linear_newton_solver": "fft", "epsrel": 1e-2, "Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
+    >>> param = pd.Series({"H0": 100, "boxlen": 500, "Om_m": 0.3, "npart": 64, "save_power_spectrum": "no", "nthreads": 1, "theory": "newton",  "mass_scheme": "TSC", "gradient_stencil_order": 5, "max_aexp_stepping": 5, "linear_newton_solver": "fft", "epsrel": 1e-2, "Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
     >>> pos, vel, acc, potential, additional_field = euler(position, velocity, acceleration, potential, additional_field, dt, tables, param)
     """
     utils.add_vector_scalar_inplace(position, velocity, dt)
@@ -244,7 +244,7 @@ def leapfrog(
     >>> additional_field = np.random.random((32, 32, 32)).astype(np.float32)
     >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.random(100))]*4
     >>> dt = 0.1
-    >>> param = pd.Series({"H0": 100, "boxlen": 500, "Om_m": 0.3, "npart": 64, "save_power_spectrum": "no", "nthreads": 1, "theory": "newton", "linear_newton_solver": "fft", "epsrel": 1e-2, "Courant_factor": 1.0, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
+    >>> param = pd.Series({"H0": 100, "boxlen": 500, "Om_m": 0.3, "npart": 64, "save_power_spectrum": "no", "nthreads": 1, "theory": "newton", "linear_newton_solver": "fft", "epsrel": 1e-2, "Courant_factor": 1.0,  "mass_scheme": "TSC", "gradient_stencil_order": 5, "max_aexp_stepping": 5, "ncoarse": 4, "t": 0.0, "aexp": 1.0, "aexp_old": 1.0, "write_snapshot": False, "integrator": "leapfrog"})
     >>> pos, vel, acc, potential, additional_field = leapfrog(position, velocity, acceleration, potential, additional_field, dt, tables, param)
     """
     half_dt = np.float32(0.5 * dt)
@@ -348,8 +348,8 @@ def dt_weak_variation(
     -------
     >>> from scipy.interpolate import interp1d
     >>> from pysco.integration import dt_weak_variation
-    >>> func_t_a = interp1d(np.linspace(0.2, 1, 100), np.linspace(-1, 0, 100))
-    >>> param = pd.Series({"aexp": 0.5})
+    >>> func_t_a = interp1d(np.linspace(np.log(0.2), 0, 100), np.linspace(-1, 0, 100))
+    >>> param = pd.Series({"aexp": 0.5, "max_aexp_stepping": 5})
     >>> dt = dt_weak_variation(func_t_a, param)
     """
     aexp_factor = 1.0 + 0.01 * param["max_aexp_stepping"]

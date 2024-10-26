@@ -28,32 +28,22 @@ def generate(param: pd.Series) -> List[interp1d]:
     List[interp1d]
         Interpolated functions [a(t), t(a), H(a), Dplus1(a), f1(a), Dplus2(a), f2(a), Dplus3a(a), f3a(a), Dplus3b(a), f3b(a), Dplus3c(a), f3c(a)]
 
-     Examples
+    Examples
     --------
     >>> import pandas as pd
     >>> from pysco.cosmotable import generate
-    >>> import os
-    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
-    >>> params_cosmo = pd.Series({
-    ...     "evolution_table": "no",
+    >>> param = pd.Series({
+    ...     "theory": "newton",
     ...     "H0": 70.0,
     ...     "Om_m": 0.3,
     ...     "T_cmb": 2.726,
     ...     "N_eff": 3.044,
     ...     "w0": -1.0,
     ...     "wa": 0.0,
-    ...     "base": f"{this_dir}/../examples/"
+    ...     "base": "./",
+    ...     "extra": "test"
     ...     })
-    >>> interpolators_cosmo = generate(params_cosmo)
-    >>> a_interp, t_interp, Dplus_interp, H_interp = interpolators_cosmo
-
-    >>> params_ramses = pd.Series({
-    ...     "evolution_table": f"{this_dir}/../examples/ramses_input_lcdmw7v2.dat",
-    ...     "mpgrafic_table": f"{this_dir}/../examples/mpgrafic2ndorder_input_lcdmw7v2.dat",
-    ...     "H0": 70.0,
-    ...     "base": f"{this_dir}/../examples/"
-    ...     })
-    >>> interpolators_ramses = generate(params_ramses)
+    >>> interpolators_cosmo = generate(param)
     """
     cosmo = Flatw0waCDM(
         H0=param["H0"],
@@ -138,6 +128,32 @@ def compute_growth_functions(
     Returns
     ----------
     npt.NDArray[np.float64]: A list containing the scale factors aexp, Dplus1, f1, Dplus2, f2, Dplus3a, f3a, Dplus3b, f3b, Dplus3c, f3c.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> from astropy.cosmology import Flatw0waCDM
+    >>> from pysco.cosmotable import compute_growth_functions
+    >>> param = pd.Series({
+    ...     "theory": "newton",
+    ...     "H0": 70.0,
+    ...     "Om_m": 0.3,
+    ...     "T_cmb": 2.726,
+    ...     "N_eff": 3.044,
+    ...     "w0": -1.0,
+    ...     "wa": 0.0,
+    ...     "base": "./",
+    ...     "extra": "test"
+    ...     })
+    >>> cosmo = Flatw0waCDM(
+    ...    H0=param["H0"],
+    ...    Om0=param["Om_m"],
+    ...    Tcmb0=param["T_cmb"],
+    ...    Neff=param["N_eff"],
+    ...    w0=param["w0"],
+    ...    wa=param["wa"],
+    ... )
+    >>> growth_functions = compute_growth_functions(cosmo, param)
     """
     # Initial conditions
     aexp_start = 1e-8

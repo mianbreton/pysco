@@ -1193,7 +1193,6 @@ def smoothing(
     >>> smoothing(x, b, h, n_smoothing)
     """
 
-    # Uncomment these lines if you want to use F or W cycles instead
     """ gauss_seidel_no_overrelaxation(x, b, h)
     # gauss_seidel_no_overrelaxation.parallel_diagnostics(level=4)
     if n_smoothing > 1:

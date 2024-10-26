@@ -35,7 +35,7 @@ def fourier_grid_to_Pk(
     ----------
     density_k : npt.NDArray[np.complex64]
         Fourier-space field [N, N, N//2 + 1]
-    p : int
+    MAS : int
         Compensation order (NGP = 1, CIC = 2, TSC = 3)
 
     Returns
@@ -47,9 +47,9 @@ def fourier_grid_to_Pk(
     --------
     >>> import numpy as np
     >>> from pysco.fourier import fourier_grid_to_Pk
-    >>> density_k_array = np.array([[[1.0+0.0j, 2.0+0.0j], [3.0+0.0j, 4.0+0.0j]]], dtype=np.complex64)
-    >>> p_val = 2
-    >>> k, pk, modes = fourier_grid_to_Pk(density_k_array, p_val)
+    >>> density_k_array = np.random.rand(16, 16, 9).astype(np.complex64)
+    >>> MAS = 0
+    >>> k, pk, modes = fourier_grid_to_Pk(density_k_array, MAS)
     """
     ncells_1d = density_k.shape[0]
     one = np.float32(1)
@@ -431,12 +431,8 @@ def ifft_3D_grad(
 
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
-    x_in = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
-    )
-    x_out = pyfftw.empty_aligned(
-        (ndim, ncells_1d, ncells_1d, ncells_1d), dtype="complex64"
-    )
+    x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="complex64")
+    x_out = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="complex64")
     fftw_plan = pyfftw.FFTW(
         x_in,
         x_out,
@@ -510,7 +506,7 @@ def inverse_laplacian_compensated(x: npt.NDArray[np.complex64], p: int) -> None:
     ----------
     x : npt.NDArray[np.complex64]
         Fourier-space field [N, N, N//2 + 1]
-    p : int
+    MAS : int
         Compensation order (NGP = 1, CIC = 2, TSC = 3)
 
     Examples
@@ -518,8 +514,8 @@ def inverse_laplacian_compensated(x: npt.NDArray[np.complex64], p: int) -> None:
     >>> import numpy as np
     >>> from pysco.fourier import inverse_laplacian_compensated
     >>> complex_grid = np.random.rand(16, 16, 9).astype(np.complex64)
-    >>> p_val = 2
-    >>> inverse_laplacian_compensated(complex_grid, p_val)
+    >>> MAS = 0
+    >>> inverse_laplacian_compensated(complex_grid, MAS)
     """
     minus_inv_fourpi2 = np.float32(-0.25 / np.pi**2)
     ncells_1d = len(x)
@@ -674,7 +670,7 @@ def gradient_inverse_laplacian_compensated(
     ----------
     x : npt.NDArray[np.complex64]
         Fourier-space field [N, N, N//2 + 1]
-    p : int
+    MAS : int
         Compensation order (NGP = 1, CIC = 2, TSC = 3)
 
     Returns
@@ -687,8 +683,8 @@ def gradient_inverse_laplacian_compensated(
     >>> import numpy as np
     >>> from pysco.fourier import gradient_inverse_laplacian_compensated
     >>> complex_field = np.random.rand(16, 16, 9).astype(np.complex64)
-    >>> p_val = 2
-    >>> result = gradient_inverse_laplacian_compensated(complex_field, p_val)
+    >>> MAS = 2
+    >>> result = gradient_inverse_laplacian_compensated(complex_field, MAS)
     """
     minus_ii = np.complex64(-1j)
     invtwopi = np.float32(0.5 / np.pi)
