@@ -5,7 +5,7 @@ Main executable module to run cosmological N-body simulations
 Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
-__version__ = "0.8.3"
+__version__ = "1.0.0"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Development"
 
@@ -123,7 +123,7 @@ def run(param) -> None:
     else:
         param["i_snap"] += 1
 
-    while param["aexp"] < 1.0:
+    while param["aexp"] < aexp_out[-1]:
         param["nsteps"] += 1
         (
             position,

@@ -44,25 +44,35 @@ def generate(
     -------
     >>> import numpy as np
     >>> import pandas as pd
+    >>> from pysco.utils import set_units
     >>> from pysco.initial_conditions import generate
-    >>> import os
-    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
+    >>> from pysco import cosmotable
     >>> param = pd.Series({
     ...     'initial_conditions': '2LPT',
     ...     'z_start': 49.0,
-    ...     'Om_m': 0.27,
-    ...     'Om_lambda': 0.73,
-    ...     'unit_t': 1.0,
-    ...     'npart': 64,
-    ...     'power_spectrum_file': f"{this_dir}/../examples/pk_lcdmw7v2.dat",
+    ...     "theory": "newton",
+    ...     "H0": 70.0,
+    ...     "Om_m": 0.3,
+    ...     "T_cmb": 2.726,
+    ...     "N_eff": 3.044,
+    ...     "w0": -1.0,
+    ...     "wa": 0.0,
+    ...     "base": "./",
+    ...     "extra": "test",
+    ...     'power_spectrum_file': f"./examples/pk_lcdmw7v2.dat",
     ...     'boxlen': 500,
+    ...     'npart': 32**3,
     ...     'seed': 42,
-    ...     'fixed_ICS': 0,
-    ...     'paired_ICS': 0,
-    ...     'nthreads': 1,
-    ...     'linear_newton_solver': "fft",
+    ...     'fixed_ICS': False,
+    ...     'paired_ICS': False,
+    ...     'dealiased_ICS': False,
+    ...     'position_ICS': "center",
+    ...     'output_snapshot_format': "HDF5",
+    ...     'nthreads': 2,
     ...  })
-    >>> tables = [interp1d(np.linspace(0, 1, 100), np.random.rand(100)) for _ in range(13)]
+    >>> param["aexp"] = 1./(1 + param["z_start"])
+    >>> set_units(param)
+    >>> tables = cosmotable.generate(param)
     >>> position, velocity = generate(param, tables)
     """
     INITIAL_CONDITIONS = param["initial_conditions"]
@@ -234,6 +244,9 @@ def finalise_initial_conditions(
     >>> velocity = np.random.rand(64, 3).astype(np.float32)
     >>> param = pd.Series({
     ...     'aexp': 0.8,
+    ...     'base': '.',
+    ...     'output_snapshot_format': 'HDF5',
+    ...     'extra': 'test',
     ...  })
     >>> finalise_initial_conditions(position, velocity, param, True)
     """
@@ -281,6 +294,15 @@ def read_hdf5(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [3, Npart]
+
+    Example
+    -------
+    >>> from pysco.initial_conditions import read_hdf5
+    >>> param = pd.Series({
+    ...     'initial_conditions': "file.h5",
+    ...     'npart': 128**3,
+    ...  })
+    >>> position, velocity = read_hdf5(param)
     """
     import h5py
 
@@ -331,6 +353,15 @@ def read_gadget(
     -------
     Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
         Position, Velocity [3, Npart]
+
+    Example
+    -------
+    >>> from pysco.initial_conditions import read_hdf5
+    >>> param = pd.Series({
+    ...     'initial_conditions': "file.h5",
+    ...     'npart': 128**3,
+    ...  })
+    >>> position, velocity = read_gadget(param)
     """
     import readgadget  # From Pylians
 
@@ -353,11 +384,9 @@ def read_gadget(
     npart = int(Nall[ptype])
     if npart != param["npart"]:
         raise ValueError(f"{npart=} and {param['npart']} should be equal.")
-    if not np.allclose(
-        [Omega_m, Omega_l, 100 * h], [param["Om_m"], param["Om_lambda"], param["H0"]]
-    ):
+    if not np.allclose([Omega_m, Omega_l, 100 * h], [param["Om_m"], param["H0"]]):
         raise ValueError(
-            f"Cosmology mismatch: {Omega_m=} {param['Om_m']=} {Omega_l=} {param['Om_lambda']=} {(100*h)=} {param['H0']=}"
+            f"Cosmology mismatch: {Omega_m=} {param['Om_m']=} {(100*h)=} {param['H0']=}"
         )
 
     position = readgadget.read_block(filename, "POS ", [ptype])
@@ -370,7 +399,7 @@ def read_gadget(
 
 
 @utils.time_me
-def generate_density_fourier(param: pd.Series) -> npt.NDArray[np.float32]:
+def generate_density_fourier(param: pd.Series) -> npt.NDArray[np.complex64]:
     """Compute density initial conditions from power spectrum
 
     Parameters
@@ -380,17 +409,18 @@ def generate_density_fourier(param: pd.Series) -> npt.NDArray[np.float32]:
 
     Returns
     -------
-    npt.NDArray[np.float32]
-        Initial density field and velocity field (delta, vx, vy, vz)
+    npt.NDArray[np.complex64]
+        Fourier-space density field [N, N, N]
 
     Example
     -------
     >>> import pandas as pd
     >>> from pysco.initial_conditions import generate_density_fourier
     >>> param = pd.Series({
-         'power_spectrum_file': 'path/to/power_spectrum.txt',
+         'power_spectrum_file': './examples/pk_lcdmw7v2.dat',
          'npart': 64,
          'seed': 42,
+         'boxlen': 100,
          'fixed_ICS': False,
          'paired_ICS': False,
      })
@@ -434,11 +464,13 @@ def generate_density(param: pd.Series) -> npt.NDArray[np.float32]:
     >>> import pandas as pd
     >>> from pysco.initial_conditions import generate_density
     >>> param = pd.Series({
-         'power_spectrum_file': 'path/to/power_spectrum.txt',
+         'power_spectrum_file': './examples/pk_lcdmw7v2.dat',
          'npart': 64,
          'seed': 42,
+         'boxlen': 100,
          'fixed_ICS': False,
          'paired_ICS': False,
+         'nthreads': 2,
      })
     >>> generate_density(param)
     """
@@ -467,16 +499,17 @@ def generate_force(param: pd.Series) -> npt.NDArray[np.float32]:
     >>> import pandas as pd
     >>> from pysco.initial_conditions import generate_force
     >>> param = pd.Series({
-         'power_spectrum_file': 'path/to/power_spectrum.txt',
-         'npart': 64,
+         'power_spectrum_file': './examples/pk_lcdmw7v2.dat',
+         'npart': 16**3,
          'seed': 42,
+         'boxlen': 100,
          'fixed_ICS': False,
          'paired_ICS': False,
+         'nthreads': 2,
      })
     >>> generate_force(param)
     """
     transfer_grid = get_transfer_grid(param)
-
     ncells_1d = int(math.cbrt(param["npart"]))
     seed = param["seed"]
     if seed < 0:
@@ -488,7 +521,6 @@ def generate_force(param: pd.Series) -> npt.NDArray[np.float32]:
         force = white_noise_fourier_fixed_force(ncells_1d, rng, param["paired_ICS"])
     else:
         force = white_noise_fourier_force(ncells_1d, rng)
-
     utils.prod_gradient_vector_inplace(force, transfer_grid)
     transfer_grid = 0
     force = fourier.ifft_3D_real_grad(force, param["nthreads"])
@@ -516,8 +548,9 @@ def get_transfer_grid(param: pd.Series) -> npt.NDArray[np.float32]:
     >>> import pandas as pd
     >>> from pysco.initial_conditions import get_transfer_grid
     >>> param = pd.Series({
-         'power_spectrum_file': 'path/to/power_spectrum.txt',
-         'npart': 64,
+         'power_spectrum_file': './examples/pk_lcdmw7v2.dat',
+         'npart': 16**3,
+         'boxlen': 100,
      })
     >>> get_transfer_grid(param)
     """
@@ -570,7 +603,7 @@ def white_noise_fourier(
     -------
     >>> import numpy as np
     >>> from pysco.initial_conditions import white_noise_fourier
-    >>> white_noise = white_noise_fourier(64, np.random.default_rng())
+    >>> white_noise = white_noise_fourier(16, np.random.default_rng())
     >>> print(white_noise)
     """
     twopi = np.float32(2 * math.pi)
@@ -651,7 +684,7 @@ def white_noise_fourier_fixed(
     -------
     >>> import numpy as np
     >>> from pysco.initial_conditions import white_noise_fourier_fixed
-    >>> paired_white_noise = white_noise_fourier_fixed(64, np.random.default_rng(), 1)
+    >>> paired_white_noise = white_noise_fourier_fixed(16, np.random.default_rng(), 1)
     >>> print(paired_white_noise)
     """
     twopi = np.float32(2 * np.pi)
@@ -717,7 +750,7 @@ def white_noise_fourier_force(
     -------
     >>> import numpy as np
     >>> from pysco.initial_conditions import white_noise_fourier_force
-    >>> ncells_1d = 64
+    >>> ncells_1d = 16
     >>> rng = np.random.default_rng(42)
     >>> white_noise_fourier_force(ncells_1d, rng)
     """
@@ -788,6 +821,8 @@ def white_noise_fourier_force(
 
     # 0
     force[0, 0, 0, 0] = 0
+    force[0, 0, 0, 1] = 0
+    force[0, 0, 0, 2] = 0
     # 1
     force[0, middle, 0, 0] = 0
     force[0, 0, middle, 0] = 0
@@ -852,7 +887,7 @@ def white_noise_fourier_fixed_force(
     -------
     >>> import numpy as np
     >>> from pysco.initial_conditions import white_noise_fourier_fixed_force
-    >>> ncells_1d = 64
+    >>> ncells_1d = 16
     >>> rng = np.random.default_rng(42)
     >>> is_paired = True
     >>> white_noise_fourier_fixed_force(ncells_1d, rng, is_paired)
@@ -908,6 +943,8 @@ def white_noise_fourier_fixed_force(
     force_3 = invkmiddle * inv3
     # 0
     force[0, 0, 0, 0] = 0
+    force[0, 0, 0, 1] = 0
+    force[0, 0, 0, 2] = 0
     # 1
     force[0, middle, 0, 0] = 0
     force[0, 0, middle, 0] = 0
@@ -937,13 +974,13 @@ def white_noise_fourier_fixed_force(
 
 
 def compute_2ndorder_rhs(
-    phi_1_fourier: npt.NDArray[np.float32], param: pd.Series
+    phi_1_fourier: npt.NDArray[np.complex64], param: pd.Series
 ) -> npt.NDArray[np.float32]:
     """Compute 2LPT displacement [Scoccimarro 1998 Appendix B.2]
 
     Parameters
     ----------
-    phi_1_fourier : npt.NDArray[np.float32]
+    phi_1_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
     param : pd.Series
         Parameter container
@@ -955,10 +992,15 @@ def compute_2ndorder_rhs(
 
     Example
     -------
+    >>> import pandas as pd
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_2ndorder_rhs
-    >>> phi = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> rhs_2ndorder = compute_2ndorder_rhs(phi, 2)
+    >>> param = pd.Series({
+    ...     'nthreads': 2,
+    ...     'dealiased_ICS': False,
+    ...  })
+    >>> phi = np.random.random((16,16,9)).astype(np.complex64)
+    >>> rhs_2ndorder = compute_2ndorder_rhs(phi, param)
     """
     one = np.float32(1)
     nthreads = param["nthreads"]
@@ -998,13 +1040,13 @@ def compute_2ndorder_rhs(
 
 
 def compute_3a_rhs(
-    phi_1_fourier: npt.NDArray[np.float32], param: pd.Series
+    phi_1_fourier: npt.NDArray[np.complex64], param: pd.Series
 ) -> npt.NDArray[np.float32]:
     """Compute 3aLPT displacement [Scoccimarro 1998 Appendix B.2]
 
     Parameters
     ----------
-    phi_1_fourier : npt.NDArray[np.float32]
+    phi_1_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
     param : pd.Series
         Parameter container
@@ -1016,10 +1058,15 @@ def compute_3a_rhs(
 
     Example
     -------
+    >>> import pandas as pd
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_3a_rhs
-    >>> phi = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> rhs = compute_3a_rhs(phi, 2)
+    >>> param = pd.Series({
+    ...     'nthreads': 2,
+    ...     'dealiased_ICS': False,
+    ...  })
+    >>> phi = np.random.random((16,16,16)).astype(np.complex64)
+    >>> rhs = compute_3a_rhs(phi, param)
     """
     one = np.float32(1)
     two = np.float32(2)
@@ -1075,13 +1122,13 @@ def compute_3a_rhs(
 
 
 def compute_3a_displacement(
-    phi_1_fourier: npt.NDArray[np.float32], param: pd.Series
+    phi_1_fourier: npt.NDArray[np.complex64], param: pd.Series
 ) -> npt.NDArray[np.float32]:
     """Compute 3aLPT displacement [Scoccimarro 1998 Appendix B.2]
 
     Parameters
     ----------
-    phi_1_fourier : npt.NDArray[np.float32]
+    phi_1_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
     param : pd.Series
         Parameter container
@@ -1093,11 +1140,16 @@ def compute_3a_displacement(
 
     Example
     -------
+    >>> import pandas as pd
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_3a_displacement
-    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> rhs = compute_3a_displacement(phi_1, phi_2, 2)
+    >>> param = pd.Series({
+    ...     'nthreads': 2,
+    ...     'dealiased_ICS': False,
+    ...  })
+    >>> phi_1 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> phi_2 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> rhs = compute_3a_displacement(phi_1, param)
     """
     density_3a = compute_3a_rhs(phi_1_fourier, param)
     density_3a_fourier = fourier.fft_3D_real(density_3a, param["nthreads"])
@@ -1108,17 +1160,17 @@ def compute_3a_displacement(
 
 
 def compute_3b_rhs(
-    phi_1_fourier: npt.NDArray[np.float32],
-    phi_2_fourier: npt.NDArray[np.float32],
+    phi_1_fourier: npt.NDArray[np.complex64],
+    phi_2_fourier: npt.NDArray[np.complex64],
     param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3bLPT displacement
 
     Parameters
     ----------
-    phi_1_fourier : npt.NDArray[np.float32]
+    phi_1_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
-    phi_2_fourier : npt.NDArray[np.float32]
+    phi_2_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
     param : pd.Series
         Parameter container
@@ -1130,11 +1182,16 @@ def compute_3b_rhs(
 
     Example
     -------
+    >>> import pandas as pd
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_3b_rhs
-    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> rhs = compute_3b_rhs(phi_1, phi_2, 2)
+    >>> param = pd.Series({
+    ...     'nthreads': 2,
+    ...     'dealiased_ICS': False,
+    ...  })
+    >>> phi_1 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> phi_2 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> rhs = compute_3b_rhs(phi_1, phi_2, param)
     """
     one = np.float32(1)
     half = np.float32(0.5)
@@ -1190,17 +1247,17 @@ def compute_3b_rhs(
 
 
 def compute_3b_displacement(
-    phi_1_fourier: npt.NDArray[np.float32],
-    phi_2_fourier: npt.NDArray[np.float32],
+    phi_1_fourier: npt.NDArray[np.complex64],
+    phi_2_fourier: npt.NDArray[np.complex64],
     param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3bLPT displacement
 
     Parameters
     ----------
-    phi_1_fourier : npt.NDArray[np.float32]
+    phi_1_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
-    phi_2_fourier : npt.NDArray[np.float32]
+    phi_2_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
     param : pd.Series
         Parameter container
@@ -1212,11 +1269,16 @@ def compute_3b_displacement(
 
     Example
     -------
+    >>> import pandas as pd
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_3b_displacement
-    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> rhs = compute_3b_displacement(phi_1, phi_2, 2)
+    >>> param = pd.Series({
+    ...     'nthreads': 2,
+    ...     'dealiased_ICS': False,
+    ...  })
+    >>> phi_1 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> phi_2 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> rhs = compute_3b_displacement(phi_1, phi_2, param)
     """
     density_3b = compute_3b_rhs(phi_1_fourier, phi_2_fourier, param)
     density_3b_fourier = fourier.fft_3D_real(density_3b, param["nthreads"])
@@ -1226,17 +1288,17 @@ def compute_3b_displacement(
 
 
 def compute_3c_Ax_rhs(
-    phi_1_fourier: npt.NDArray[np.float32],
-    phi_2_fourier: npt.NDArray[np.float32],
+    phi_1_fourier: npt.NDArray[np.complex64],
+    phi_2_fourier: npt.NDArray[np.complex64],
     param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3cLPT displacement
 
     Parameters
     ----------
-    phi_1_fourier : npt.NDArray[np.float32]
+    phi_1_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
-    phi_2_fourier : npt.NDArray[np.float32]
+    phi_2_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
     param : pd.Series
         Parameter container
@@ -1248,11 +1310,16 @@ def compute_3c_Ax_rhs(
 
     Example
     -------
+    >>> import pandas as pd
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_3c_Ax_rhs
-    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> rhs = compute_3c_Ax_rhs(phi_1, phi_2, 2)
+    >>> param = pd.Series({
+    ...     'nthreads': 2,
+    ...     'dealiased_ICS': False,
+    ...  })
+    >>> phi_1 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> phi_2 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> rhs = compute_3c_Ax_rhs(phi_1, phi_2, param)
     """
     one = np.float32(1)
     nthreads = param["nthreads"]
@@ -1295,17 +1362,17 @@ def compute_3c_Ax_rhs(
 
 
 def compute_3c_Ax_displacement(
-    phi_1_fourier: npt.NDArray[np.float32],
-    phi_2_fourier: npt.NDArray[np.float32],
+    phi_1_fourier: npt.NDArray[np.complex64],
+    phi_2_fourier: npt.NDArray[np.complex64],
     param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3aLPT displacement
 
     Parameters
     ----------
-    phi_1_fourier : npt.NDArray[np.float32]
+    phi_1_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
-    phi_2_fourier : npt.NDArray[np.float32]
+    phi_2_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
     param : pd.Series
         Parameter container
@@ -1317,11 +1384,16 @@ def compute_3c_Ax_displacement(
 
     Example
     -------
+    >>> import pandas as pd
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_3c_Ax_displacement
-    >>> phi_1 = np.random.random((64, 64, 64, 3)).astype(np.float32)
-    >>> phi_2 = np.random.random((64, 64, 64, 3)).astype(np.float32)
-    >>> rhs = compute_3c_Ax_displacement(phi_1, phi_2, 2)
+    >>> param = pd.Series({
+    ...     'nthreads': 2,
+    ...     'dealiased_ICS': False,
+    ...  })
+    >>> phi_1 = np.random.random((16, 16, 16)).astype(np.complex64)
+    >>> phi_2 = np.random.random((16, 16, 16)).astype(np.complex64)
+    >>> rhs = compute_3c_Ax_displacement(phi_1, phi_2, param)
     """
     density_3c_Ax = compute_3c_Ax_rhs(phi_1_fourier, phi_2_fourier, param)
     density_3c_Ax_fourier = fourier.fft_3D_real(density_3c_Ax, param["nthreads"])
@@ -1331,17 +1403,17 @@ def compute_3c_Ax_displacement(
 
 
 def compute_3c_Ay_rhs(
-    phi_1_fourier: npt.NDArray[np.float32],
-    phi_2_fourier: npt.NDArray[np.float32],
+    phi_1_fourier: npt.NDArray[np.complex64],
+    phi_2_fourier: npt.NDArray[np.complex64],
     param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3cLPT displacement
 
     Parameters
     ----------
-    phi_1_fourier : npt.NDArray[np.float32]
+    phi_1_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
-    phi_2_fourier : npt.NDArray[np.float32]
+    phi_2_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
     param : pd.Series
         Parameter container
@@ -1353,11 +1425,16 @@ def compute_3c_Ay_rhs(
 
     Example
     -------
+    >>> import pandas as pd
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_3c_Ay_rhs
-    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> rhs = compute_3c_Ay_rhs(phi_1, phi_2, 2)
+    >>> param = pd.Series({
+    ...     'nthreads': 2,
+    ...     'dealiased_ICS': False,
+    ...  })
+    >>> phi_1 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> phi_2 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> rhs = compute_3c_Ay_rhs(phi_1, phi_2, param)
     """
     one = np.float32(1)
     nthreads = param["nthreads"]
@@ -1400,17 +1477,17 @@ def compute_3c_Ay_rhs(
 
 
 def compute_3c_Ay_displacement(
-    phi_1_fourier: npt.NDArray[np.float32],
-    phi_2_fourier: npt.NDArray[np.float32],
+    phi_1_fourier: npt.NDArray[np.complex64],
+    phi_2_fourier: npt.NDArray[np.complex64],
     param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3aLPT displacement
 
     Parameters
     ----------
-    phi_1_fourier : npt.NDArray[np.float32]
+    phi_1_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
-    phi_2_fourier : npt.NDArray[np.float32]
+    phi_2_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
     param : pd.Series
         Parameter container
@@ -1422,11 +1499,16 @@ def compute_3c_Ay_displacement(
 
     Example
     -------
+    >>> import pandas as pd
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_3c_Ay_displacement
-    >>> phi_1 = np.random.random((64, 64, 64, 3)).astype(np.float32)
-    >>> phi_2 = np.random.random((64, 64, 64, 3)).astype(np.float32)
-    >>> rhs = compute_3c_Ay_displacement(phi_1, phi_2, 2)
+    >>> param = pd.Series({
+    ...     'nthreads': 2,
+    ...     'dealiased_ICS': False,
+    ...  })
+    >>> phi_1 = np.random.random((16, 16, 16)).astype(np.complex64)
+    >>> phi_2 = np.random.random((16, 16, 16)).astype(np.complex64)
+    >>> rhs = compute_3c_Ay_displacement(phi_1, phi_2, param)
     """
     density_3c_Ay = compute_3c_Ay_rhs(phi_1_fourier, phi_2_fourier, param)
     density_3c_Ay_fourier = fourier.fft_3D_real(density_3c_Ay, param["nthreads"])
@@ -1436,17 +1518,17 @@ def compute_3c_Ay_displacement(
 
 
 def compute_3c_Az_rhs(
-    phi_1_fourier: npt.NDArray[np.float32],
-    phi_2_fourier: npt.NDArray[np.float32],
+    phi_1_fourier: npt.NDArray[np.complex64],
+    phi_2_fourier: npt.NDArray[np.complex64],
     param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3cLPT displacement
 
     Parameters
     ----------
-    phi_1_fourier : npt.NDArray[np.float32]
+    phi_1_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
-    phi_2_fourier : npt.NDArray[np.float32]
+    phi_2_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
     param : pd.Series
         Parameter container
@@ -1458,11 +1540,16 @@ def compute_3c_Az_rhs(
 
     Example
     -------
+    >>> import pandas as pd
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_3c_Az_rhs
-    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> rhs = compute_3c_Az_rhs(phi_1, phi_2, 2)
+    >>> param = pd.Series({
+    ...     'nthreads': 2,
+    ...     'dealiased_ICS': False,
+    ...  })
+    >>> phi_1 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> phi_2 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> rhs = compute_3c_Az_rhs(phi_1, phi_2, param)
     """
     one = np.float32(1)
     nthreads = param["nthreads"]
@@ -1505,17 +1592,17 @@ def compute_3c_Az_rhs(
 
 
 def compute_3c_Az_displacement(
-    phi_1_fourier: npt.NDArray[np.float32],
-    phi_2_fourier: npt.NDArray[np.float32],
+    phi_1_fourier: npt.NDArray[np.complex64],
+    phi_2_fourier: npt.NDArray[np.complex64],
     param: pd.Series,
 ) -> npt.NDArray[np.float32]:
     """Compute 3aLPT displacement
 
     Parameters
     ----------
-    phi_1_fourier : npt.NDArray[np.float32]
+    phi_1_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
-    phi_2_fourier : npt.NDArray[np.float32]
+    phi_2_fourier : npt.NDArray[np.complex64]
         First-order Potential [N, N, N]
     param : pd.Series
         Parameter container
@@ -1527,11 +1614,16 @@ def compute_3c_Az_displacement(
 
     Example
     -------
+    >>> import pandas as pd
     >>> import numpy as np
     >>> from pysco.initial_conditions import compute_3c_Az_displacement
-    >>> phi_1 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> phi_2 = np.random.random((64, 64, 64)).astype(np.float32)
-    >>> rhs = compute_3c_Az_displacement(phi_1, phi_2, 2)
+    >>> param = pd.Series({
+    ...     'nthreads': 2,
+    ...     'dealiased_ICS': False,
+    ...  })
+    >>> phi_1 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> phi_2 = np.random.random((16,16,16)).astype(np.complex64)
+    >>> rhs = compute_3c_Az_displacement(phi_1, phi_2, param)
     """
     density_3c_Az = compute_3c_Az_rhs(phi_1_fourier, phi_2_fourier, param)
     density_3c_Az_fourier = fourier.fft_3D_real(density_3c_Az, param["nthreads"])
@@ -1566,12 +1658,16 @@ def initialise_1LPT(
 
     Example
     -------
+    >>> import pandas as pd
     >>> import numpy as np
     >>> from pysco.initial_conditions import initialise_1LPT
+    >>> param = pd.Series({
+    ...     'position_ICS': "center",
+    ...  })
     >>> psi_1lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
     >>> dplus_1 = 0.1
     >>> fH = 0.1
-    >>> initialise_1LPT(psi_1lpt, dplus_1, fH)
+    >>> initialise_1LPT(psi_1lpt, dplus_1, fH, param)
     """
     POSITION = param["position_ICS"].casefold()
     if POSITION == "center":
@@ -1735,13 +1831,13 @@ def add_nLPT(
     Example
     -------
     >>> import numpy as np
-    >>> from pysco.initial_conditions import add_2LPT
+    >>> from pysco.initial_conditions import add_nLPT
     >>> position_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
     >>> velocity_1storder = np.random.random((64, 64, 64, 3)).astype(np.float32)
     >>> psi_2lpt = np.random.random((64, 64, 64, 3)).astype(np.float32)
     >>> dplus_2 = 0.2
     >>> fH_2 = 0.2
-    >>> add_2LPT(position_1storder, velocity_1storder, psi_2lpt, dplus_2, fH_2)
+    >>> add_nLPT(position_1storder, velocity_1storder, psi_2lpt, dplus_2, fH_2)
     """
     ncells_1d = psi_nlpt.shape[0]
     dfH_n = dplus_n * fH_n
@@ -1766,12 +1862,19 @@ def pad(input: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     Parameters
     ----------
     input : npt.NDArray[np.float32]
-        Input field [N,N,N]
+        Input field [N,N,N//2+1]
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Padded field [3N/2, 3N/2, 3N/2]
+        Padded field [3N/2, 3N/2, 3N/2 //2+1]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import pad
+    >>> phi = np.random.random((16,16,9)).astype(np.float32)
+    >>> pad(phi)
     """
     ncells_1d = len(input)
     ncells_1d_extended = 3 * ncells_1d // 2
@@ -1796,12 +1899,19 @@ def trim(input: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     Parameters
     ----------
     input : npt.NDArray[np.float32]
-        Input field [3N/2, 3N/2, 3N/2]
+        Input field [3N/2, 3N/2, (3N/2)//2 +1]
 
     Returns
     -------
     npt.NDArray[np.float32]
-        Trimmed field [N,N,N]
+        Trimmed field [N, N, N//2+1]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.initial_conditions import trim
+    >>> phi = np.random.random((24, 24, 13)).astype(np.float32)
+    >>> trim(phi)
     """
     ncells_1d_extended = len(input)
     ncells_1d = 2 * ncells_1d_extended // 3

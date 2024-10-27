@@ -26,9 +26,7 @@ def read_param_file(name: str) -> pd.Series:
     Examples
     --------
     >>> from pysco.iostream import read_param_file
-    >>> import os
-    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
-    >>> params = read_param_file(f"{this_dir}/../examples/param.ini")
+    >>> params = read_param_file(f"./examples/param.ini")
     """
     param = pd.read_csv(
         name,
@@ -92,9 +90,7 @@ def read_snapshot_particles_hdf5(
     Examples
     --------
     >>> from pysco.iostream import read_snapshot_particles_hdf5
-    >>> import os
-    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
-    >>> position, velocity = read_snapshot_particles_hdf5(f"{this_dir}/../examples/snapshot.h5")
+    >>> position, velocity = read_snapshot_particles_hdf5(f"snapshot.h5")
     """
     import h5py
 
@@ -124,9 +120,7 @@ def read_snapshot_particles_parquet(
     Examples
     --------
     >>> from pysco.iostream import read_snapshot_particles_parquet
-    >>> import os
-    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
-    >>> position, velocity = read_snapshot_particles_parquet(f"{this_dir}/../examples/snapshot.parquet")
+    >>> position, velocity = read_snapshot_particles_parquet(f"snapshot.parquet")
     """
     import pyarrow.parquet as pq
 
@@ -162,13 +156,11 @@ def write_snapshot_particles(
     >>> import numpy as np
     >>> import pandas as pd
     >>> from pysco.iostream import write_snapshot_particles
-    >>> import os
-    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> position = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
     >>> velocity = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype=np.float32)
-    >>> parameters = pd.Series({"snapshot_format": "parquet", "base": f"{this_dir}/../examples/", "i_snap": 0, "extra": "extra_info", "aexp": 1.0})
+    >>> parameters = pd.Series({"output_snapshot_format": "parquet", "base": f"./examples/", "i_snap": 0, "extra": "extra_info", "aexp": 1.0})
     >>> write_snapshot_particles(position, velocity, parameters)
-    >>> parameters = pd.Series({"snapshot_format": "hdf5", "base": f"{this_dir}/../examples/", "i_snap": 0, "extra": "extra_info", "aexp": 1.0})
+    >>> parameters = pd.Series({"output_snapshot_format": "hdf5", "base": f"./examples/", "i_snap": 0, "extra": "extra_info", "aexp": 1.0})
     >>> write_snapshot_particles(position, velocity, parameters)
     """
     OUTPUT_SNAPSHOT_FORMAT = param["output_snapshot_format"].casefold()
@@ -215,11 +207,9 @@ def write_snapshot_particles_parquet(
     --------
     >>> import numpy as np
     >>> from pysco.iostream import write_snapshot_particles_parquet
-    >>> import os
-    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> position = np.random.rand(32**3, 3).astype(np.float32)
     >>> velocity = np.random.rand(32**3, 3).astype(np.float32)
-    >>> write_snapshot_particles_parquet(f"{this_dir}/../examples/snapshot.parquet", position, velocity)
+    >>> write_snapshot_particles_parquet(f"./examples/snapshot.parquet", position, velocity)
     """
     import pyarrow as pa
     import pyarrow.parquet as pq
@@ -263,12 +253,10 @@ def write_snapshot_particles_hdf5(
     >>> import numpy as np
     >>> import pandas as pd
     >>> from pysco.iostream import write_snapshot_particles_hdf5
-    >>> import os
-    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> position = np.random.rand(32**3, 3).astype(np.float32)
     >>> velocity = np.random.rand(32**3, 3).astype(np.float32)
     >>> param = pd.Series({"Attribute_0": 0.0, "Attribute_1": 300.0})
-    >>> write_snapshot_particles_hdf5(f"{this_dir}/../examples/snapshot.h5", position, velocity, param)
+    >>> write_snapshot_particles_hdf5(f"./examples/snapshot.h5", position, velocity, param)
     """
     import h5py
 
@@ -303,8 +291,6 @@ def write_power_spectrum_to_ascii_file(
     >>> import numpy as np
     >>> import pandas as pd
     >>> from pysco.iostream import write_power_spectrum_to_ascii_file
-    >>> import os
-    >>> this_dir = os.path.dirname(os.path.abspath(__file__))
     >>> k = np.random.rand(32**3, 3).astype(np.float32)
     >>> Pk = np.random.rand(32**3, 3).astype(np.float32)
     >>> Nmodes = np.random.rand(32**3, 3).astype(np.float32)

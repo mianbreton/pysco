@@ -1,8 +1,9 @@
 """
 This module implements numerical solutions for a quartic operator in the context of f(R) gravity,
-based on the work by Ruan et al. (2021). The numerical methods include a Gauss-Seidel solver,
+based on the work by Ruan et al. (2022). The numerical methods include a Gauss-Seidel solver,
 solution of the depressed quartic equation, and additional utility functions.
 """
+
 import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange

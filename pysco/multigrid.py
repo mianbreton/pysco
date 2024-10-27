@@ -53,7 +53,7 @@ def linear(
     >>> x_initial = np.zeros((64, 64, 64), dtype=np.float32)
     >>> rhs = np.ones((64, 64, 64), dtype=np.float32)
     >>> grid_size = 1./64
-    >>> parameters = pd.Series({"compute_additional_field": False, "epsrel": 1e-5, "nsteps": 0})
+    >>> parameters = pd.Series({"theory": "newton", "compute_additional_field": False, "Npre": 2, "Npost": 1, "ncoarse": 4,  "epsrel": 1e-5, "nsteps": 0})
 
     >>> # Call the linear multigrid solver
     >>> result = linear(x_initial, rhs, grid_size, parameters)
@@ -125,7 +125,7 @@ def FAS(
     >>> x_initial = np.zeros((64, 64, 64), dtype=np.float32)
     >>> rhs = np.ones((64, 64, 64), dtype=np.float32)
     >>> grid_size = 1./64
-    >>> parameters = pd.Series({"compute_additional_field": False, "epsrel": 1e-5, "nsteps": 0})
+    >>> parameters = pd.Series({"theory": "newton", "compute_additional_field": False, "Npre": 2, "Npost": 1, "ncoarse": 4,  "epsrel": 1e-5, "nsteps": 0})
 
     >>> # Call the FAS multigrid solver
     >>> result = FAS(x_initial, rhs, grid_size, parameters)
@@ -232,7 +232,7 @@ def residual_error(
     --------
     >>> import numpy as np
     >>> import pandas as pd
-    >>> from pysco.multigrid import residual_error_half
+    >>> from pysco.multigrid import residual_error
 
     >>> # Define input arrays and parameters
     >>> potential = np.ones((64, 64, 64), dtype=np.float32)
@@ -241,7 +241,7 @@ def residual_error(
     >>> parameters = pd.Series({"compute_additional_field": False, "fR_n": 1, "fR_q": 0.1})
 
     >>> # Call the function
-    >>> error = residual_error_half(potential, density, grid_size, parameters)
+    >>> error = residual_error(potential, density, grid_size, parameters)
     """
     if (
         param["compute_additional_field"]
@@ -418,14 +418,14 @@ def operator(
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> param = pd.Series({"compute_additional_field": True, "fR_n": 1, "fR_q": -0.1})
+    >>> param = pd.Series({"theory":"fr", "compute_additional_field": True, "fR_n": 1, "fR_q": -0.1})
     >>> operator_result = operator(x, h, param, b)
 
     >>> # Example 2: Compute operator for f(R) with n = 2 and custom density term
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> h = np.float32(1./32)
-    >>> param = pd.Series({"compute_additional_field": True, "fR_n": 2, "fR_q": -0.2})
+    >>> param = pd.Series({"theory":"fr", "compute_additional_field": True, "fR_n": 2, "fR_q": -0.2})
     >>> operator_result = operator(x, h, param, b)
 
     >>> # Example 3: Compute Laplacian operator for the main field
