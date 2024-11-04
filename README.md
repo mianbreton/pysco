@@ -35,6 +35,7 @@
        </ul>
     </li>
     <li><a href="#library-utilities">Library utilities</a></li>
+    <li><a href="#citation">Citation</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
@@ -437,6 +438,27 @@ k, pk, modes = fourier_grid_to_Pk(density_k, MAS)
 boxlen = 100 # Box length, in Mpc/h
 pk *= (boxlen / len(density) ** 2) ** 3
 k *= 2 * np.pi / boxlen
+```
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+<!-- CITATION -->
+
+## Citation
+
+If you use PySCo in your work, please cite [Breton (2024)](https://arxiv.org/abs/2410.20501)
+
+```bibtex
+#biblio.bib
+@misc{breton2024pysco,
+      title={PySCo: A fast Particle-Mesh $N$-body code for modified gravity simulations in Python},
+      author={Michel-Andrès Breton},
+      year={2024},
+      eprint={2410.20501},
+      archivePrefix={arXiv},
+      primaryClass={astro-ph.CO},
+      url={https://arxiv.org/abs/2410.20501},
+}
 ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
