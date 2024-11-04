@@ -450,15 +450,23 @@ If you use PySCo in your work, please cite [Breton (2024)](https://arxiv.org/abs
 
 ```bibtex
 #biblio.bib
-@misc{breton2024pysco,
-      title={PySCo: A fast Particle-Mesh $N$-body code for modified gravity simulations in Python},
-      author={Michel-Andrès Breton},
-      year={2024},
-      eprint={2410.20501},
-      archivePrefix={arXiv},
-      primaryClass={astro-ph.CO},
-      url={https://arxiv.org/abs/2410.20501},
+@ARTICLE{breton2024pysco,
+       author = {{Breton}, Michel-Andr{\`e}s},
+        title = "{PySCo: A fast Particle-Mesh $N$-body code for modified gravity simulations in Python}",
+      journal = {arXiv e-prints},
+     keywords = {Astrophysics - Cosmology and Nongalactic Astrophysics},
+         year = 2024,
+        month = oct,
+          eid = {arXiv:2410.20501},
+        pages = {arXiv:2410.20501},
+          doi = {10.48550/arXiv.2410.20501},
+archivePrefix = {arXiv},
+       eprint = {2410.20501},
+ primaryClass = {astro-ph.CO},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2024arXiv241020501B},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
 }
+
 ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
