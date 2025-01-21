@@ -184,7 +184,7 @@ def set_units(param: pd.Series) -> None:
     g = G.value * 1e-9  # m3/kg/s2 -> km3/kg/s2
     # Modify relevant quantities
     H0 = param["H0"] / mpc_to_km  # km/s/Mpc -> 1/s
-    rhoc = 3.0 * H0**2 / (8.0 * np.pi * g)  #   kg/m3
+    rhoc = 3.0 * H0**2 / (8.0 * np.pi * g)  #   kg/km3
 
     param["unit_l"] = param["aexp"] * param["boxlen"] * 100.0 / H0  # BU to proper km
     param["unit_t"] = param["aexp"] ** 2 / H0  # BU to lookback seconds

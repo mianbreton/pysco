@@ -66,8 +66,6 @@ def read_param_file(name: str) -> pd.Series:
             value = eval(param[key].item())
             param[key] = value
 
-    param["write_snapshot"] = False
-
     return param.T.iloc[:, 0]
 
 

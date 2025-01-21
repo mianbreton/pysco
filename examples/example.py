@@ -56,4 +56,4 @@ param = {
 # Run simulation
 pysco.run(param)
 
-print("Run Completed!")
+print("Run completed!")
