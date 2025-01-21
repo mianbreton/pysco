@@ -5,9 +5,9 @@ Main executable module to run cosmological N-body simulations
 Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __email__ = "michel-andres.breton@obspm.fr"
-__status__ = "Development"
+__status__ = "Production"
 
 import ast
 import numba
@@ -66,6 +66,7 @@ def run(param) -> None:
         pass
     else:
         raise ValueError(f"{type(param)=}, should be a dictionnary or a Pandas Series")
+    param["write_snapshot"] = False
 
     if param["nthreads"] > 0:
         numba.set_num_threads(param["nthreads"])
