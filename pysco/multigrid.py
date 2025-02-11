@@ -267,6 +267,7 @@ def restrict_residual(
     b: npt.NDArray[np.float32],
     h: np.float32,
     param: pd.Series,
+    rhs: npt.NDArray[np.float32] = np.empty(0, dtype=np.float32),
 ) -> npt.NDArray[np.float32]:
     """Restricts the residual of the field
 
@@ -280,6 +281,8 @@ def restrict_residual(
         Grid size
     param : pd.Series
         Parameter container
+    rhs : npt.NDArray[np.float32], optional
+        Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Returns
     -------
@@ -315,8 +318,10 @@ def restrict_residual(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
             )
     else:
-        return laplacian.restrict_residual(x, b, h)
-        # return laplacian.restrict_residual_half(x, b, h)
+        if len(rhs) == 0:
+            return laplacian.restrict_residual(x, b, h)
+        else:
+            return laplacian.restrict_residual(x, rhs, h)
 
 
 def smoothing(
@@ -379,7 +384,10 @@ def smoothing(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
             )
     else:
-        laplacian.smoothing(x, b, h, n_smoothing)
+        if len(rhs) == 0:
+            laplacian.smoothing(x, b, h, n_smoothing)
+        else:
+            laplacian.smoothing(x, rhs, h, n_smoothing)
 
 
 def operator(
@@ -539,7 +547,7 @@ def V_cycle_FAS(
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
     smoothing(x, b, h, param["Npre"], param, rhs)
-    res_c = restrict_residual(x, b, h, param)
+    res_c = restrict_residual(x, b, h, param, rhs)
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
     b_c = mesh.restriction(b)
@@ -662,7 +670,7 @@ def F_cycle_FAS(
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
     smoothing(x, b, h, param["Npre"], param, rhs)
-    res_c = restrict_residual(x, b, h, param)
+    res_c = restrict_residual(x, b, h, param, rhs)
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
     b_c = mesh.restriction(b)
@@ -679,7 +687,7 @@ def F_cycle_FAS(
     x_corr_c = 0
     smoothing(x, b, h, param["Npre"], param, rhs)
 
-    res_c = restrict_residual(x, b, h, param)
+    res_c = restrict_residual(x, b, h, param, rhs)
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
     L_c = operator(x_c, two * h, param, b_c)
@@ -799,7 +807,7 @@ def W_cycle_FAS(
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
     smoothing(x, b, h, param["Npre"], param, rhs)
-    res_c = restrict_residual(x, b, h, param)
+    res_c = restrict_residual(x, b, h, param, rhs)
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
     b_c = mesh.restriction(b)
@@ -818,7 +826,7 @@ def W_cycle_FAS(
     x_corr_c = 0
     smoothing(x, b, h, param["Npre"], param, rhs)
 
-    res_c = restrict_residual(x, b, h, param)
+    res_c = restrict_residual(x, b, h, param, rhs)
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
     L_c = operator(x_c, two * h, param, b_c)
