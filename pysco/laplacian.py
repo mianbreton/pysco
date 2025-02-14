@@ -803,6 +803,7 @@ def jacobi(
     h2 = np.float32(h**2)
     ncells_1d = x.shape[0]
     invsix = np.float32(1.0 / 6)
+    x_old = x.copy()
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -813,13 +814,13 @@ def jacobi(
                 km1 = k - 1
                 kp1 = k + 1
                 x[i, j, k] = (
-                    x[im1, j, k]
-                    + x[i, jm1, k]
-                    + x[i, j, km1]
+                    x_old[im1, j, k]
+                    + x_old[i, jm1, k]
+                    + x_old[i, j, km1]
                     - h2 * b[i, j, k]
-                    + x[i, j, kp1]
-                    + x[i, jp1, k]
-                    + x[ip1, j, k]
+                    + x_old[i, j, kp1]
+                    + x_old[i, jp1, k]
+                    + x_old[ip1, j, k]
                 ) * invsix
 
 
