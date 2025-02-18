@@ -6,6 +6,7 @@ of f(R) gravity, as described by Bose et al. (2017). The cubic operator equation
 given by u^3 + pu + q = 0, where p and q are determined from the given field and density
 terms.
 """
+
 import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange
@@ -38,6 +39,7 @@ def operator(
     h : np.float32
         Grid size
     q : np.float32
+        Cubic parameter
         
 
     Returns
@@ -83,6 +85,83 @@ def operator(
 
 
 @njit(
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4, f4, f4[:,:,::1])"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def residual_with_rhs(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    h: np.float32,
+    q: np.float32,
+    rhs: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Cubic residual with RHS
+
+    u^3 + pu + q = rhs\\
+    with, in f(R) gravity [Bose et al. 2017]\\
+    q = q*h^2
+    p = h^2*b - 1/6 * (u_{i+1,j,k}**2+u_{i-1,j,k}**2+u_{i,j+1,k}**2+u_{i,j-1,k}**2+u_{i,j,k+1}**2+u_{i,j,k-1}**2)
+    
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Density term [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+    q : np.float32
+        cubic parameter
+    rhs : npt.NDArray[np.float32]
+        RHS term [N_cells_1d, N_cells_1d, N_cells_1d]
+        
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Cubic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.cubic import operator
+    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> h = 1./32
+    >>> q = 0.05
+    >>> result = residual_with_rhs(x, b, h, q, rhs)
+    """
+    h2 = np.float32(h**2)
+    ncells_1d = x.shape[0]
+    qh2 = q * h2
+    invsix = np.float32(1.0 / 6)
+    result = np.empty_like(x)
+    for i in prange(-1, ncells_1d - 1):
+        im1 = i - 1
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jm1 = j - 1
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                km1 = k - 1
+                kp1 = k + 1
+                p = h2 * b[i, j, k] - invsix * (
+                    x[im1, j, k] ** 2
+                    + x[i, jm1, k] ** 2
+                    + x[i, j, km1] ** 2
+                    + x[i, j, kp1] ** 2
+                    + x[i, jp1, k] ** 2
+                    + x[ip1, j, k] ** 2
+                )
+                x_tmp = x[i, j, k]
+                result[i, j, k] = -(x_tmp**3) - p * x_tmp - qh2 + rhs[i, j, k]
+    return result
+
+
+@njit(
     ["f4(f4, f4)"],
     fastmath=True,
     cache=True,
@@ -113,7 +192,7 @@ def solution_cubic_equation(
     >>> d1 = 2.7
     >>> solution = solution_cubic_equation(p, d1)
     """  # TODO: Optimize but keep double precision
-    inv3 = 1.0 / 3
+    inv3 = np.float64(1.0 / 3)
     d1 = np.float64(d1)
     p = np.float64(p)
     d = d1**2 + 108.0 * p**3

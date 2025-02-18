@@ -310,9 +310,15 @@ def restrict_residual(
     ):
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
-            return mesh.minus_restriction(cubic.operator(x, b, h, q))
+            if len(rhs) == 0:
+                return mesh.minus_restriction(cubic.operator(x, b, h, q))
+            else:
+                return mesh.restriction(cubic.residual_with_rhs(x, b, h, q, rhs))
         elif param["fR_n"] == 2:
-            return mesh.minus_restriction(quartic.operator(x, b, h, q))
+            if len(rhs) == 0:
+                return mesh.minus_restriction(quartic.operator(x, b, h, q))
+            else:
+                return mesh.restriction(quartic.residual_with_rhs(x, b, h, q, rhs))
         else:
             raise NotImplemented(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
@@ -563,7 +569,7 @@ def V_cycle_FAS(
     b_c = 0
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     x_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npost"], param, rhs)
 
@@ -683,7 +689,7 @@ def F_cycle_FAS(
         F_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
     res_c = 0
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npre"], param, rhs)
 
@@ -701,7 +707,7 @@ def F_cycle_FAS(
     res_c = 0
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     x_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npost"], param, rhs)
 
@@ -822,7 +828,7 @@ def W_cycle_FAS(
     res_c = 0
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     x_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npre"], param, rhs)
 
@@ -840,6 +846,6 @@ def W_cycle_FAS(
     res_c = 0
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     x_c = 0
-    mesh.add_prolongation_half(x, x_corr_c)
+    mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
     smoothing(x, b, h, param["Npost"], param, rhs)

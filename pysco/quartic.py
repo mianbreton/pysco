@@ -81,6 +81,82 @@ def operator(
 
 
 @njit(
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4, f4, f4[:,:,::1])"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def residual_with_rhs(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    h: np.float32,
+    q: np.float32,
+    rhs: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Quartic residual with rhs
+
+    u^4 + pu + q = rhs\\
+    with, in f(R) gravity [Ruan et al. (2021)]\\
+    q = q*h^2
+    p = h^2*b - 1/6 * (u_{i+1,j,k}**3+u_{i-1,j,k}**3+u_{i,j+1,k}**3+u_{i,j-1,k}**3+u_{i,j,k+1}**3+u_{i,j,k-1}**3)
+    
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Density term [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+    q : np.float32
+        Constant term in quartic equation
+    rhs : npt.NDArray[np.float32]
+        RHS term [N_cells_1d, N_cells_1d, N_cells_1d]
+        
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Quartic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.quartic import operator
+    >>> x = np.random.rand(10, 10, 10).astype(np.float32)
+    >>> b = np.random.rand(10, 10, 10).astype(np.float32)
+    >>> rhs = np.random.rand(10, 10, 10).astype(np.float32)
+    >>> h = np.float32(0.1)
+    >>> q = np.float32(0.01)
+    >>> result = residual_with_rhs(x, b, h, q, rhs)
+    """
+    h2 = np.float32(h**2)
+    ncells_1d = x.shape[0]
+    qh2 = q * h2
+    invsix = np.float32(1.0 / 6)
+    result = np.empty_like(x)
+    for i in prange(-1, ncells_1d - 1):
+        im1 = i - 1
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jm1 = j - 1
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                km1 = k - 1
+                kp1 = k + 1
+                p = h2 * b[i, j, k] - invsix * (
+                    x[im1, j, k] ** 3
+                    + x[i, jm1, k] ** 3
+                    + x[i, j, km1] ** 3
+                    + x[i, j, kp1] ** 3
+                    + x[i, jp1, k] ** 3
+                    + x[ip1, j, k] ** 3
+                )
+                x_tmp = x[i, j, k]
+                result[i, j, k] = -(x_tmp**4) - p * x_tmp - qh2 + rhs[i, j, k]
+    return result
+
+
+@njit(
     ["f4(f4, f4)"],
     fastmath=True,
     cache=True,
@@ -111,26 +187,28 @@ def solution_quartic_equation(
     >>> q = np.float32(0.01)
     >>> result = solution_quartic_equation(p, q)
     """  # TODO: Try if not better to use double precision but less checking conditions
-    zero = np.float32(0)
-    if p == zero:
-        return (-q) ** np.float32(1.0 / 4.0)
-    one = np.float32(1.0)
-    half = np.float32(0.5)
-    inv3 = np.float32(1.0 / 3.0)
-    four = np.float32(4.0)
-    d0 = np.float32(12.0 * q)
-    d1 = np.float32(27.0 * p**2)
+    zero = np.float64(0)
+    pp = np.float64(p)
+    qq = np.float64(q)
+    if pp == zero:
+        return (-qq) ** np.float64(1.0 / 4.0)
+    one = np.float64(1.0)
+    half = np.float64(0.5)
+    inv3 = np.float64(1.0 / 3.0)
+    four = np.float64(4.0)
+    d0 = np.float64(12.0 * qq)
+    d1 = np.float64(27.0 * pp**2)
     sqrt_term = one - four * d0 * (d0 / d1) ** 2
     if sqrt_term < zero:  # No real solution
-        return (-q) ** np.float32(1.0 / 4.0)
+        return (-qq) ** np.float64(1.0 / 4.0)
     Q = (half * d1 * (one + math.sqrt(sqrt_term))) ** inv3
     Q_d0oQ = Q + d0 / Q
     if Q_d0oQ > zero:
         S = half * math.sqrt(Q_d0oQ * inv3)
-        if p > zero:
+        if pp > zero:
             return -S + half * math.sqrt(-four * S**2 + p / S)
         return S + half * math.sqrt(-four * S**2 - p / S)
-    return (-q) ** np.float32(1.0 / 4.0)
+    return (-qq) ** np.float64(1.0 / 4.0)
 
 
 # @utils.time_me
@@ -176,18 +254,18 @@ def initialise_potential(
     >>> q = np.float32(-0.01)
     >>> result = initialise_potential(b, h, q)
     """
-    h2 = np.float32(h**2)
-    four = np.float32(4)
-    half = np.float32(0.5)
-    inv3 = np.float32(1.0 / 3)
-    twentyseven = np.float32(27)
-    d0 = np.float32(12 * h**2 * q)
+    h2 = np.float64(h**2)
+    four = np.float64(4)
+    half = np.float64(0.5)
+    inv3 = np.float64(1.0 / 3)
+    twentyseven = np.float64(27)
+    d0 = np.float64(12 * h**2 * q)
     u_scalaron = np.empty_like(b)
     ncells_1d = b.shape[0]
     for i in prange(ncells_1d):
         for j in prange(ncells_1d):
             for k in prange(ncells_1d):
-                p = h2 * b[i, j, k]
+                p = h2 * np.float64(b[i, j, k])
                 d1 = twentyseven * p**2
                 Q = (half * (d1 + math.sqrt(d1**2 - four * d0**3))) ** inv3
                 S = half * math.sqrt((Q + d0 / Q) * inv3)
