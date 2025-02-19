@@ -88,7 +88,9 @@ def pm(
             else:
                 density = mesh.TSC_seq(position, ncells_1d)
         case _:
-            raise ValueError(f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'")
+            raise NotImplementedError(
+                f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'"
+            )
 
     if "parametrized" == THEORY:
         evolution_term = param["aexp"] ** (
@@ -124,7 +126,9 @@ def pm(
     elif SAVE_POWER_SPECTRUM == "no":
         param["save_pk"] = False
     else:
-        raise ValueError(f"{SAVE_POWER_SPECTRUM=}, should be 'yes', 'z_out' or 'no'")
+        raise NotImplementedError(
+            f"{SAVE_POWER_SPECTRUM=}, should be 'yes', 'z_out' or 'no'"
+        )
 
     LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
     if param["save_pk"] and "multigrid" == LINEAR_NEWTON_SOLVER:
@@ -155,7 +159,7 @@ def pm(
         case "full_fft":
             pass
         case _:
-            raise ValueError(
+            raise NotImplementedError(
                 f"{param['linear_newton_solver']=}, should be multigrid, fft, fft_7pt or full_fft"
             )
 
@@ -204,7 +208,9 @@ def pm(
         case "tsc":
             acceleration = mesh.invTSC_vec(force, position)
         case _:
-            raise ValueError(f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'")
+            raise NotImplementedError(
+                f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'"
+            )
     force = 0
     return (acceleration, potential, additional_field)
 
@@ -262,7 +268,7 @@ def initialise_potential(
             elif param["fR_n"] == 2:
                 potential = quartic.initialise_potential(rhs, h, q)
             else:
-                raise NotImplemented(
+                raise NotImplementedError(
                     f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
                 )
         else:
@@ -371,12 +377,12 @@ def get_additional_field(
             elif LINEAR_NEWTON_SOLVER == "fft_7pt":
                 additional_field = fft(density, param)
             else:
-                raise ValueError(
+                raise NotImplementedError(
                     f"{param['linear_newton_solver']=}, should be 'multigrid' or 'fft_7pt'"
                 )
             return additional_field
         case _:
-            raise ValueError(
+            raise NotImplementedError(
                 f"{param['theory']=}, should be 'newton', 'fr', 'parametrized' or 'mond'"
             )
 
@@ -518,7 +524,9 @@ def fft(
         case "fft_7pt":
             fourier.inverse_laplacian_7pt(rhs_fourier)
         case _:
-            raise ValueError(f"{LINEAR_NEWTON_SOLVER=}, should be 'fft' or 'fft_7pt'")
+            raise NotImplementedError(
+                f"{LINEAR_NEWTON_SOLVER=}, should be 'fft' or 'fft_7pt'"
+            )
 
     return fourier.ifft_3D_real(rhs_fourier, param["nthreads"])
 
@@ -637,5 +645,5 @@ def force_3d(
         case "full_fft":
             force = fft_force(rhs, param)
         case _:
-            raise ValueError(f"Unsupported {LINEAR_NEWTON_SOLVER=}")
+            raise NotImplementedError(f"Unsupported {LINEAR_NEWTON_SOLVER=}")
     return force

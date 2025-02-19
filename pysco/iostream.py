@@ -177,7 +177,7 @@ def write_snapshot_particles(
             filename = f"{param['base']}/output_{param['i_snap']:05d}/particles_{param['extra']}.h5"
             write_snapshot_particles_hdf5(filename, position, velocity, param)
         case _:
-            raise ValueError(
+            raise NotImplementedError(
                 f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'"
             )
 

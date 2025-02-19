@@ -274,7 +274,7 @@ def finalise_initial_conditions(
             snap_name = f"{param['base']}/output_00000/particles_{param['extra']}.h5"
             iostream.write_snapshot_particles_hdf5(snap_name, position, velocity, param)
         case _:
-            raise ValueError(
+            raise NotImplementedError(
                 f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'"
             )
     logging.warning(f"Write initial snapshot...{snap_name=}")
@@ -1675,7 +1675,7 @@ def initialise_1LPT(
     elif POSITION == "edge":
         return initialise_1LPT_edge(psi_1lpt, dplus_1, fH)
     else:
-        raise ValueError(f"{POSITION=}, should be 'center' or 'edge'")
+        raise NotImplementedError(f"{POSITION=}, should be 'center' or 'edge'")
 
 
 @utils.time_me
