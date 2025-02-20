@@ -13,13 +13,13 @@ import mesh
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def operator(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
 ) -> npt.NDArray[np.float32]:
     """Laplacian operator
 
@@ -29,8 +29,6 @@ def operator(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Returns
     -------
@@ -42,12 +40,11 @@ def operator(
     >>> import numpy as np
     >>> from pysco.laplacian import operator
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> result = operator(x, h)
+    >>> result = operator(x)
     """
-    h2 = np.float32(h * h)
-    invsix = np.float32(1.0 / 6)
     ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
+    invsix = np.float32(1.0 / 6)
     result = np.empty_like(x)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
@@ -71,7 +68,7 @@ def operator(
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4, f4[:,:,::1])"],
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
@@ -79,7 +76,6 @@ def operator(
 def residual_with_rhs(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     rhs: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
     """Residual of Laplacian operator \\
@@ -91,8 +87,8 @@ def residual_with_rhs(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
+    rhs : npt.NDArray[np.float32]
+        RHS of operator [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Returns
     -------
@@ -105,12 +101,11 @@ def residual_with_rhs(
     >>> from pysco.laplacian import residual
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> result = residual(x, b, h)
+    >>> result = residual(x, b)
     """
-    h2 = np.float32(h * h)
-    invsix = np.float32(1.0 / 6)
     ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
+    invsix = np.float32(1.0 / 6)
     result = np.empty_like(x)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
@@ -139,9 +134,9 @@ def residual_with_rhs(
     return result
 
 
-@njit(["f4(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
+@njit(["f4(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
 def residual_error(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
 ) -> np.float32:
     """Error on the residual of Laplacian operator  \\
     residual = b - Ax  \\
@@ -153,8 +148,6 @@ def residual_error(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Returns
     -------
@@ -167,13 +160,12 @@ def residual_error(
     >>> from pysco.laplacian import residual_error_half
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> result = residual_error_half(x, b, h)
+    >>> result = residual_error_half(x, b)
     """
-    invsix = np.float32(1.0 / 6.0)
-    h2 = np.float32(h * h)
-    result = np.float32(0)
     ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
+    invsix = np.float32(1.0 / 6.0)
+    result = np.float32(0)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -201,13 +193,13 @@ def residual_error(
 
 
 @njit(
-    ["f4(f4[:,:,::1], f4[:,:,::1], f4)"],
+    ["f4(f4[:,:,::1], f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def truncation_error(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
 ) -> np.float32:
     """Truncation error estimator \\
     As in Numerical Recipes, we estimate the truncation error as \\
@@ -220,8 +212,6 @@ def truncation_error(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Returns
     -------
@@ -234,26 +224,22 @@ def truncation_error(
     >>> from pysco.quartic import truncation_error
     >>> x = np.ones((32, 32, 32), dtype=np.float32)
     >>> b = np.ones((32, 32, 32), dtype=np.float32)
-    >>> h = 1./32
-    >>> error = truncation_error(x, b, h)
+    >>> error = truncation_error(x, b)
     """
-    two = np.float32(2)
     four = np.float32(4)  # Correction for grid discrepancy
-    ncells_1d = x.shape[0] >> 1
-    RLx = mesh.restriction(operator(x, b, h))
-    LRx = operator(mesh.restriction(x), mesh.restriction(b), two * h)
-    result = 0
-    for i in prange(-1, ncells_1d - 1):
-        for j in prange(-1, ncells_1d - 1):
-            for k in prange(-1, ncells_1d - 1):
-                result += (four * RLx[i, j, k] - LRx[i, j, k]) ** 2
+    RLx = mesh.restriction(operator(x, b))
+    LRx = operator(mesh.restriction(x), mesh.restriction(b))
+    RLx_ravel = RLx.ravel()
+    LRx_ravel = LRx.ravel()
+    size = len(RLx_ravel)
+    result = np.float32(0)
+    for i in prange(size):
+        result += (four * RLx_ravel[i] - LRx_ravel[i]) ** 2
     return np.sqrt(result)
 
 
-@njit(["void(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
-def jacobi(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
-) -> None:
+@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+def jacobi(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]) -> None:
     """Jacobi iteration \\
     Smooths x in Laplacian(x) = b
 
@@ -263,8 +249,6 @@ def jacobi(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Example
     -------
@@ -272,11 +256,10 @@ def jacobi(
     >>> from pysco.laplacian import jacobi
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> jacobi(x, b, h)
+    >>> jacobi(x, b)
     """
-    h2 = np.float32(h**2)
     ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
     invsix = np.float32(1.0 / 6)
     x_old = x.copy()
     for i in prange(-1, ncells_1d - 1):
@@ -300,7 +283,7 @@ def jacobi(
 
 
 @njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4[:,:,::1])"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
@@ -308,7 +291,6 @@ def jacobi(
 def jacobi_with_rhs(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     rhs: npt.NDArray[np.float32],
 ) -> None:
     """Jacobi iteration \\
@@ -320,8 +302,6 @@ def jacobi_with_rhs(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     rhs : npt.NDArray[np.float32]
         RHS of operator [N_cells_1d, N_cells_1d, N_cells_1d]
 
@@ -332,11 +312,10 @@ def jacobi_with_rhs(
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
     >>> rhs = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> jacobi_with_rhs(x, b, h, rhs)
+    >>> jacobi_with_rhs(x, b, rhs)
     """
-    h2 = np.float32(h**2)
     ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
     invsix = np.float32(1.0 / 6)
     x_old = x.copy()
     for i in prange(-1, ncells_1d - 1):
@@ -360,13 +339,10 @@ def jacobi_with_rhs(
 
 
 # @utils.time_me
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True
-)
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
 def gauss_seidel(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     f_relax: np.float32,
 ) -> None:
     """Gauss-Seidel iteration using red-black ordering without over-relaxation \\
@@ -378,9 +354,7 @@ def gauss_seidel(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
-        f_relax : np.float32
+    f_relax : np.float32
         Relaxation factor
 
     Example
@@ -389,14 +363,14 @@ def gauss_seidel(
     >>> from pysco.laplacian import gauss_seidel_no_overrelaxation
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> gauss_seidel(x, b, h, 1)
+    >>> gauss_seidel(x, b, 1)
     """
     # WARNING: If I replace the arguments in prange by some constant values (for example, doing imax = int(0.5*x.shape[0]), then prange(imax)...),
     #          then LLVM tries to fuse the red and black loops! And we really don't want that...
-    h2 = np.float32(h**2)
+    ncells_1d = x.shape[0]
+    ncells_1d_coarse = ncells_1d // 2
+    h2 = np.float32(1.0 / ncells_1d**2)
     invsix = np.float32(1.0 / 6)
-    half_ncells_1d = x.shape[0] >> 1
 
     # Computation Red
     for i in prange(x.shape[0] >> 1):
@@ -404,12 +378,12 @@ def gauss_seidel(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(half_ncells_1d):
+        for j in prange(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(half_ncells_1d):
+            for k in prange(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -472,17 +446,17 @@ def gauss_seidel(
                     - x[ii, jj, kkm1]
                 )
     # Computation Black
-    for i in prange(half_ncells_1d):
+    for i in prange(ncells_1d_coarse):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(half_ncells_1d):
+        for j in prange(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(half_ncells_1d):
+            for k in prange(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -548,7 +522,7 @@ def gauss_seidel(
 
 # @utils.time_me
 @njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4[:,:,::1], f4)"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
@@ -556,7 +530,6 @@ def gauss_seidel(
 def gauss_seidel_with_rhs(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     rhs: npt.NDArray[np.float32],
     f_relax: np.float32,
 ) -> None:
@@ -569,8 +542,6 @@ def gauss_seidel_with_rhs(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     rhs : npt.NDArray[np.float32]
         RHS equation [N_cells_1d, N_cells_1d, N_cells_1d]
     f_relax : np.float32
@@ -583,14 +554,14 @@ def gauss_seidel_with_rhs(
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
     >>> rhs = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> gauss_seidel_with_rhs(x, b, h, rhs, 1)
+    >>> gauss_seidel_with_rhs(x, b, rhs, 1)
     """
     # WARNING: If I replace the arguments in prange by some constant values (for example, doing imax = int(0.5*x.shape[0]), then prange(imax)...),
     #          then LLVM tries to fuse the red and black loops! And we really don't want that...
-    h2 = np.float32(h**2)
     invsix = np.float32(1.0 / 6)
-    half_ncells_1d = x.shape[0] >> 1
+    ncells_1d = x.shape[0]
+    ncells_1d_coarse = ncells_1d // 2
+    h2 = np.float32(1.0 / ncells_1d**2)
 
     # Computation Red
     for i in prange(x.shape[0] >> 1):
@@ -598,12 +569,12 @@ def gauss_seidel_with_rhs(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(half_ncells_1d):
+        for j in prange(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(half_ncells_1d):
+            for k in prange(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -671,17 +642,17 @@ def gauss_seidel_with_rhs(
                     - x[ii, jj, kkm1]
                 )
     # Computation Black
-    for i in prange(half_ncells_1d):
+    for i in prange(ncells_1d_coarse):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(half_ncells_1d):
+        for j in prange(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(half_ncells_1d):
+            for k in prange(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -753,7 +724,6 @@ def gauss_seidel_with_rhs(
 def smoothing(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     n_smoothing: int,
 ) -> None:
     """Smooth field with several Gauss-Seidel iterations \\
@@ -765,8 +735,6 @@ def smoothing(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     n_smoothing : int
         Number of smoothing iterations
 
@@ -776,19 +744,17 @@ def smoothing(
     >>> from pysco.laplacian import smoothing
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
     >>> n_smoothing = 5
-    >>> smoothing(x, b, h, n_smoothing)
+    >>> smoothing(x, b, n_smoothing)
     """
     f_relax = np.float32(1.25)  # As in Kravtsov et al. 1997
     for _ in range(n_smoothing):
-        gauss_seidel(x, b, h, f_relax)
+        gauss_seidel(x, b, f_relax)
 
 
 def smoothing_with_rhs(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     n_smoothing: int,
     rhs: npt.NDArray[np.float32],
 ) -> None:
@@ -801,8 +767,6 @@ def smoothing_with_rhs(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     n_smoothing : int
         Number of smoothing iterations
     b : npt.NDArray[np.float32]
@@ -815,10 +779,9 @@ def smoothing_with_rhs(
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
     >>> rhs = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
     >>> n_smoothing = 5
-    >>> smoothing_with_rhs(x, b, h, n_smoothing, rhs, 1)
+    >>> smoothing_with_rhs(x, b, n_smoothing, rhs, 1)
     """
     f_relax = np.float32(1.25)  # As in Kravtsov et al. 1997
     for _ in range(n_smoothing):
-        gauss_seidel_with_rhs(x, b, h, rhs, f_relax)
+        gauss_seidel_with_rhs(x, b, rhs, f_relax)

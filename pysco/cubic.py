@@ -15,13 +15,13 @@ import math
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4, f4)"],
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def operator(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32, q: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
 ) -> npt.NDArray[np.float32]:
     """Cubic operator
 
@@ -36,8 +36,6 @@ def operator(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     q : np.float32
         Cubic parameter
         
@@ -53,12 +51,11 @@ def operator(
     >>> from pysco.cubic import operator
     >>> x = np.random.rand(32, 32, 32).astype(np.float32)
     >>> b = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> h = 1./32
     >>> q = 0.05
-    >>> result = operator(x, b, h, q)
+    >>> result = operator(x, b, q)
     """
-    h2 = np.float32(h**2)
     ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
     qh2 = q * h2
     invsix = np.float32(1.0 / 6)
     result = np.empty_like(x)
@@ -85,7 +82,7 @@ def operator(
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4, f4, f4[:,:,::1])"],
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4, f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
@@ -93,7 +90,6 @@ def operator(
 def residual_with_rhs(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     q: np.float32,
     rhs: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.float32]:
@@ -110,8 +106,6 @@ def residual_with_rhs(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     q : np.float32
         cubic parameter
     rhs : npt.NDArray[np.float32]
@@ -130,12 +124,11 @@ def residual_with_rhs(
     >>> x = np.random.rand(32, 32, 32).astype(np.float32)
     >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> h = 1./32
     >>> q = 0.05
-    >>> result = residual_with_rhs(x, b, h, q, rhs)
+    >>> result = residual_with_rhs(x, b, q, rhs)
     """
-    h2 = np.float32(h**2)
     ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
     qh2 = q * h2
     invsix = np.float32(1.0 / 6)
     result = np.empty_like(x)
@@ -216,14 +209,13 @@ def solution_cubic_equation(
 
 # @utils.time_me
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4, f4)"],
+    ["f4[:,:,::1](f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def initialise_potential(
     b: npt.NDArray[np.float32],
-    h: np.float32,
     q: np.float32,
 ) -> npt.NDArray[np.float32]:
     """Gauss-Seidel depressed cubic equation solver \\
@@ -236,8 +228,6 @@ def initialise_potential(
     ----------
     b : npt.NDArray[np.float32]
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     q : np.float32
         Constant value in the cubic equation
 
@@ -251,12 +241,12 @@ def initialise_potential(
     >>> import numpy as np
     >>> from pysco.cubic import initialise_potential
     >>> b = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> h = 1./32
     >>> q = -0.01
-    >>> potential = initialise_potential(b, h, q)
+    >>> potential = initialise_potential(b, q)
     """
-    threeh2 = 3 * h**2
-    d1 = 27.0 * h**2 * q
+    h2 = np.float32(1.0 / b.shape[0] ** 2)
+    threeh2 = 3 * h2
+    d1 = 27.0 * h2 * q
     inv3 = 1.0 / 3
     u_scalaron = np.empty_like(b)
     u_scalaron_ravel = u_scalaron.ravel()
@@ -271,7 +261,7 @@ def initialise_potential(
 
 # @utils.time_me
 @njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4, f4)"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
@@ -279,7 +269,6 @@ def initialise_potential(
 def gauss_seidel(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     q: np.float32,
     f_relax: np.float32,
 ) -> None:
@@ -295,8 +284,6 @@ def gauss_seidel(
         Field [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     q : np.float32
         Constant value in the cubic equation
     f_relax : np.float32
@@ -308,26 +295,26 @@ def gauss_seidel(
     >>> from pysco.cubic import gauss_seidel
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> b = np.ones((32, 32, 32), dtype=np.float32)
-    >>> h = 1./32
     >>> q = 1.0
-    >>> gauss_seidel(x, b, h, q, 1)
+    >>> gauss_seidel(x, b, q, 1)
     """
     invsix = np.float32(1.0 / 6)
-    h2 = np.float32(h**2)
+    ncells_1d = x.shape[0]
+    ncells_1d_coarse = ncells_1d // 2
+    h2 = np.float32(1.0 / ncells_1d**2)
     d1 = np.float32(27 * h2 * q)
-    half_ncells_1d = x.shape[0] >> 1
     # Computation Red
     for i in prange(x.shape[0] >> 1):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(half_ncells_1d):
+        for j in prange(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(half_ncells_1d):
+            for k in prange(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -383,17 +370,17 @@ def gauss_seidel(
                 )
 
     # Computation Black
-    for i in prange(half_ncells_1d):
+    for i in prange(ncells_1d_coarse):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(half_ncells_1d):
+        for j in prange(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(half_ncells_1d):
+            for k in prange(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -451,7 +438,7 @@ def gauss_seidel(
 
 # @utils.time_me
 @njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4, f4[:,:,::1], f4)"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
@@ -459,7 +446,6 @@ def gauss_seidel(
 def gauss_seidel_with_rhs(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     q: np.float32,
     rhs: npt.NDArray[np.float32],
     f_relax: np.float32,
@@ -476,8 +462,6 @@ def gauss_seidel_with_rhs(
         Field [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     q : np.float32
         Constant value in the cubic equation
     rhs : npt.NDArray[np.float32]
@@ -491,16 +475,16 @@ def gauss_seidel_with_rhs(
     >>> from pysco.cubic import gauss_seidel_with_rhs
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> b = np.ones((32, 32, 32), dtype=np.float32)
-    >>> h = 1./32
     >>> q = 1.0
     >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> gauss_seidel_with_rhs(x, b, h, q, rhs, 1)
+    >>> gauss_seidel_with_rhs(x, b, q, rhs, 1)
     """
     invsix = np.float32(1.0 / 6)
-    h2 = np.float32(h**2)
+    ncells_1d = x.shape[0]
+    ncells_1d_coarse = ncells_1d // 2
+    h2 = np.float32(1.0 / ncells_1d**2)
     twenty_seven = np.float32(27)
     d1_q = twenty_seven * h2 * q
-    half_ncells_1d = x.shape[0] >> 1
 
     # Computation Red
     for i in prange(x.shape[0] >> 1):
@@ -508,12 +492,12 @@ def gauss_seidel_with_rhs(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(half_ncells_1d):
+        for j in prange(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(half_ncells_1d):
+            for k in prange(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -573,17 +557,17 @@ def gauss_seidel_with_rhs(
                 )
 
     # Computation Black
-    for i in prange(half_ncells_1d):
+    for i in prange(ncells_1d_coarse):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(half_ncells_1d):
+        for j in prange(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(half_ncells_1d):
+            for k in prange(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -644,13 +628,13 @@ def gauss_seidel_with_rhs(
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4, f4)"],
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def residual_half(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32, q: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
 ) -> npt.NDArray[np.float32]:
     """Residual of the cubic operator on half the mesh \\
     residual = -(u^3 + p*u + q)  \\
@@ -663,8 +647,6 @@ def residual_half(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     q : np.float32
         Constant value in the cubic equation
 
@@ -679,26 +661,26 @@ def residual_half(
     >>> from pysco.cubic import residual_half
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> b = np.ones((32, 32, 32), dtype=np.float32)
-    >>> h = 1./32
     >>> q = 1.0
-    >>> residual = residual_half(x, b, h, q)
+    >>> residual = residual_half(x, b, q)
     """
     invsix = np.float32(1.0 / 6)
-    ncells_1d = x.shape[0] >> 1
-    h2 = np.float32(h**2)
+    ncells_1d = x.shape[0]
+    ncells_1d_coarse = ncells_1d // 2
+    h2 = np.float32(1.0 / ncells_1d**2)
     qh2 = q * h2
     result = np.zeros_like(x)
-    for i in prange(-1, ncells_1d - 1):
+    for i in prange(-1, ncells_1d_coarse - 1):
         ii = 2 * i
         iim1 = ii - 1
         iim2 = iim1 - 1
         iip1 = ii + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in prange(-1, ncells_1d_coarse - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjm2 = jjm1 - 1
             jjp1 = jj + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in prange(-1, ncells_1d_coarse - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
@@ -752,11 +734,9 @@ def residual_half(
     return result
 
 
-@njit(
-    ["f4(f4[:,:,::1], f4[:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True
-)
+@njit(["f4(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
 def residual_error_half(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32, q: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
 ) -> np.float32:
     """Error on half of the residual of the cubic operator  \\
     residual = u^3 + p*u + q  \\
@@ -770,8 +750,6 @@ def residual_error_half(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     q : np.float32
         Constant value in the cubic equation
 
@@ -786,26 +764,26 @@ def residual_error_half(
     >>> from pysco.cubic import residual_error_half
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> b = np.ones((32, 32, 32), dtype=np.float32)
-    >>> h = 1./32
     >>> q = 1.0
-    >>> error = residual_error_half(x, b, h, q)
+    >>> error = residual_error_half(x, b, q)
     """
     invsix = np.float32(1.0 / 6)
-    h2 = np.float32(h**2)
-    ncells_1d = x.shape[0] >> 1
+    ncells_1d = x.shape[0]
+    ncells_1d_coarse = ncells_1d // 2
+    h2 = np.float32(1.0 / ncells_1d**2)
     qh2 = q * h2
     result = np.float32(0)
-    for i in prange(-1, ncells_1d - 1):
+    for i in prange(-1, ncells_1d_coarse - 1):
         ii = 2 * i
         iim1 = ii - 1
         iim2 = iim1 - 1
         iip1 = ii + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in prange(-1, ncells_1d_coarse - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjm2 = jjm1 - 1
             jjp1 = jj + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in prange(-1, ncells_1d_coarse - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
@@ -862,13 +840,13 @@ def residual_error_half(
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4, f4)"],
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def restrict_residual_half(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32, q: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
 ) -> npt.NDArray[np.float32]:
     """Restriction of residual of the cubic operator on half the mesh \\
     residual = -(u^3 + p*u + q)  \\
@@ -881,8 +859,6 @@ def restrict_residual_half(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     q : np.float32
         Constant value in the cubic equation
 
@@ -897,27 +873,29 @@ def restrict_residual_half(
     >>> from pysco.cubic import restrict_residual_half
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> b = np.ones((32, 32, 32), dtype=np.float32)
-    >>> h = 1./32
     >>> q = 1.0
-    >>> restricted_residual = restrict_residual_half(x, b, h, q)
+    >>> restricted_residual = restrict_residual_half(x, b, q)
     """
     invsix = np.float32(1.0 / 6)
     inveight = np.float32(0.125)
-    ncells_1d = x.shape[0] >> 1
-    h2 = np.float32(h**2)
+    ncells_1d = x.shape[0]
+    ncells_1d_coarse = ncells_1d // 2
+    h2 = np.float32(1.0 / ncells_1d**2)
     qh2 = q * h2
-    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
-    for i in prange(-1, ncells_1d - 1):
+    result = np.empty(
+        (ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32
+    )
+    for i in prange(-1, ncells_1d_coarse - 1):
         ii = 2 * i
         iim1 = ii - 1
         iim2 = iim1 - 1
         iip1 = ii + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in prange(-1, ncells_1d_coarse - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjm2 = jjm1 - 1
             jjp1 = jj + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in prange(-1, ncells_1d_coarse - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
@@ -973,13 +951,13 @@ def restrict_residual_half(
 
 
 @njit(
-    ["f4(f4[:,:,::1], f4[:,:,::1], f4, f4)"],
+    ["f4(f4[:,:,::1], f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def truncation_error(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32, q: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
 ) -> np.float32:
     """Truncation error estimator \\
     As in Numerical Recipes, we estimate the truncation error as \\
@@ -992,8 +970,6 @@ def truncation_error(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     q : np.float32
         Constant value in the cubic equation
 
@@ -1008,20 +984,18 @@ def truncation_error(
     >>> from pysco.cubic import truncation_error
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> b = np.ones((32, 32, 32), dtype=np.float32)
-    >>> h = 1./32
     >>> q = 1.0
-    >>> error_estimate = truncation_error(x, b, h, q)
+    >>> error_estimate = truncation_error(x, b, q)
     """
     four = np.float32(4)  # Correction for grid discrepancy
-    two = np.float32(2)
-    ncells_1d = x.shape[0] >> 1
-    RLx = mesh.restriction(operator(x, b, h, q))
-    LRx = operator(mesh.restriction(x), mesh.restriction(b), two * h, q)
-    result = 0
-    for i in prange(-1, ncells_1d - 1):
-        for j in prange(-1, ncells_1d - 1):
-            for k in prange(-1, ncells_1d - 1):
-                result += (four * RLx[i, j, k] - LRx[i, j, k]) ** 2
+    RLx = mesh.restriction(operator(x, b, q))
+    LRx = operator(mesh.restriction(x), mesh.restriction(b), q)
+    RLx_ravel = RLx.ravel()
+    LRx_ravel = LRx.ravel()
+    size = len(RLx_ravel)
+    result = np.float32(0)
+    for i in prange(size):
+        result += (four * RLx_ravel[i] - LRx_ravel[i]) ** 2
     return np.sqrt(result)
 
 
@@ -1029,7 +1003,6 @@ def truncation_error(
 def smoothing(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     q: np.float32,
     n_smoothing: int,
 ) -> None:
@@ -1041,8 +1014,6 @@ def smoothing(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     q : np.float32
         Constant value in the cubic equation
     n_smoothing : int
@@ -1054,21 +1025,19 @@ def smoothing(
     >>> from pysco.cubic import smoothing
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> b = np.ones((32, 32, 32), dtype=np.float32)
-    >>> h = 1./32
     >>> q = 1.0
     >>> n_iterations = 5
-    >>> smoothing(x, b, h, q, n_iterations)
+    >>> smoothing(x, b, q, n_iterations)
     """
     f_relax = np.float32(1.0)
     for _ in range(n_smoothing):
-        gauss_seidel(x, b, h, q, f_relax)
+        gauss_seidel(x, b, q, f_relax)
 
 
 # @utils.time_me
 def smoothing_with_rhs(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     q: np.float32,
     n_smoothing: int,
     rhs: npt.NDArray[np.float32],
@@ -1081,8 +1050,6 @@ def smoothing_with_rhs(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     q : np.float32
         Constant value in the cubic equation
     n_smoothing : int
@@ -1096,12 +1063,11 @@ def smoothing_with_rhs(
     >>> from pysco.cubic import smoothing_with_rhs
     >>> x = np.zeros((32, 32, 32), dtype=np.float32)
     >>> b = np.ones((32, 32, 32), dtype=np.float32)
-    >>> h = 1./32
     >>> q = 1.0
     >>> n_iterations = 5
     >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> smoothing_with_rhs(x, b, h, q, n_iterations, rhs)
+    >>> smoothing_with_rhs(x, b, q, n_iterations, rhs)
     """
     f_relax = np.float32(1.0)
     for _ in range(n_smoothing):
-        gauss_seidel_with_rhs(x, b, h, q, rhs, f_relax)
+        gauss_seidel_with_rhs(x, b, q, rhs, f_relax)

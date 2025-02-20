@@ -8,16 +8,14 @@ from numba import config, njit, prange
 import mesh
 
 
-@njit(["f4[:,:,::1](f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
-def operator(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float32]:
+@njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+def operator(x: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     """Laplacian operator
 
     Parameters
     ----------
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Returns
     -------
@@ -29,12 +27,11 @@ def operator(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float3
     >>> import numpy as np
     >>> from pysco.laplacian import operator
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> result = operator(x, h)
+    >>> result = operator(x)
     """
-    invh2 = np.float32(h ** (-2))
-    six = np.float32(6)
     ncells_1d = x.shape[0]
+    invh2 = np.float32(ncells_1d**2)
+    six = np.float32(6)
     result = np.empty_like(x)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
@@ -58,13 +55,13 @@ def operator(x: npt.NDArray[np.float32], h: np.float32) -> npt.NDArray[np.float3
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def residual(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
 ) -> npt.NDArray[np.float32]:
     """Residual of Laplacian operator \\
     residual = b - Ax
@@ -75,8 +72,6 @@ def residual(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Returns
     -------
@@ -89,12 +84,11 @@ def residual(
     >>> from pysco.laplacian import residual
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> result = residual(x, b, h)
+    >>> result = residual(x, b)
     """
-    invh2 = np.float32(h ** (-2))
-    six = np.float32(6)
     ncells_1d = x.shape[0]
+    invh2 = np.float32(ncells_1d**2)
+    six = np.float32(6)
     result = np.empty_like(x)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
@@ -123,13 +117,13 @@ def residual(
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def restrict_residual(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
 ) -> npt.NDArray[np.float32]:
     """Restriction operator on half of the residual of Laplacian operator \\
     residual = -(Ax - b)  \\
@@ -142,8 +136,6 @@ def restrict_residual(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Returns
     -------
@@ -156,25 +148,27 @@ def restrict_residual(
     >>> from pysco.laplacian import restrict_residual
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> result = restrict_residual(x, b, h)
+    >>> result = restrict_residual(x, b)
     """
+    ncells_1d = x.shape[0]
+    invh2 = np.float32(ncells_1d**2)
+    ncells_1d_coarse = ncells_1d // 2
     inveight = np.float32(0.125)
     three = np.float32(3.0)
-    invh2 = np.float32(h ** (-2))
-    ncells_1d = x.shape[0] >> 1
-    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
-    for i in prange(-1, ncells_1d - 1):
+    result = np.empty(
+        (ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32
+    )
+    for i in prange(-1, ncells_1d_coarse - 1):
         ii = 2 * i
         iim1 = ii - 1
         iip1 = ii + 1
         iip2 = iip1 + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in prange(-1, ncells_1d_coarse - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjp1 = jj + 1
             jjp2 = jjp1 + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in prange(-1, ncells_1d_coarse - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkp1 = kk + 1
@@ -233,13 +227,13 @@ def restrict_residual(
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def restrict_residual_half(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
 ) -> npt.NDArray[np.float32]:
     """Restriction operator on half of the residual of Laplacian operator \\
     residual = -(Ax - b)  \\
@@ -252,8 +246,6 @@ def restrict_residual_half(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Returns
     -------
@@ -266,26 +258,28 @@ def restrict_residual_half(
     >>> from pysco.laplacian import restrict_residual_half
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> result = restrict_residual_half(x, b, h)
+    >>> result = restrict_residual_half(x, b)
     """
+    ncells_1d = x.shape[0]
+    invh2 = np.float32(ncells_1d**2)
+    ncells_1d_coarse = ncells_1d // 2
     inveight = np.float32(0.125)
     three = np.float32(3.0)
     six = np.float32(6.0)
-    invh2 = np.float32(h ** (-2))
-    ncells_1d = x.shape[0] >> 1
-    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
-    for i in prange(-1, ncells_1d - 1):
+    result = np.empty(
+        (ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32
+    )
+    for i in prange(-1, ncells_1d_coarse - 1):
         ii = 2 * i
         iim1 = ii - 1
         iip1 = ii + 1
         iip2 = iip1 + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in prange(-1, ncells_1d_coarse - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjp1 = jj + 1
             jjp2 = jjp1 + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in prange(-1, ncells_1d_coarse - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkp1 = kk + 1
@@ -329,9 +323,9 @@ def restrict_residual_half(
     return result
 
 
-@njit(["f4(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
+@njit(["f4(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
 def residual_error(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
 ) -> np.float32:
     """Error on the residual of Laplacian operator  \\
     residual = b - Ax  \\
@@ -343,8 +337,6 @@ def residual_error(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Returns
     -------
@@ -357,13 +349,12 @@ def residual_error(
     >>> from pysco.laplacian import residual_error_half
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> result = residual_error_half(x, b, h)
+    >>> result = residual_error_half(x, b)
     """
-    six = np.float32(6.0)
-    invh2 = np.float32(h ** (-2))
-    result = np.float32(0)
     ncells_1d = x.shape[0]
+    invh2 = np.float32(ncells_1d**2)
+    six = np.float32(6.0)
+    result = np.float32(0)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -390,9 +381,9 @@ def residual_error(
     return np.sqrt(result)
 
 
-@njit(["f4(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
+@njit(["f4(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
 def residual_error_half(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
 ) -> np.float32:
     """Error on half of the residual of Laplacian operator  \\
     residual = b - Ax  \\
@@ -406,8 +397,6 @@ def residual_error_half(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Returns
     -------
@@ -420,24 +409,24 @@ def residual_error_half(
     >>> from pysco.laplacian import residual_error_half
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> result = residual_error_half(x, b, h)
+    >>> result = residual_error_half(x, b)
     """
+    ncells_1d = x.shape[0]
+    invh2 = np.float32(ncells_1d**2)
+    ncells_1d_coarse = ncells_1d // 2
     six = np.float32(6.0)
-    invh2 = np.float32(h ** (-2))
     result = np.float32(0)
-    ncells_1d = x.shape[0] >> 1
-    for i in prange(-1, ncells_1d - 1):
+    for i in prange(-1, ncells_1d_coarse - 1):
         ii = 2 * i
         iim1 = ii - 1
         iip1 = ii + 1
         iip2 = iip1 + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in prange(-1, ncells_1d_coarse - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjp1 = jj + 1
             jjp2 = jjp1 + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in prange(-1, ncells_1d_coarse - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkp1 = kk + 1
@@ -505,12 +494,12 @@ def residual_error_half(
 
 
 @njit(
-    ["f4(f4[:,:,::1], f4)"],
+    ["f4(f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
-def truncation_error(x: npt.NDArray[np.float32], h: np.float32) -> np.float32:
+def truncation_error(x: npt.NDArray[np.float32]) -> np.float32:
     """Truncation error estimator \\
     As in Numerical Recipes, we estimate the truncation error as \\
     t = Laplacian(Restriction(Phi)) - Restriction(Laplacian(Phi)) \\
@@ -520,8 +509,6 @@ def truncation_error(x: npt.NDArray[np.float32], h: np.float32) -> np.float32:
     ----------
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Returns
     -------
@@ -533,24 +520,21 @@ def truncation_error(x: npt.NDArray[np.float32], h: np.float32) -> np.float32:
     >>> import numpy as np
     >>> from pysco.laplacian import truncation_error
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> result = truncation_error(x, h)
+    >>> result = truncation_error(x)
     """
-    ncells_1d = x.shape[0] >> 1
-    RLx = mesh.restriction(operator(x, h))
-    LRx = operator(mesh.restriction(x), 2 * h)
+    RLx = mesh.restriction(operator(x))
+    LRx = operator(mesh.restriction(x))
+    RLx_ravel = RLx.ravel()
+    LRx_ravel = LRx.ravel()
+    size = len(RLx_ravel)
     result = 0
-    for i in prange(-1, ncells_1d - 1):
-        for j in prange(-1, ncells_1d - 1):
-            for k in prange(-1, ncells_1d - 1):
-                result += (RLx[i, j, k] - LRx[i, j, k]) ** 2
+    for i in prange(size):
+        result += (RLx_ravel[i] - LRx_ravel[i]) ** 2
     return np.sqrt(result)
 
 
-@njit(["f4[:,:,::1](f4[:,:,::1], f4)"], fastmath=True, cache=True)
-def truncation_knebe2(
-    x: npt.NDArray[np.float32], h: np.float32
-) -> npt.NDArray[np.float32]:
+@njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True)
+def truncation_knebe2(x: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     """Truncation error estimator \\
     As in Knebe et al. (2001), we estimate the truncation error as \\
     t = Prolongation(Laplacian(Restriction(Phi))) - Laplacian(Phi)
@@ -559,8 +543,6 @@ def truncation_knebe2(
     ----------
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Returns
     -------
@@ -572,10 +554,9 @@ def truncation_knebe2(
     >>> import numpy as np
     >>> from pysco.laplacian import truncation_knebe2
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> result = truncation_knebe2(x, h)
+    >>> result = truncation_knebe2(x)
     """
-    return mesh.prolongation(operator(mesh.restriction(x), 2 * h)) - operator(x, h)
+    return mesh.prolongation(operator(mesh.restriction(x))) - operator(x)
 
 
 @njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True)
@@ -776,14 +757,13 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4)"],
+    ["f4[:,:,::1](f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def initialise_potential(
     b: npt.NDArray[np.float32],
-    h: np.float32,
 ) -> npt.NDArray[np.float32]:
     """Initialse solution of Poisson equation \\
     u_ini = h^2/6 b
@@ -792,8 +772,6 @@ def initialise_potential(
     ----------
     b : npt.NDArray[np.float32]
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Returns
     -------
@@ -805,9 +783,9 @@ def initialise_potential(
     >>> import numpy as np
     >>> from pysco.laplacian import initialise_potential
     >>> b = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> h = 1./32
-    >>> potential = initialise_potential(b, h)
+    >>> potential = initialise_potential(b)
     """
+    h = np.float32(1.0 / len(b))
     minus_h2_over_six = np.float32(-h * h / 6.0)
     potential = np.empty_like(b)
     potential_ravel = potential.ravel()
@@ -818,10 +796,8 @@ def initialise_potential(
     return potential
 
 
-@njit(["void(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
-def jacobi(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
-) -> None:
+@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+def jacobi(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]) -> None:
     """Jacobi iteration \\
     Smooths x in Laplacian(x) = b
 
@@ -831,8 +807,6 @@ def jacobi(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
 
     Example
     -------
@@ -840,11 +814,10 @@ def jacobi(
     >>> from pysco.laplacian import jacobi
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
-    >>> jacobi(x, b, h)
+    >>> jacobi(x, b)
     """
-    h2 = np.float32(h**2)
     ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
     invsix = np.float32(1.0 / 6)
     x_old = x.copy()
     for i in prange(-1, ncells_1d - 1):
@@ -867,13 +840,10 @@ def jacobi(
                 ) * invsix
 
 
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4)"], fastmath=True, cache=True, parallel=True
-)
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
 def gauss_seidel(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     f_relax: np.float32,
 ) -> None:
     """Gauss-Seidel iteration using red-black ordering with over-relaxation \\
@@ -885,8 +855,6 @@ def gauss_seidel(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     f_relax : np.float32
         Relaxation factor
 
@@ -896,28 +864,27 @@ def gauss_seidel(
     >>> from pysco.laplacian import gauss_seidel
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
     >>> f_relax = np.float32(1.3)
-    >>> gauss_seidel(x, b, h, f_relax)
+    >>> gauss_seidel(x, b, f_relax)
     """
     # WARNING: If I replace the arguments in prange by some constant values (for example, doing imax = int(0.5*x.shape[0]), then prange(imax)...),
     #          then LLVM tries to fuse the red and black loops! And we really don't want that...
-    h2 = np.float32(h**2)
+    ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
+    ncells_1d_coarse = ncells_1d // 2
     invsix = np.float32(1.0 / 6)
-    half_ncells_1d = x.shape[0] >> 1
-
     # Computation Red
     for i in prange(x.shape[0] >> 1):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(half_ncells_1d):
+        for j in prange(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(half_ncells_1d):
+            for k in prange(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -981,17 +948,17 @@ def gauss_seidel(
                 )
 
     # Computation Black
-    for i in prange(half_ncells_1d):
+    for i in prange(ncells_1d_coarse):
         ii = 2 * i
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(half_ncells_1d):
+        for j in prange(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(half_ncells_1d):
+            for k in prange(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -1059,7 +1026,6 @@ def gauss_seidel(
 def smoothing(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-    h: np.float32,
     n_smoothing: int,
 ) -> None:
     """Smooth field with several Gauss-Seidel iterations \\
@@ -1071,8 +1037,6 @@ def smoothing(
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    h : np.float32
-        Grid size
     n_smoothing : int
         Number of smoothing iterations
 
@@ -1082,11 +1046,10 @@ def smoothing(
     >>> from pysco.laplacian import smoothing
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> h = np.float32(1./32)
     >>> n_smoothing = 5
-    >>> smoothing(x, b, h, n_smoothing)
+    >>> smoothing(x, b, n_smoothing)
     """
 
     f_relax = np.float32(1.25)  # As in Kravtsov et al. 1997
     for _ in range(n_smoothing):
-        gauss_seidel(x, b, h, f_relax)
+        gauss_seidel(x, b, f_relax)
