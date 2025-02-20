@@ -538,10 +538,9 @@ def V_cycle(
     """
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
-    f1 = np.float32(-4.0 / 6 * h**2)
     laplacian.smoothing(x, b, h, param["Npre"])
     res_c = laplacian.restrict_residual(x, b, h)
-    x_corr_c = utils.prod_vector_scalar(res_c, f1)
+    x_corr_c = laplacian.initialise_potential(res_c, two * h)
 
     if nlevel >= (param["ncoarse"] - 3):
         laplacian.smoothing(x_corr_c, res_c, two * h, param["Npre"])
@@ -653,10 +652,9 @@ def F_cycle(
     """
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
-    f1 = np.float32(-4.0 / 6 * h**2)
     laplacian.smoothing(x, b, h, param["Npre"])
     res_c = laplacian.restrict_residual(x, b, h)
-    x_corr_c = utils.prod_vector_scalar(res_c, f1)
+    x_corr_c = laplacian.initialise_potential(res_c, two * h)
 
     if nlevel >= (param["ncoarse"] - 3):
         laplacian.smoothing(x_corr_c, res_c, two * h, param["Npre"])
@@ -668,7 +666,7 @@ def F_cycle(
     laplacian.smoothing(x, b, h, param["Npre"])
 
     res_c = laplacian.restrict_residual(x, b, h)
-    x_corr_c = utils.prod_vector_scalar(res_c, f1)
+    x_corr_c = laplacian.initialise_potential(res_c, two * h)
     if nlevel >= (param["ncoarse"] - 3):
         laplacian.smoothing(x_corr_c, res_c, two * h, param["Npre"])
     else:
@@ -797,10 +795,9 @@ def W_cycle(
     """
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
-    f1 = np.float32(-4.0 / 6 * h**2)
     laplacian.smoothing(x, b, h, param["Npre"])
     res_c = laplacian.restrict_residual(x, b, h)
-    x_corr_c = utils.prod_vector_scalar(res_c, f1)
+    x_corr_c = laplacian.initialise_potential(res_c, two * h)
     if nlevel >= (param["ncoarse"] - 3):
         laplacian.smoothing(x_corr_c, res_c, two * h, param["Npre"])
     else:
@@ -811,7 +808,7 @@ def W_cycle(
     laplacian.smoothing(x, b, h, param["Npre"])
 
     res_c = laplacian.restrict_residual(x, b, h)
-    x_corr_c = utils.prod_vector_scalar(res_c, f1)
+    x_corr_c = laplacian.initialise_potential(res_c, two * h)
     if nlevel >= (param["ncoarse"] - 3):
         laplacian.smoothing(x_corr_c, res_c, two * h, param["Npre"])
     else:

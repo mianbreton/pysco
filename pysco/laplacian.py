@@ -775,6 +775,49 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
     return np.sqrt(truncation)
 
 
+@njit(
+    ["f4[:,:,::1](f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def initialise_potential(
+    b: npt.NDArray[np.float32],
+    h: np.float32,
+) -> npt.NDArray[np.float32]:
+    """Initialse solution of Poisson equation \\
+    u_ini = h^2/6 b
+
+    Parameters
+    ----------
+    b : npt.NDArray[np.float32]
+        Density term [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+
+    Returns
+    -------
+    npt.NDArray[np.float32]
+        Reduced scalaron field initialised
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.laplacian import initialise_potential
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> h = 1./32
+    >>> potential = initialise_potential(b, h)
+    """
+    minus_h2_over_six = np.float32(-h * h / 6.0)
+    potential = np.empty_like(b)
+    potential_ravel = potential.ravel()
+    b_ravel = b.ravel()
+    size = len(b_ravel)
+    for i in prange(size):
+        potential_ravel[i] = minus_h2_over_six * b_ravel[i]
+    return potential
+
+
 @njit(["void(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
 def jacobi(
     x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32

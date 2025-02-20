@@ -231,8 +231,6 @@ def initialise_potential(
 
     Parameters
     ----------
-    x : npt.NDArray[np.float32]
-        Field [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
     h : np.float32
@@ -261,15 +259,15 @@ def initialise_potential(
     twentyseven = np.float64(27)
     d0 = np.float64(12 * h**2 * q)
     u_scalaron = np.empty_like(b)
-    ncells_1d = b.shape[0]
-    for i in prange(ncells_1d):
-        for j in prange(ncells_1d):
-            for k in prange(ncells_1d):
-                p = h2 * np.float64(b[i, j, k])
-                d1 = twentyseven * p**2
-                Q = (half * (d1 + math.sqrt(d1**2 - four * d0**3))) ** inv3
-                S = half * math.sqrt((Q + d0 / Q) * inv3)
-                u_scalaron[i, j, k] = -S + half * math.sqrt(-four * S**2 + p / S)
+    u_scalaron_ravel = u_scalaron.ravel()
+    b_ravel = b.ravel()
+    size = len(b_ravel)
+    for i in prange(size):
+        p = h2 * np.float64(b_ravel[i])
+        d1 = twentyseven * p**2
+        Q = (half * (d1 + math.sqrt(d1**2 - four * d0**3))) ** inv3
+        S = half * math.sqrt((Q + d0 / Q) * inv3)
+        u_scalaron_ravel[i] = -S + half * math.sqrt(-four * S**2 + p / S)
     return u_scalaron
 
 
