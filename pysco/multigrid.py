@@ -10,6 +10,7 @@ truncation error estimation, residual error computation, and various multigrid c
 import numpy.typing as npt
 import pandas as pd
 import laplacian
+import laplacian_reformulated
 import cubic
 import quartic
 import mesh
@@ -60,28 +61,25 @@ def linear(
     """
     THEORY = param["theory"].casefold()
     if param["compute_additional_field"] and "fr" == THEORY:
-        tolerance = 1e-20  # For scalaron field do not use any tolerance threshold but rather a convergence of residual
-    else:
-        if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
-            logging.info("Compute Truncation error")
-            if not param["compute_additional_field"] and "mond" == THEORY:
-                param["tolerance_mond"] = param["epsrel"] * truncation_error(
-                    x, h, param, rhs
-                )
-            else:
-                param["tolerance"] = param["epsrel"] * truncation_error(
-                    x, h, param, rhs
-                )
+        raise ValueError(f"Linear should not be used for scalaron field")
+
+    if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
+        logging.info("Compute Truncation error")
+        tolerance = param["epsrel"] * laplacian.truncation_error(x, h)
         if not param["compute_additional_field"] and "mond" == THEORY:
-            tolerance = param["tolerance_mond"]
+            param["tolerance_mond"] = tolerance
         else:
-            tolerance = param["tolerance"]
+            param["tolerance"] = tolerance
+    if not param["compute_additional_field"] and "mond" == THEORY:
+        tolerance = param["tolerance_mond"]
+    else:
+        tolerance = param["tolerance"]
 
     logging.info("Start linear Multigrid")
     residual_err = 1e30
     while residual_err > tolerance:
         V_cycle(x, rhs, param)
-        residual_error_tmp = residual_error(x, rhs, h, param)
+        residual_error_tmp = laplacian.residual_error(x, rhs, h)
         logging.info(f"{residual_error_tmp=} {tolerance=}")
         if residual_error_tmp < tolerance or residual_err / residual_error_tmp < 2:
             break
@@ -194,11 +192,50 @@ def truncation_error(
         elif param["fR_n"] == 2:
             return quartic.truncation_error(x, b, h, q)
         else:
-            raise NotImplemented(
+            raise NotImplementedError(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
             )
     else:
         return laplacian.truncation_error(x, h)
+
+
+def normalisation_residual(
+    param: pd.Series,
+) -> np.float32:
+    """Normalisation of the residual in FAS \\
+    Depending on the operator in FAS, we might need to normalise by hand the restricted residual \\
+    This is due, sometimes to the RHS of the operator being sensitive to the grid size.
+
+    For example, for Newtonian gravity, if one reformulates the Laplacian operator as
+
+    u_ijk + 1/6 [ h^2 rho - Lu] = 0
+
+    Here the restricted residual will depend on h^2. Because it is restricted to a coarser grid, we need to add a factor (2h)^2/h^2 = 4.
+
+    Had the operator be written normally, that is (Lu - 6 u_ijk)/h^2 = rho, then there would not be any correction needed.
+
+    On has to be careful about the formuation of the operator considered.
+
+    Parameters
+    ----------
+    param : pd.Series
+        Parameter container
+
+    Returns
+    -------
+    np.float32
+        Normalisation factor
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> from pysco.multigrid import normalisation_residual
+    >>> parameters = pd.Series({"theory": "newton"})
+    >>> norm = normalisation_residual(parameters)
+    """
+    return np.float32(
+        4
+    )  # Currently, all the model considered are based on (linear and non-linear) Laplacians
 
 
 @utils.time_me
@@ -258,7 +295,6 @@ def residual_error(
             )
 
     else:
-        # return laplacian.residual_error_half(x, b, h)
         return laplacian.residual_error(x, b, h)
 
 
@@ -325,9 +361,11 @@ def restrict_residual(
             )
     else:
         if len(rhs) == 0:
-            return laplacian.restrict_residual(x, b, h)
+            return mesh.minus_restriction(laplacian_reformulated.operator(x, b, h))
         else:
-            return laplacian.restrict_residual(x, rhs, h)
+            return mesh.restriction(
+                laplacian_reformulated.residual_with_rhs(x, b, h, rhs)
+            )
 
 
 def smoothing(
@@ -391,9 +429,9 @@ def smoothing(
             )
     else:
         if len(rhs) == 0:
-            laplacian.smoothing(x, b, h, n_smoothing)
+            laplacian_reformulated.smoothing(x, b, h, n_smoothing)
         else:
-            laplacian.smoothing(x, rhs, h, n_smoothing)
+            laplacian_reformulated.smoothing_with_rhs(x, b, h, n_smoothing, rhs)
 
 
 def operator(
@@ -455,11 +493,11 @@ def operator(
         elif param["fR_n"] == 2:
             return quartic.operator(x, b, h, q)
         else:
-            raise NotImplemented(
+            raise NotImplementedError(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
             )
     else:
-        return laplacian.operator(x, h)
+        return laplacian_reformulated.operator(x, b, h)
 
 
 @utils.time_me
@@ -499,18 +537,18 @@ def V_cycle(
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
     f1 = np.float32(-4.0 / 6 * h**2)
-    smoothing(x, b, h, param["Npre"], param)
-    res_c = restrict_residual(x, b, h, param)
+    laplacian.smoothing(x, b, h, param["Npre"])
+    res_c = laplacian.restrict_residual(x, b, h)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
 
     if nlevel >= (param["ncoarse"] - 3):
-        smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
+        laplacian.smoothing(x_corr_c, res_c, two * h, param["Npre"])
     else:
         V_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
     mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
-    smoothing(x, b, h, param["Npost"], param)
+    laplacian.smoothing(x, b, h, param["Npost"])
 
 
 @utils.time_me
@@ -558,7 +596,10 @@ def V_cycle_FAS(
     x_corr_c = x_c.copy()
     b_c = mesh.restriction(b)
     L_c = operator(x_c, two * h, param, b_c)
-    utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
+    normalisation_grid_factor = normalisation_residual(param)
+    utils.linear_operator_vectors_inplace(
+        res_c, normalisation_grid_factor, L_c, np.float32(1)
+    )
     L_c = 0
 
     if nlevel >= (param["ncoarse"] - 3):
@@ -611,29 +652,29 @@ def F_cycle(
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
     f1 = np.float32(-4.0 / 6 * h**2)
-    smoothing(x, b, h, param["Npre"], param)
-    res_c = restrict_residual(x, b, h, param)
+    laplacian.smoothing(x, b, h, param["Npre"])
+    res_c = laplacian.restrict_residual(x, b, h)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
 
     if nlevel >= (param["ncoarse"] - 3):
-        smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
+        laplacian.smoothing(x_corr_c, res_c, two * h, param["Npre"])
     else:
         F_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
     mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
-    smoothing(x, b, h, param["Npre"], param)
+    laplacian.smoothing(x, b, h, param["Npre"])
 
-    res_c = restrict_residual(x, b, h, param)
+    res_c = laplacian.restrict_residual(x, b, h)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
     if nlevel >= (param["ncoarse"] - 3):
-        smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
+        laplacian.smoothing(x_corr_c, res_c, two * h, param["Npre"])
     else:
         V_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
     mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
-    smoothing(x, b, h, param["Npost"], param)
+    laplacian.smoothing(x, b, h, param["Npost"])
 
 
 @utils.time_me
@@ -681,7 +722,10 @@ def F_cycle_FAS(
     x_corr_c = x_c.copy()
     b_c = mesh.restriction(b)
     L_c = operator(x_c, two * h, param, b_c)
-    utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
+    normalisation_grid_factor = normalisation_residual(param)
+    utils.linear_operator_vectors_inplace(
+        res_c, normalisation_grid_factor, L_c, np.float32(1)
+    )
     L_c = 0
     if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, two * h, param["Npre"], param, res_c)
@@ -697,7 +741,10 @@ def F_cycle_FAS(
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
     L_c = operator(x_c, two * h, param, b_c)
-    utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
+    normalisation_grid_factor = normalisation_residual(param)
+    utils.linear_operator_vectors_inplace(
+        res_c, normalisation_grid_factor, L_c, np.float32(1)
+    )
     L_c = 0
 
     if nlevel >= (param["ncoarse"] - 3):
@@ -749,28 +796,28 @@ def W_cycle(
     h = np.float32(0.5 ** (param["ncoarse"] - nlevel))
     two = np.float32(2)
     f1 = np.float32(-4.0 / 6 * h**2)
-    smoothing(x, b, h, param["Npre"], param)
-    res_c = restrict_residual(x, b, h, param)
+    laplacian.smoothing(x, b, h, param["Npre"])
+    res_c = laplacian.restrict_residual(x, b, h)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
     if nlevel >= (param["ncoarse"] - 3):
-        smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
+        laplacian.smoothing(x_corr_c, res_c, two * h, param["Npre"])
     else:
         W_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
     mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
-    smoothing(x, b, h, param["Npre"], param)
+    laplacian.smoothing(x, b, h, param["Npre"])
 
-    res_c = restrict_residual(x, b, h, param)
+    res_c = laplacian.restrict_residual(x, b, h)
     x_corr_c = utils.prod_vector_scalar(res_c, f1)
     if nlevel >= (param["ncoarse"] - 3):
-        smoothing(x_corr_c, res_c, two * h, param["Npre"], param)
+        laplacian.smoothing(x_corr_c, res_c, two * h, param["Npre"])
     else:
         W_cycle(x_corr_c, res_c, param, nlevel + 1)
     res_c = 0
     mesh.add_prolongation(x, x_corr_c)
     x_corr_c = 0
-    smoothing(x, b, h, param["Npost"], param)
+    laplacian.smoothing(x, b, h, param["Npost"])
 
 
 @utils.time_me
@@ -818,7 +865,10 @@ def W_cycle_FAS(
     x_corr_c = x_c.copy()
     b_c = mesh.restriction(b)
     L_c = operator(x_c, two * h, param, b_c)
-    utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
+    normalisation_grid_factor = normalisation_residual(param)
+    utils.linear_operator_vectors_inplace(
+        res_c, normalisation_grid_factor, L_c, np.float32(1)
+    )
     L_c = 0
 
     if nlevel >= (param["ncoarse"] - 3):
@@ -836,7 +886,10 @@ def W_cycle_FAS(
     x_c = mesh.restriction(x)
     x_corr_c = x_c.copy()
     L_c = operator(x_c, two * h, param, b_c)
-    utils.add_vector_scalar_inplace(res_c, L_c, np.float32(1))
+    normalisation_grid_factor = normalisation_residual(param)
+    utils.linear_operator_vectors_inplace(
+        res_c, normalisation_grid_factor, L_c, np.float32(1)
+    )
     L_c = 0
 
     if nlevel >= (param["ncoarse"] - 3):

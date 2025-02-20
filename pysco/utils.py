@@ -698,6 +698,44 @@ def linear_operator_inplace(
 
 
 @njit(fastmath=True, cache=True, parallel=True)
+def linear_operator_vectors_inplace(
+    x: npt.NDArray[np.float32],
+    f1: np.float32,
+    y: npt.NDArray[np.float32],
+    f2: np.float32,
+) -> None:
+    """Inplace Linear operator on array
+
+    x = f1 * x + f2 * y
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        First array (mutable)
+    f1 : np.float32
+        Scalar factor 1
+    y : npt.NDArray[np.float32]
+        Second array (immutable)
+    f2 : np.float32
+        Scalar factor 2
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import linear_operator_inplace
+    >>> x_array = np.array([1.0, 2.0, 3.0])
+    >>> y_array = np.array([10.0, 20.0, 30.0])
+    >>> f1_scalar = 2.0
+    >>> f2_scalar = 1.0
+    >>> linear_operator_inplace(x_array, f1_scalar, y_array, f2_scalar)
+    """
+    x_ravel = x.ravel()
+    y_ravel = y.ravel()
+    for i in prange(x_ravel.shape[0]):
+        x_ravel[i] = f1 * x_ravel[i] + f2 * y_ravel[i]
+
+
+@njit(fastmath=True, cache=True, parallel=True)
 def operator_fR_inplace(
     density: npt.NDArray[np.float32],
     u_scalaron: npt.NDArray[np.float32],
