@@ -273,7 +273,7 @@ def initialise_potential(
 
 # @utils.time_me
 @njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4)"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4, f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
@@ -283,6 +283,7 @@ def gauss_seidel(
     b: npt.NDArray[np.float32],
     h: np.float32,
     q: np.float32,
+    f_relax: np.float32,
 ) -> None:
     """Gauss-Seidel depressed cubic equation solver \\
     Solve the roots of u in the equation: \\
@@ -300,6 +301,8 @@ def gauss_seidel(
         Grid size
     q : np.float32
         Constant value in the cubic equation
+    f_relax : np.float32
+        Relaxation factor
     
     Example
     -------
@@ -309,7 +312,7 @@ def gauss_seidel(
     >>> b = np.ones((32, 32, 32), dtype=np.float32)
     >>> h = 1./32
     >>> q = 1.0
-    >>> gauss_seidel(x, b, h, q)
+    >>> gauss_seidel(x, b, h, q, 1)
     """
     invsix = np.float32(1.0 / 6)
     h2 = np.float32(h**2)
@@ -344,7 +347,9 @@ def gauss_seidel(
                     + x[iim1, jjm2, kkm1] ** 2
                     + x[iim1, jjm1, kkm2] ** 2
                 )
-                x[iim1, jjm1, kkm1] = solution_cubic_equation(p, d1)
+                x[iim1, jjm1, kkm1] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[iim1, jjm1, kkm1]
+                )
                 p = h2 * b[iim1, jj, kk] - invsix * (
                     +x2_001
                     + x2_010
@@ -353,7 +358,9 @@ def gauss_seidel(
                     + x[iim1, jj, kkp1] ** 2
                     + x[iim1, jjp1, kk] ** 2
                 )
-                x[iim1, jj, kk] = solution_cubic_equation(p, d1)
+                x[iim1, jj, kk] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[iim1, jj, kk]
+                )
                 p = h2 * b[ii, jjm1, kk] - invsix * (
                     x2_001
                     + x2_100
@@ -362,7 +369,9 @@ def gauss_seidel(
                     + x[ii, jjm1, kkp1] ** 2
                     + x[iip1, jjm1, kk] ** 2
                 )
-                x[ii, jjm1, kk] = solution_cubic_equation(p, d1)
+                x[ii, jjm1, kk] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[ii, jjm1, kk]
+                )
                 p = h2 * b[ii, jj, kkm1] - invsix * (
                     x2_010
                     + x2_100
@@ -371,7 +380,9 @@ def gauss_seidel(
                     + x[ii, jjp1, kkm1] ** 2
                     + x[iip1, jj, kkm1] ** 2
                 )
-                x[ii, jj, kkm1] = solution_cubic_equation(p, d1)
+                x[ii, jj, kkm1] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[ii, jj, kkm1]
+                )
 
     # Computation Black
     for i in prange(half_ncells_1d):
@@ -402,7 +413,9 @@ def gauss_seidel(
                     + x[iim1, jjm2, kk] ** 2
                     + x[iim1, jjm1, kkp1] ** 2
                 )
-                x[iim1, jjm1, kk] = solution_cubic_equation(p, d1)
+                x[iim1, jjm1, kk] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[iim1, jjm1, kk]
+                )
                 p = h2 * b[iim1, jj, kkm1] - invsix * (
                     +x2_000
                     + x2_011
@@ -411,7 +424,9 @@ def gauss_seidel(
                     + x[iim1, jj, kkm2] ** 2
                     + x[iim1, jjp1, kkm1] ** 2
                 )
-                x[iim1, jj, kkm1] = solution_cubic_equation(p, d1)
+                x[iim1, jj, kkm1] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[iim1, jj, kkm1]
+                )
                 p = h2 * b[ii, jjm1, kkm1] - invsix * (
                     x2_000
                     + x2_101
@@ -420,7 +435,9 @@ def gauss_seidel(
                     + x[ii, jjm1, kkm2] ** 2
                     + x[iip1, jjm1, kkm1] ** 2
                 )
-                x[ii, jjm1, kkm1] = solution_cubic_equation(p, d1)
+                x[ii, jjm1, kkm1] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[ii, jjm1, kkm1]
+                )
                 p = h2 * b[ii, jj, kk] - invsix * (
                     x2_011
                     + x2_101
@@ -429,12 +446,14 @@ def gauss_seidel(
                     + x[ii, jjp1, kk] ** 2
                     + x[iip1, jj, kk] ** 2
                 )
-                x[ii, jj, kk] = solution_cubic_equation(p, d1)
+                x[ii, jj, kk] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[ii, jj, kk]
+                )
 
 
 # @utils.time_me
 @njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4, f4[:,:,::1])"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4, f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
@@ -445,6 +464,7 @@ def gauss_seidel_with_rhs(
     h: np.float32,
     q: np.float32,
     rhs: npt.NDArray[np.float32],
+    f_relax: np.float32,
 ) -> None:
     """Gauss-Seidel depressed cubic equation solver with source term, for example in Multigrid with residuals\\
     Solve the roots of u in the equation: \\
@@ -464,6 +484,8 @@ def gauss_seidel_with_rhs(
         Constant value in the cubic equation
     rhs : npt.NDArray[np.float32]
         Right-hand side of the cubic equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    f_relax : np.float32
+        Relaxation factor
     
     Example
     -------
@@ -474,7 +496,7 @@ def gauss_seidel_with_rhs(
     >>> h = 1./32
     >>> q = 1.0
     >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> gauss_seidel_with_rhs(x, b, h, q, rhs)
+    >>> gauss_seidel_with_rhs(x, b, h, q, rhs, 1)
     """
     invsix = np.float32(1.0 / 6)
     h2 = np.float32(h**2)
@@ -512,7 +534,9 @@ def gauss_seidel_with_rhs(
                     + x[iim1, jjm1, kkm2] ** 2
                 )
                 d1 = d1_q - twenty_seven * rhs[iim1, jjm1, kkm1]
-                x[iim1, jjm1, kkm1] = solution_cubic_equation(p, d1)
+                x[iim1, jjm1, kkm1] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[iim1, jjm1, kkm1]
+                )
                 p = h2 * b[iim1, jj, kk] - invsix * (
                     +x2_001
                     + x2_010
@@ -522,7 +546,9 @@ def gauss_seidel_with_rhs(
                     + x[iim1, jj, kkp1] ** 2
                 )
                 d1 = d1_q - twenty_seven * rhs[iim1, jj, kk]
-                x[iim1, jj, kk] = solution_cubic_equation(p, d1)
+                x[iim1, jj, kk] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[iim1, jj, kk]
+                )
                 p = h2 * b[ii, jjm1, kk] - invsix * (
                     x2_001
                     + x2_100
@@ -532,7 +558,9 @@ def gauss_seidel_with_rhs(
                     + x[iip1, jjm1, kk] ** 2
                 )
                 d1 = d1_q - twenty_seven * rhs[ii, jjm1, kk]
-                x[ii, jjm1, kk] = solution_cubic_equation(p, d1)
+                x[ii, jjm1, kk] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[ii, jjm1, kk]
+                )
                 p = h2 * b[ii, jj, kkm1] - invsix * (
                     x2_010
                     + x2_100
@@ -542,7 +570,9 @@ def gauss_seidel_with_rhs(
                     + x[iip1, jj, kkm1] ** 2
                 )
                 d1 = d1_q - twenty_seven * rhs[ii, jj, kkm1]
-                x[ii, jj, kkm1] = solution_cubic_equation(p, d1)
+                x[ii, jj, kkm1] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[ii, jj, kkm1]
+                )
 
     # Computation Black
     for i in prange(half_ncells_1d):
@@ -574,7 +604,9 @@ def gauss_seidel_with_rhs(
                     + x[iim1, jjm1, kkp1] ** 2
                 )
                 d1 = d1_q - twenty_seven * rhs[iim1, jjm1, kk]
-                x[iim1, jjm1, kk] = solution_cubic_equation(p, d1)
+                x[iim1, jjm1, kk] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[iim1, jjm1, kk]
+                )
                 p = h2 * b[iim1, jj, kkm1] - invsix * (
                     +x2_000
                     + x2_011
@@ -584,7 +616,9 @@ def gauss_seidel_with_rhs(
                     + x[iim1, jj, kkm2] ** 2
                 )
                 d1 = d1_q - twenty_seven * rhs[iim1, jj, kkm1]
-                x[iim1, jj, kkm1] = solution_cubic_equation(p, d1)
+                x[iim1, jj, kkm1] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[iim1, jj, kkm1]
+                )
                 p = h2 * b[ii, jjm1, kkm1] - invsix * (
                     x2_000
                     + x2_110
@@ -594,7 +628,9 @@ def gauss_seidel_with_rhs(
                     + x[iip1, jjm1, kkm1] ** 2
                 )
                 d1 = d1_q - twenty_seven * rhs[ii, jjm1, kkm1]
-                x[ii, jjm1, kkm1] = solution_cubic_equation(p, d1)
+                x[ii, jjm1, kkm1] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[ii, jjm1, kkm1]
+                )
                 p = h2 * b[ii, jj, kk] - invsix * (
                     x2_011
                     + x2_101
@@ -604,7 +640,9 @@ def gauss_seidel_with_rhs(
                     + x[iip1, jj, kk] ** 2
                 )
                 d1 = d1_q - twenty_seven * rhs[ii, jj, kk]
-                x[ii, jj, kk] = solution_cubic_equation(p, d1)
+                x[ii, jj, kk] += f_relax * (
+                    solution_cubic_equation(p, d1) - x[ii, jj, kk]
+                )
 
 
 @njit(
@@ -976,14 +1014,16 @@ def truncation_error(
     >>> q = 1.0
     >>> error_estimate = truncation_error(x, b, h, q)
     """
+    four = np.float32(4)  # Correction for grid discrepancy
+    two = np.float32(2)
     ncells_1d = x.shape[0] >> 1
     RLx = mesh.restriction(operator(x, b, h, q))
-    LRx = operator(mesh.restriction(x), mesh.restriction(b), 2 * h, q)
+    LRx = operator(mesh.restriction(x), mesh.restriction(b), two * h, q)
     result = 0
     for i in prange(-1, ncells_1d - 1):
         for j in prange(-1, ncells_1d - 1):
             for k in prange(-1, ncells_1d - 1):
-                result += (RLx[i, j, k] - LRx[i, j, k]) ** 2
+                result += (four * RLx[i, j, k] - LRx[i, j, k]) ** 2
     return np.sqrt(result)
 
 
@@ -1021,8 +1061,9 @@ def smoothing(
     >>> n_iterations = 5
     >>> smoothing(x, b, h, q, n_iterations)
     """
+    f_relax = np.float32(1.0)
     for _ in range(n_smoothing):
-        gauss_seidel(x, b, h, q)
+        gauss_seidel(x, b, h, q, f_relax)
 
 
 # @utils.time_me
@@ -1063,5 +1104,6 @@ def smoothing_with_rhs(
     >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
     >>> smoothing_with_rhs(x, b, h, q, n_iterations, rhs)
     """
+    f_relax = np.float32(1.0)
     for _ in range(n_smoothing):
-        gauss_seidel_with_rhs(x, b, h, q, rhs)
+        gauss_seidel_with_rhs(x, b, h, q, rhs, f_relax)

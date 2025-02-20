@@ -22,7 +22,7 @@ import logging
 @utils.time_me
 def linear(
     x: npt.NDArray[np.float32],
-    rhs: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
     h: np.float32,
     param: pd.Series,
 ) -> npt.NDArray[np.float32]:
@@ -32,7 +32,7 @@ def linear(
     ----------
     x : npt.NDArray[np.float32]
         Potential (first guess) [N_cells_1d, N_cells_1d,N_cells_1d]
-    rhs : npt.NDArray[np.float32]
+    b : npt.NDArray[np.float32]
         Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
     h : np.float32
         Grid size
@@ -52,12 +52,12 @@ def linear(
 
     >>> # Define input arrays and parameters
     >>> x_initial = np.zeros((64, 64, 64), dtype=np.float32)
-    >>> rhs = np.ones((64, 64, 64), dtype=np.float32)
+    >>> b = np.ones((64, 64, 64), dtype=np.float32)
     >>> grid_size = 1./64
     >>> parameters = pd.Series({"theory": "newton", "compute_additional_field": False, "Npre": 2, "Npost": 1, "ncoarse": 4,  "epsrel": 1e-5, "nsteps": 0})
 
     >>> # Call the linear multigrid solver
-    >>> result = linear(x_initial, rhs, grid_size, parameters)
+    >>> result = linear(x_initial, b, grid_size, parameters)
     """
     THEORY = param["theory"].casefold()
     if param["compute_additional_field"] and "fr" == THEORY:
@@ -78,8 +78,8 @@ def linear(
     logging.info("Start linear Multigrid")
     residual_err = 1e30
     while residual_err > tolerance:
-        V_cycle(x, rhs, param)
-        residual_error_tmp = laplacian.residual_error(x, rhs, h)
+        V_cycle(x, b, param)
+        residual_error_tmp = laplacian.residual_error(x, b, h)
         logging.info(f"{residual_error_tmp=} {tolerance=}")
         if residual_error_tmp < tolerance or residual_err / residual_error_tmp < 2:
             break
@@ -128,19 +128,21 @@ def FAS(
     >>> # Call the FAS multigrid solver
     >>> result = FAS(x_initial, rhs, grid_size, parameters)
     """
-    if param["compute_additional_field"]:
-        tolerance = 1e-20  # For additional field do not use any tolerance threshold but rather a convergence of residual
-    else:
-        if (not "tolerance" in param) or (param["nsteps"] % 3) == 0:
-            logging.info("Compute Truncation error")
-            param["tolerance"] = param["epsrel"] * truncation_error(x, h, param, b)
-        tolerance = param["tolerance"]
 
-    # Main procedure: Multigrid
+    if (not "tolerance_FAS" in param) or (param["nsteps"] % 3) == 0:
+        logging.info("Compute FAS Truncation error")
+        param["tolerance_FAS"] = param["epsrel"] * truncation_error(x, h, param, b)
+    tolerance = param["tolerance_FAS"]
+
     logging.info("Start Full-Approximation Storage Multigrid")
-    F_cycle_FAS(x, b, param)
-    residual_error_tmp = residual_error(x, b, h, param)
-    logging.info(f"{residual_error_tmp=} {tolerance=}")
+    residual_err = 1e30
+    while residual_err > tolerance:
+        V_cycle_FAS(x, b, param)
+        residual_error_tmp = residual_error(x, b, h, param)
+        logging.info(f"{residual_error_tmp=} {tolerance=}")
+        if residual_error_tmp < tolerance or residual_err / residual_error_tmp < 2:
+            break
+        residual_err = residual_error_tmp
     return x
 
 
@@ -196,7 +198,7 @@ def truncation_error(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
             )
     else:
-        return laplacian.truncation_error(x, h)
+        return laplacian_reformulated.truncation_error(x, b, h)
 
 
 def normalisation_residual(
@@ -295,7 +297,7 @@ def residual_error(
             )
 
     else:
-        return laplacian.residual_error(x, b, h)
+        return laplacian_reformulated.residual_error(x, b, h)
 
 
 def restrict_residual(

@@ -275,7 +275,7 @@ def initialise_potential(
 
 # @utils.time_me
 @njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4)"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4, f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
@@ -285,6 +285,7 @@ def gauss_seidel(
     b: npt.NDArray[np.float32],
     h: np.float32,
     q: np.float32,
+    f_relax: np.float32,
 ) -> None:
     """Gauss-Seidel quartic equation solver \\
     Solve the roots of u in the equation: \\
@@ -302,6 +303,8 @@ def gauss_seidel(
         Grid size
     q : np.float32
         Constant value in the quartic equation
+    f_relax : np.float32
+        Relaxation factor
     
     Examples
     --------
@@ -311,7 +314,7 @@ def gauss_seidel(
     >>> b = np.ones((32, 32, 32), dtype=np.float32)
     >>> h = 1./32
     >>> q = 0.5
-    >>> gauss_seidel(x, b, h, q)
+    >>> gauss_seidel(x, b, h, q, 1)
     """
     invsix = np.float32(1.0 / 6)
     h2 = np.float32(h**2)
@@ -347,7 +350,9 @@ def gauss_seidel(
                     + x[iim1, jjm2, kkm1] ** 3
                     + x[iim1, jjm1, kkm2] ** 3
                 )
-                x[iim1, jjm1, kkm1] = solution_quartic_equation(p, qh2)
+                x[iim1, jjm1, kkm1] += f_relax * (
+                    solution_quartic_equation(p, qh2) - x[iim1, jjm1, kkm1]
+                )
                 p = h2 * b[iim1, jj, kk] - invsix * (
                     +x3_001
                     + x3_010
@@ -356,7 +361,9 @@ def gauss_seidel(
                     + x[iim1, jj, kkp1] ** 3
                     + x[iim1, jjp1, kk] ** 3
                 )
-                x[iim1, jj, kk] = solution_quartic_equation(p, qh2)
+                x[iim1, jj, kk] += f_relax * (
+                    solution_quartic_equation(p, qh2) - x[iim1, jj, kk]
+                )
                 p = h2 * b[ii, jjm1, kk] - invsix * (
                     x3_001
                     + x3_100
@@ -365,7 +372,9 @@ def gauss_seidel(
                     + x[ii, jjm1, kkp1] ** 3
                     + x[iip1, jjm1, kk] ** 3
                 )
-                x[ii, jjm1, kk] = solution_quartic_equation(p, qh2)
+                x[ii, jjm1, kk] += f_relax * (
+                    solution_quartic_equation(p, qh2) - x[ii, jjm1, kk]
+                )
                 p = h2 * b[ii, jj, kkm1] - invsix * (
                     x3_010
                     + x3_100
@@ -374,7 +383,9 @@ def gauss_seidel(
                     + x[ii, jjp1, kkm1] ** 3
                     + x[iip1, jj, kkm1] ** 3
                 )
-                x[ii, jj, kkm1] = solution_quartic_equation(p, qh2)
+                x[ii, jj, kkm1] += f_relax * (
+                    solution_quartic_equation(p, qh2) - x[ii, jj, kkm1]
+                )
 
     # Computation Black
     for i in prange(half_ncells_1d):
@@ -405,7 +416,9 @@ def gauss_seidel(
                     + x[iim1, jjm2, kk] ** 3
                     + x[iim1, jjm1, kkp1] ** 3
                 )
-                x[iim1, jjm1, kk] = solution_quartic_equation(p, qh2)
+                x[iim1, jjm1, kk] += f_relax * (
+                    solution_quartic_equation(p, qh2) - x[iim1, jjm1, kk]
+                )
                 p = h2 * b[iim1, jj, kkm1] - invsix * (
                     +x3_000
                     + x3_011
@@ -414,7 +427,9 @@ def gauss_seidel(
                     + x[iim1, jj, kkm2] ** 3
                     + x[iim1, jjp1, kkm1] ** 3
                 )
-                x[iim1, jj, kkm1] = solution_quartic_equation(p, qh2)
+                x[iim1, jj, kkm1] += f_relax * (
+                    solution_quartic_equation(p, qh2) - x[iim1, jj, kkm1]
+                )
                 p = h2 * b[ii, jjm1, kkm1] - invsix * (
                     x3_000
                     + x3_101
@@ -423,7 +438,9 @@ def gauss_seidel(
                     + x[ii, jjm1, kkm2] ** 3
                     + x[iip1, jjm1, kkm1] ** 3
                 )
-                x[ii, jjm1, kkm1] = solution_quartic_equation(p, qh2)
+                x[ii, jjm1, kkm1] += f_relax * (
+                    solution_quartic_equation(p, qh2) - x[ii, jjm1, kkm1]
+                )
                 p = h2 * b[ii, jj, kk] - invsix * (
                     x3_011
                     + x3_101
@@ -432,12 +449,14 @@ def gauss_seidel(
                     + x[ii, jjp1, kk] ** 3
                     + x[iip1, jj, kk] ** 3
                 )
-                x[ii, jj, kk] = solution_quartic_equation(p, qh2)
+                x[ii, jj, kk] += f_relax * (
+                    solution_quartic_equation(p, qh2) - x[ii, jj, kk]
+                )
 
 
 # @utils.time_me
 @njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4, f4[:,:,::1])"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4, f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
@@ -448,6 +467,7 @@ def gauss_seidel_with_rhs(
     h: np.float32,
     q: np.float32,
     rhs: npt.NDArray[np.float32],
+    f_relax: np.float32,
 ) -> None:
     """Gauss-Seidel depressed quartic equation solver with source term, for example in Multigrid with residuals\\
     Solve the roots of u in the equation: \\
@@ -467,6 +487,8 @@ def gauss_seidel_with_rhs(
         Constant value in the quartic equation
     rhs : npt.NDArray[np.float32]
         Right-hand side of the quartic equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    f_relax : np.float32
+        Relaxation factor
     
     Examples
     --------
@@ -477,7 +499,7 @@ def gauss_seidel_with_rhs(
     >>> h = 1./32
     >>> q = 0.01
     >>> rhs = np.ones((4, 4, 4), dtype=np.float32)
-    >>> gauss_seidel_with_rhs(x, b, h, q, rhs)
+    >>> gauss_seidel_with_rhs(x, b, h, q, rhs, 1)
     """
     invsix = np.float32(1.0 / 6)
     h2 = np.float32(h**2)
@@ -513,7 +535,9 @@ def gauss_seidel_with_rhs(
                     + x[iim1, jjm1, kkm2] ** 3
                 )
                 qq = qh2 - rhs[iim1, jjm1, kkm1]
-                x[iim1, jjm1, kkm1] = solution_quartic_equation(p, qq)
+                x[iim1, jjm1, kkm1] += f_relax * (
+                    solution_quartic_equation(p, qq) - x[iim1, jjm1, kkm1]
+                )
                 p = h2 * b[iim1, jj, kk] - invsix * (
                     +x3_001
                     + x3_010
@@ -523,7 +547,9 @@ def gauss_seidel_with_rhs(
                     + x[iim1, jj, kkp1] ** 3
                 )
                 qq = qh2 - rhs[iim1, jj, kk]
-                x[iim1, jj, kk] = solution_quartic_equation(p, qq)
+                x[iim1, jj, kk] += f_relax * (
+                    solution_quartic_equation(p, qq) - x[iim1, jj, kk]
+                )
                 p = h2 * b[ii, jjm1, kk] - invsix * (
                     x3_001
                     + x3_111
@@ -533,7 +559,9 @@ def gauss_seidel_with_rhs(
                     + x[iip1, jjm1, kk] ** 3
                 )
                 qq = qh2 - rhs[ii, jjm1, kk]
-                x[ii, jjm1, kk] = solution_quartic_equation(p, qq)
+                x[ii, jjm1, kk] += f_relax * (
+                    solution_quartic_equation(p, qq) - x[ii, jjm1, kk]
+                )
                 p = h2 * b[ii, jj, kkm1] - invsix * (
                     x3_010
                     + x3_100
@@ -543,7 +571,9 @@ def gauss_seidel_with_rhs(
                     + x[iip1, jj, kkm1] ** 3
                 )
                 qq = qh2 - rhs[ii, jj, kkm1]
-                x[ii, jj, kkm1] = solution_quartic_equation(p, qq)
+                x[ii, jj, kkm1] += f_relax * (
+                    solution_quartic_equation(p, qq) - x[ii, jj, kkm1]
+                )
 
     # Computation Black
     for i in prange(half_ncells_1d):
@@ -575,7 +605,9 @@ def gauss_seidel_with_rhs(
                     + x[iim1, jjm1, kkp1] ** 3
                 )
                 qq = qh2 - rhs[iim1, jjm1, kk]
-                x[iim1, jjm1, kk] = solution_quartic_equation(p, qq)
+                x[iim1, jjm1, kk] += f_relax * (
+                    solution_quartic_equation(p, qq) - x[iim1, jjm1, kk]
+                )
                 p = h2 * b[iim1, jj, kkm1] - invsix * (
                     +x3_000
                     + x3_011
@@ -585,7 +617,9 @@ def gauss_seidel_with_rhs(
                     + x[iim1, jj, kkm2] ** 3
                 )
                 qq = qh2 - rhs[iim1, jj, kkm1]
-                x[iim1, jj, kkm1] = solution_quartic_equation(p, qq)
+                x[iim1, jj, kkm1] += f_relax * (
+                    solution_quartic_equation(p, qq) - x[iim1, jj, kkm1]
+                )
                 p = h2 * b[ii, jjm1, kkm1] - invsix * (
                     x3_000
                     + x3_101
@@ -595,7 +629,9 @@ def gauss_seidel_with_rhs(
                     + x[iip1, jjm1, kkm1] ** 3
                 )
                 qq = qh2 - rhs[ii, jjm1, kkm1]
-                x[ii, jjm1, kkm1] = solution_quartic_equation(p, qq)
+                x[ii, jjm1, kkm1] += f_relax * (
+                    solution_quartic_equation(p, qq) - x[ii, jjm1, kkm1]
+                )
                 p = h2 * b[ii, jj, kk] - invsix * (
                     x3_011
                     + x3_101
@@ -605,7 +641,9 @@ def gauss_seidel_with_rhs(
                     + x[iip1, jj, kk] ** 3
                 )
                 qq = qh2 - rhs[ii, jj, kk]
-                x[ii, jj, kk] = solution_quartic_equation(p, qq)
+                x[ii, jj, kk] += f_relax * (
+                    solution_quartic_equation(p, qq) - x[ii, jj, kk]
+                )
 
 
 @njit(
@@ -978,14 +1016,16 @@ def truncation_error(
     >>> q = 0.01
     >>> error = truncation_error(x, b, h, q)
     """
+    four = np.float32(4)  # Correction for grid discrepancy
+    two = np.float32(2)
     ncells_1d = x.shape[0] >> 1
     RLx = mesh.restriction(operator(x, b, h, q))
-    LRx = operator(mesh.restriction(x), mesh.restriction(b), 2 * h, q)
+    LRx = operator(mesh.restriction(x), mesh.restriction(b), two * h, q)
     result = 0
     for i in prange(-1, ncells_1d - 1):
         for j in prange(-1, ncells_1d - 1):
             for k in prange(-1, ncells_1d - 1):
-                result += (RLx[i, j, k] - LRx[i, j, k]) ** 2
+                result += (four * RLx[i, j, k] - LRx[i, j, k]) ** 2
     return np.sqrt(result)
 
 
@@ -1023,8 +1063,9 @@ def smoothing(
     >>> n_smoothing = 5
     >>> smoothing(x, b, h, q, n_smoothing)
     """
+    f_relax = np.float32(1.0)
     for _ in range(n_smoothing):
-        gauss_seidel(x, b, h, q)
+        gauss_seidel(x, b, h, q, f_relax)
 
 
 # @utils.time_me
@@ -1065,5 +1106,6 @@ def smoothing_with_rhs(
     >>> rhs = np.ones((32, 32, 32), dtype=np.float32)
     >>> smoothing_with_rhs(x, b, h, q, n_smoothing, rhs)
     """
+    f_relax = np.float32(1.0)
     for _ in range(n_smoothing):
-        gauss_seidel_with_rhs(x, b, h, q, rhs)
+        gauss_seidel_with_rhs(x, b, h, q, rhs, f_relax)

@@ -200,6 +200,56 @@ def residual_error(
     return np.sqrt(result)
 
 
+@njit(
+    ["f4(f4[:,:,::1], f4[:,:,::1], f4)"],
+    fastmath=True,
+    cache=True,
+    parallel=True,
+)
+def truncation_error(
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
+) -> np.float32:
+    """Truncation error estimator \\
+    As in Numerical Recipes, we estimate the truncation error as \\
+    t = Laplacian(Restriction(Phi)) - Restriction(Laplacian(Phi)) \\
+    terr = Sum t^2
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    h : np.float32
+        Grid size
+
+    Returns
+    -------
+    np.float32
+        Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.quartic import truncation_error
+    >>> x = np.ones((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> h = 1./32
+    >>> error = truncation_error(x, b, h)
+    """
+    two = np.float32(2)
+    four = np.float32(4)  # Correction for grid discrepancy
+    ncells_1d = x.shape[0] >> 1
+    RLx = mesh.restriction(operator(x, b, h))
+    LRx = operator(mesh.restriction(x), mesh.restriction(b), two * h)
+    result = 0
+    for i in prange(-1, ncells_1d - 1):
+        for j in prange(-1, ncells_1d - 1):
+            for k in prange(-1, ncells_1d - 1):
+                result += (four * RLx[i, j, k] - LRx[i, j, k]) ** 2
+    return np.sqrt(result)
+
+
 @njit(["void(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
 def jacobi(
     x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], h: np.float32
