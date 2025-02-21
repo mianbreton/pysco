@@ -2106,7 +2106,7 @@ def derivative(
         case 7:
             return derivative7(a)
         case _:
-            raise ValueError(f"Unsupported: {gradient_order=}")
+            raise NotImplementedError(f"Unsupported: {gradient_order=}")
 
 
 def derivative_fR(
@@ -2157,7 +2157,7 @@ def derivative_fR(
             case 7:
                 return derivative7_fR_n1(a, b, f)
             case _:
-                raise ValueError(f"Unsupported: {gradient_order=}")
+                raise NotImplementedError(f"Unsupported: {gradient_order=}")
     elif fR_n == 2:
         match gradient_order:
             case 2:
@@ -2169,9 +2169,9 @@ def derivative_fR(
             case 7:
                 return derivative7_fR_n2(a, b, f)
             case _:
-                raise ValueError(f"Unsupported: {gradient_order=}")
+                raise NotImplementedError(f"Unsupported: {gradient_order=}")
     else:
-        raise ValueError(f"Unsupported: {fR_n=}")
+        raise NotImplementedError(f"Unsupported: {fR_n=}")
 
 
 def add_derivative_fR(
@@ -2217,7 +2217,7 @@ def add_derivative_fR(
             case 7:
                 add_derivative7_fR_n1(force, b, f)
             case _:
-                raise ValueError(f"Unsupported: {gradient_order=}")
+                raise NotImplementedError(f"Unsupported: {gradient_order=}")
     elif fR_n == 2:
         match gradient_order:
             case 2:
@@ -2229,9 +2229,9 @@ def add_derivative_fR(
             case 7:
                 add_derivative7_fR_n2(force, b, f)
             case _:
-                raise ValueError(f"Unsupported: {gradient_order=}")
+                raise NotImplementedError(f"Unsupported: {gradient_order=}")
     else:
-        raise ValueError(f"Unsupported: {fR_n=}")
+        raise NotImplementedError(f"Unsupported: {fR_n=}")
 
 
 # TODO: To be improved when numba atomics are available

@@ -58,7 +58,7 @@ def integrate(
 
     Raises
     ------
-    ValueError
+    NotImplementedError
         Integrator must be Euler or Leapfrog
 
     Example
@@ -115,7 +115,7 @@ def integrate(
                 param,
             )
         case _:
-            raise ValueError("ERROR: Integrator must be 'leapfrog' or 'euler'")
+            raise NotImplementedError("ERROR: Integrator must be 'leapfrog' or 'euler'")
 
 
 def euler(
