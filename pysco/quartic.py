@@ -839,6 +839,67 @@ def residual_error_half(
     return np.sqrt(result)
 
 
+@njit(["f4(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
+def residual_error(
+    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
+) -> np.float32:
+    """Error on the residual of the quartic operator  \\
+    residual = u^4 + p*u + q  \\
+    error = sqrt[sum(residual**2)] \\
+    This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
+    in this case we can compute the residual for only half the points.
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    q : np.float32
+        Constant value in the quartic equation
+
+    Returns
+    -------
+    np.float32
+        Residual error
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.quartic import residual_error
+    >>> x = np.ones((32, 32, 32), dtype=np.float32)
+    >>> b = np.ones((32, 32, 32), dtype=np.float32)
+    >>> q = 0.01
+    >>> error = residual_error(x, b, q)
+    """
+    invsix = np.float32(1.0 / 6)
+    ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
+    qh2 = q * h2
+    result = np.float32(0)
+    for i in prange(-1, ncells_1d - 1):
+        im1 = i - 1
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jm1 = j - 1
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                km1 = k - 1
+                kp1 = k + 1
+                p = h2 * b[i, j, k] - invsix * (
+                    +x[im1, j, k] ** 3
+                    + x[i, jm1, k] ** 3
+                    + x[i, j, km1] ** 3
+                    + x[i, j, kp1] ** 3
+                    + x[i, jp1, k] ** 3
+                    + x[ip1, j, k] ** 3
+                )
+                x_tmp = x[i, j, k]
+                result += (x_tmp**4 + p * x_tmp + qh2) ** 2
+
+    return np.sqrt(result)
+
+
 @njit(
     ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
     fastmath=True,
@@ -1030,7 +1091,7 @@ def smoothing(
     >>> n_smoothing = 5
     >>> smoothing(x, b, q, n_smoothing)
     """
-    f_relax = np.float32(1.0)
+    f_relax = np.float32(1.25)
     for _ in range(n_smoothing):
         gauss_seidel(x, b, q, f_relax)
 
@@ -1069,6 +1130,6 @@ def smoothing_with_rhs(
     >>> rhs = np.ones((32, 32, 32), dtype=np.float32)
     >>> smoothing_with_rhs(x, b, q, n_smoothing, rhs)
     """
-    f_relax = np.float32(1.0)
+    f_relax = np.float32(1.25)
     for _ in range(n_smoothing):
         gauss_seidel_with_rhs(x, b, q, rhs, f_relax)

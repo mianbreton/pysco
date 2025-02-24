@@ -272,9 +272,9 @@ def residual_error(
     ):
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
-            return cubic.residual_error_half(x, b, q)
+            return cubic.residual_error(x, b, q)
         elif param["fR_n"] == 2:
-            return quartic.residual_error_half(x, b, q)
+            return quartic.residual_error(x, b, q)
         else:
             raise NotImplemented(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
