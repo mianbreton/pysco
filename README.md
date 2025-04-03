@@ -446,27 +446,27 @@ k *= 2 * np.pi / boxlen
 
 ## Citation
 
-If you use PySCo in your work, please cite [Breton (2024)](https://arxiv.org/abs/2410.20501)
+If you use PySCo in your work, please cite [Breton (2025)](https://arxiv.org/abs/2410.20501)
 
 ```bibtex
 #biblio.bib
-@ARTICLE{breton2024pysco,
+@ARTICLE{2025A&A...695A.170B,
        author = {{Breton}, Michel-Andr{\`e}s},
-        title = "{PySCo: A fast Particle-Mesh $N$-body code for modified gravity simulations in Python}",
-      journal = {arXiv e-prints},
-     keywords = {Astrophysics - Cosmology and Nongalactic Astrophysics},
-         year = 2024,
-        month = oct,
-          eid = {arXiv:2410.20501},
-        pages = {arXiv:2410.20501},
-          doi = {10.48550/arXiv.2410.20501},
+        title = "{PySCo: A fast particle-mesh N-body code for modified gravity simulations in Python}",
+      journal = {\aap},
+     keywords = {methods: numerical, cosmology: miscellaneous, large-scale structure of Universe, Astrophysics - Cosmology and Nongalactic Astrophysics},
+         year = 2025,
+        month = mar,
+       volume = {695},
+          eid = {A170},
+        pages = {A170},
+          doi = {10.1051/0004-6361/202452770},
 archivePrefix = {arXiv},
        eprint = {2410.20501},
  primaryClass = {astro-ph.CO},
-       adsurl = {https://ui.adsabs.harvard.edu/abs/2024arXiv241020501B},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2025A&A...695A.170B},
       adsnote = {Provided by the SAO/NASA Astrophysics Data System}
 }
-
 ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
