@@ -267,13 +267,13 @@ def add_vector_scalar_inplace(
     y_ravel = y.ravel()
     x_ravel = x.ravel()
     if a == 1:
-        for i in prange(y_ravel.shape[0]):
+        for i in prange(len(y_ravel)):
             y_ravel[i] += x_ravel[i]
     elif a == -1:
-        for i in prange(y_ravel.shape[0]):
+        for i in prange(len(y_ravel)):
             y_ravel[i] -= x_ravel[i]
     else:
-        for i in prange(y_ravel.shape[0]):
+        for i in prange(len(y_ravel)):
             y_ravel[i] += a * x_ravel[i]
 
 
@@ -303,7 +303,7 @@ def prod_vector_vector_scalar_inplace(
     """
     y_ravel = y.ravel()
     x_ravel = x.ravel()
-    for i in prange(y_ravel.shape[0]):
+    for i in prange(len(y_ravel)):
         y_ravel[i] *= a * x_ravel[i]
 
 
@@ -340,7 +340,7 @@ def add_vector_vector_inplace(
     y_ravel = y.ravel()
     a_ravel = a.ravel()
     b_ravel = b.ravel()
-    for i in prange(y_ravel.shape[0]):
+    for i in prange(len(y_ravel)):
         y_ravel[i] += f * a_ravel[i] * b_ravel[i]
 
 
@@ -382,7 +382,7 @@ def add_vector_vector_vector_inplace(
     a_ravel = a.ravel()
     b_ravel = b.ravel()
     c_ravel = c.ravel()
-    for i in prange(y_ravel.shape[0]):
+    for i in prange(len(y_ravel)):
         y_ravel[i] += f * a_ravel[i] * b_ravel[i] * c_ravel[i]
 
 
@@ -406,7 +406,7 @@ def prod_vector_scalar_inplace(y: npt.NDArray[np.float32], a: np.float32) -> Non
     >>> prod_vector_scalar_inplace(y_array, 2.0)
     """
     y_ravel = y.ravel()
-    for i in prange(y_ravel.shape[0]):
+    for i in prange(len(y_ravel)):
         y_ravel[i] *= a
 
 
@@ -439,7 +439,7 @@ def prod_vector_scalar(
     result = np.empty_like(x)
     result_ravel = result.ravel()
     x_ravel = x.ravel()
-    for i in prange(result_ravel.shape[0]):
+    for i in prange(len(result_ravel)):
         result_ravel[i] = a * x_ravel[i]
     return result
 
@@ -477,7 +477,7 @@ def prod_add_vector_scalar_scalar(
     result = np.empty_like(x)
     result_ravel = result.ravel()
     x_ravel = x.ravel()
-    for i in prange(result_ravel.shape[0]):
+    for i in prange(len(result_ravel)):
         result_ravel[i] = a * x_ravel[i] + b
     return result
 
@@ -540,11 +540,10 @@ def prod_gradient_vector_inplace(
     ndim = x.shape[-1]
     x_ravel = x.ravel()
     y_ravel = y.ravel()
-    size = y_ravel.shape[0]
-    for i in prange(size):
+    for i in prange(len(y_ravel)):
         y_tmp = y_ravel[i]
         ii = i * ndim
-        for j in prange(ndim):
+        for j in range(ndim):
             x_ravel[ii + j] *= y_tmp
 
 
@@ -584,7 +583,7 @@ def prod_add_vector_scalar_vector(
     result_ravel = result.ravel()
     x_ravel = x.ravel()
     b_ravel = b.ravel()
-    for i in prange(result_ravel.shape[0]):
+    for i in prange(len(result_ravel)):
         result_ravel[i] = a * x_ravel[i] + b_ravel[i]
     return result
 
@@ -616,7 +615,7 @@ def prod_minus_vector_inplace(
     result_ravel = result.ravel()
     x_ravel = x.ravel()
     y_ravel = y.ravel()
-    for i in prange(result_ravel.shape[0]):
+    for i in prange(len(result_ravel)):
         x_ravel[i] *= -y_ravel[i]
 
 
@@ -655,7 +654,7 @@ def linear_operator(
     result = np.empty_like(x)
     x_ravel = x.ravel()
     result_ravel = result.ravel()
-    for i in prange(result_ravel.shape[0]):
+    for i in prange(len(result_ravel)):
         result_ravel[i] = f1 * x_ravel[i] + f2
     return result
 
@@ -693,7 +692,7 @@ def linear_operator_inplace(
     >>> linear_operator_inplace(x_array, f1_scalar, f2_scalar)
     """
     x_ravel = x.ravel()
-    for i in prange(x_ravel.shape[0]):
+    for i in prange(len(x_ravel)):
         x_ravel[i] = f1 * x_ravel[i] + f2
 
 
@@ -731,7 +730,7 @@ def linear_operator_vectors_inplace(
     """
     x_ravel = x.ravel()
     y_ravel = y.ravel()
-    for i in prange(x_ravel.shape[0]):
+    for i in prange(len(x_ravel)):
         x_ravel[i] = f1 * x_ravel[i] + f2 * y_ravel[i]
 
 
@@ -779,7 +778,7 @@ def operator_fR_inplace(
     """
     density_ravel = density.ravel()
     u_scalaron_ravel = u_scalaron.ravel()
-    for i in prange(density_ravel.shape[0]):
+    for i in prange(len(density_ravel)):
         density_ravel[i] = f1 * density_ravel[i] + f2 / u_scalaron_ravel[i] + f3
 
 
@@ -835,8 +834,8 @@ def injection_to_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
     """
     ii, jj, kk = b.shape
     for i in prange(ii):
-        for j in prange(jj):
-            for k in prange(kk):
+        for j in range(jj):
+            for k in range(kk):
                 a[i, j, k, dim] = b[i, j, k]
 
 
@@ -865,8 +864,8 @@ def injection_from_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
     """
     ii, jj, kk = a.shape
     for i in prange(ii):
-        for j in prange(jj):
-            for k in prange(kk):
+        for j in range(jj):
+            for k in range(kk):
                 a[i, j, k] = b[i, j, k, dim]
 
 
@@ -1116,14 +1115,14 @@ def periodic_wrap(position: npt.NDArray[np.float32]) -> None:
     one = np.float32(1)
     eps = -(0.5**25)  # Limit of float32 precision
     eps += 1e-6 * eps  # Buffer to avoid unwanted numerical rounding
-    position_ravelled = position.ravel()
-    for i in prange(position_ravelled.shape[0]):
-        tmp = position_ravelled[i]
+    position_ravel = position.ravel()
+    for i in prange(len(position_ravel)):
+        tmp = position_ravel[i]
         if tmp < zero:
             # Avoid numerical rounding for negative values close to zero
             if tmp > eps:
-                position_ravelled[i] = zero
+                position_ravel[i] = zero
             else:
-                position_ravelled[i] += one
+                position_ravel[i] += one
         elif tmp >= one:
-            position_ravelled[i] -= one
+            position_ravel[i] -= one

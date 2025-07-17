@@ -616,9 +616,9 @@ def white_noise_fourier(
     rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
     for i in prange(middle + 1):
         im = -np.int32(i)
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             jm = -j
-            for k in prange(ncells_1d):
+            for k in range(ncells_1d):
                 km = -k
                 phase = twopi * rng_phases[i, j, k]
                 amplitude = math.sqrt(
@@ -699,9 +699,9 @@ def white_noise_fourier_fixed(
     rng_phases = rng.random((middle + 1, ncells_1d, ncells_1d), dtype=np.float32)
     for i in prange(middle + 1):
         im = -np.int32(i)
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             jm = -j
-            for k in prange(ncells_1d):
+            for k in range(ncells_1d):
                 km = -k
                 phase = twopi * rng_phases[i, j, k] + shift
                 real = math.cos(phase)
@@ -770,14 +770,14 @@ def white_noise_fourier_force(
         else:
             kx = np.float32(i)
         kx2 = kx**2
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             jm = -j
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
             kx2_ky2 = kx2 + ky**2
-            for k in prange(ncells_1d):
+            for k in range(ncells_1d):
                 km = -k
                 kz = np.float32(k)
                 invk2 = one / (kx2_ky2 + kz**2)
@@ -910,14 +910,14 @@ def white_noise_fourier_fixed_force(
         else:
             kx = np.float32(i)
         kx2 = kx**2
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             jm = -j
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
             kx2_ky2 = kx2 + ky**2
-            for k in prange(ncells_1d):
+            for k in range(ncells_1d):
                 km = -k
                 kz = np.float32(k)
                 invk2 = one / (kx2_ky2 + kz**2)
@@ -1722,9 +1722,9 @@ def initialise_1LPT_edge(
     velocity = np.empty_like(psi_1lpt)
     for i in prange(ncells_1d):
         x = i * h
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             y = j * h
-            for k in prange(ncells_1d):
+            for k in range(ncells_1d):
                 z = k * h
                 psix = -psi_1lpt[i, j, k, 0]
                 psiy = -psi_1lpt[i, j, k, 1]
@@ -1783,9 +1783,9 @@ def initialise_1LPT_center(
     velocity = np.empty_like(psi_1lpt)
     for i in prange(ncells_1d):
         x = half_h + i * h
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             y = half_h + j * h
-            for k in prange(ncells_1d):
+            for k in range(ncells_1d):
                 z = half_h + k * h
                 psix = -psi_1lpt[i, j, k, 0]
                 psiy = -psi_1lpt[i, j, k, 1]
@@ -1842,8 +1842,8 @@ def add_nLPT(
     ncells_1d = psi_nlpt.shape[0]
     dfH_n = dplus_n * fH_n
     for i in prange(ncells_1d):
-        for j in prange(ncells_1d):
-            for k in prange(ncells_1d):
+        for j in range(ncells_1d):
+            for k in range(ncells_1d):
                 psix = psi_nlpt[i, j, k, 0]
                 psiy = psi_nlpt[i, j, k, 1]
                 psiz = psi_nlpt[i, j, k, 2]

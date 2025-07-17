@@ -480,12 +480,12 @@ def inverse_laplacian(x: npt.NDArray[np.complex64]) -> None:
             kx2 = np.float32(ncells_1d - i) ** 2
         else:
             kx2 = np.float32(i) ** 2
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             if j > middle:
                 kx2_ky2 = kx2 + np.float32(ncells_1d - j) ** 2
             else:
                 kx2_ky2 = kx2 + np.float32(j) ** 2
-            for k in prange(middle + 1):
+            for k in range(middle + 1):
                 invk2 = minus_inv_fourpi2 / (kx2_ky2 + np.float32(k) ** 2)
                 x[i, j, k] *= invk2
     x[0, 0, 0] = 0
@@ -529,14 +529,14 @@ def inverse_laplacian_compensated(x: npt.NDArray[np.complex64], p: int) -> None:
             kx = np.float32(i)
         kx2 = kx**2
         w_x = np.sinc(kx * h)
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
             w_xy = w_x * np.sinc(ky * h)
             kx2_ky2 = kx2 + ky**2
-            for k in prange(middle + 1):
+            for k in range(middle + 1):
                 kz = np.float32(k)
                 w_xyz = w_xy * np.sinc(kz * h)
                 invk2 = minus_inv_fourpi2 / (kx2_ky2 + kz**2)
@@ -580,14 +580,14 @@ def inverse_laplacian_7pt(
         else:
             kx = np.float32(i)
         f_x = math.sin(pi_h * kx) ** 2
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
             f_y = math.sin(pi_h * ky) ** 2
             f_xy = f_x + f_y
-            for k in prange(middle + 1):
+            for k in range(middle + 1):
                 kz = np.float32(k)
                 f_z = math.sin(pi_h * kz) ** 2
                 inv_f_xyz = minus_h2_inv4 / (f_xy + f_z)
@@ -636,13 +636,13 @@ def gradient_inverse_laplacian(
         else:
             kx = np.float32(i)
         kx2 = kx**2
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
             kx2_ky2 = kx2 + ky**2
-            for k in prange(middle + 1):
+            for k in range(middle + 1):
                 kz = np.float32(k)
                 invk2 = invtwopi / (kx2_ky2 + kz**2)
                 x_k2_tmp = minus_ii * invk2 * x[i, j, k]
@@ -700,14 +700,14 @@ def gradient_inverse_laplacian_compensated(
             kx = np.float32(i)
         kx2 = kx**2
         w_x = np.sinc(kx * h)
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
             kx2_ky2 = kx2 + ky**2
             w_xy = w_x * np.sinc(ky * h)
-            for k in prange(middle + 1):
+            for k in range(middle + 1):
                 kz = np.float32(k)
                 w_xyz = w_xy * np.sinc(kz * h)
                 invk2 = invtwopi / (kx2_ky2 + kz**2)
@@ -759,12 +759,12 @@ def gradient(
             kx = np.float32(i - ncells_1d)
         else:
             kx = np.float32(i)
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
-            for k in prange(middle + 1):
+            for k in range(middle + 1):
                 kz = np.float32(k)
                 x_tmp = ii * twopi * x[i, j, k]
                 result[i, j, k, 0] = x_tmp * kx
@@ -817,12 +817,12 @@ def hessian(
             kx = np.float32(i - ncells_1d)
         else:
             kx = np.float32(i)
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
-            for k in prange(middle + 1):
+            for k in range(middle + 1):
                 kz = np.float32(k)
                 k_array = np.array([kx, ky, kz])
                 kn = k_array[n]
@@ -880,12 +880,12 @@ def sum_of_hessian(
             kx = np.float32(i - ncells_1d)
         else:
             kx = np.float32(i)
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
-            for k in prange(middle + 1):
+            for k in range(middle + 1):
                 kz = np.float32(k)
                 k_array = np.array([kx, ky, kz])
                 kn1 = k_array[n1]
@@ -945,12 +945,12 @@ def diff_of_hessian(
             kx = np.float32(i - ncells_1d)
         else:
             kx = np.float32(i)
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             if j >= middle:
                 ky = np.float32(j - ncells_1d)
             else:
                 ky = np.float32(j)
-            for k in prange(middle + 1):
+            for k in range(middle + 1):
                 kz = np.float32(k)
                 k_array = np.array([kx, ky, kz])
                 kn1 = k_array[n1]

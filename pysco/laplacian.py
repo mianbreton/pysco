@@ -36,10 +36,10 @@ def operator(x: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 result[i, j, k] = (
@@ -93,10 +93,10 @@ def residual(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 result[i, j, k] = (
@@ -163,12 +163,12 @@ def restrict_residual(
         iim1 = ii - 1
         iip1 = ii + 1
         iip2 = iip1 + 1
-        for j in prange(-1, ncells_1d_coarse - 1):
+        for j in range(-1, ncells_1d_coarse - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjp1 = jj + 1
             jjp2 = jjp1 + 1
-            for k in prange(-1, ncells_1d_coarse - 1):
+            for k in range(-1, ncells_1d_coarse - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkp1 = kk + 1
@@ -274,12 +274,12 @@ def restrict_residual_half(
         iim1 = ii - 1
         iip1 = ii + 1
         iip2 = iip1 + 1
-        for j in prange(-1, ncells_1d_coarse - 1):
+        for j in range(-1, ncells_1d_coarse - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjp1 = jj + 1
             jjp2 = jjp1 + 1
-            for k in prange(-1, ncells_1d_coarse - 1):
+            for k in range(-1, ncells_1d_coarse - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkp1 = kk + 1
@@ -358,10 +358,10 @@ def residual_error(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 result += (
@@ -421,12 +421,12 @@ def residual_error_half(
         iim1 = ii - 1
         iip1 = ii + 1
         iip2 = iip1 + 1
-        for j in prange(-1, ncells_1d_coarse - 1):
+        for j in range(-1, ncells_1d_coarse - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjp1 = jj + 1
             jjp2 = jjp1 + 1
-            for k in prange(-1, ncells_1d_coarse - 1):
+            for k in range(-1, ncells_1d_coarse - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkp1 = kk + 1
@@ -526,9 +526,8 @@ def truncation_error(x: npt.NDArray[np.float32]) -> np.float32:
     LRx = operator(mesh.restriction(x))
     RLx_ravel = RLx.ravel()
     LRx_ravel = LRx.ravel()
-    size = len(RLx_ravel)
     result = 0
-    for i in prange(size):
+    for i in prange(len(RLx_ravel)):
         result += (RLx_ravel[i] - LRx_ravel[i]) ** 2
     return np.sqrt(result)
 
@@ -631,12 +630,12 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
         ip1 = i + 1
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 kk = 2 * k
@@ -790,8 +789,7 @@ def initialise_potential(
     potential = np.empty_like(b)
     potential_ravel = potential.ravel()
     b_ravel = b.ravel()
-    size = len(b_ravel)
-    for i in prange(size):
+    for i in prange(len(potential_ravel)):
         potential_ravel[i] = minus_h2_over_six * b_ravel[i]
     return potential
 
@@ -823,10 +821,10 @@ def jacobi(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]) -> None:
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 x[i, j, k] = (
@@ -879,12 +877,12 @@ def gauss_seidel(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(ncells_1d_coarse):
+        for j in range(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(ncells_1d_coarse):
+            for k in range(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -953,12 +951,12 @@ def gauss_seidel(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(ncells_1d_coarse):
+        for j in range(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(ncells_1d_coarse):
+            for k in range(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1

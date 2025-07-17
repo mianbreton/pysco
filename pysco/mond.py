@@ -199,10 +199,10 @@ def rhs_simple(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
 
@@ -354,10 +354,10 @@ def rhs_n(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
 
@@ -508,10 +508,10 @@ def rhs_beta(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
 
@@ -662,10 +662,10 @@ def rhs_gamma(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
 
@@ -816,10 +816,10 @@ def rhs_delta(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
 

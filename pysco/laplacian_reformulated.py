@@ -49,10 +49,10 @@ def operator(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 result[i, j, k] = x[i, j, k] + invsix * (
@@ -110,10 +110,10 @@ def residual_with_rhs(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 result[i, j, k] = (
@@ -169,10 +169,10 @@ def residual_error(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 result += (
@@ -231,9 +231,8 @@ def truncation_error(
     LRx = operator(mesh.restriction(x), mesh.restriction(b))
     RLx_ravel = RLx.ravel()
     LRx_ravel = LRx.ravel()
-    size = len(RLx_ravel)
     result = np.float32(0)
-    for i in prange(size):
+    for i in prange(len(RLx_ravel)):
         result += (four * RLx_ravel[i] - LRx_ravel[i]) ** 2
     return np.sqrt(result)
 
@@ -265,10 +264,10 @@ def jacobi(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]) -> None:
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 x[i, j, k] = (
@@ -321,10 +320,10 @@ def jacobi_with_rhs(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 x[i, j, k] = (
@@ -378,12 +377,12 @@ def gauss_seidel(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(ncells_1d_coarse):
+        for j in range(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(ncells_1d_coarse):
+            for k in range(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -451,12 +450,12 @@ def gauss_seidel(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(ncells_1d_coarse):
+        for j in range(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(ncells_1d_coarse):
+            for k in range(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -569,12 +568,12 @@ def gauss_seidel_with_rhs(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(ncells_1d_coarse):
+        for j in range(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(ncells_1d_coarse):
+            for k in range(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -647,12 +646,12 @@ def gauss_seidel_with_rhs(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(ncells_1d_coarse):
+        for j in range(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(ncells_1d_coarse):
+            for k in range(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1

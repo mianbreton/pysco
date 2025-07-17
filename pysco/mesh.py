@@ -40,10 +40,10 @@ def restriction(
     for i in prange(ncells_1d):
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(ncells_1d):
+            for k in range(ncells_1d):
                 kk = 2 * k
                 kkp1 = kk + 1
                 result[i, j, k] = inveighth * (
@@ -89,10 +89,10 @@ def minus_restriction(
     for i in prange(ncells_1d):
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(ncells_1d):
+            for k in range(ncells_1d):
                 kk = 2 * k
                 kkp1 = kk + 1
                 result[i, j, k] = minus_inveighth * (
@@ -138,10 +138,10 @@ def restriction_half(
     for i in prange(ncells_1d):
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(ncells_1d):
+            for k in range(ncells_1d):
                 kk = 2 * k
                 kkp1 = kk + 1
                 result[i, j, k] = inveighth * (
@@ -184,10 +184,10 @@ def prolongation0(
     for i in prange(ncells_1d):
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(ncells_1d):
+            for k in range(ncells_1d):
                 kk = 2 * k
                 kkp1 = kk + 1
                 x_fine[ii, jj, kk] = x_fine[ii, jj, kkp1] = x_fine[ii, jjp1, kk] = (
@@ -239,12 +239,12 @@ def prolongation(
         ip1 = i + 1
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 kk = 2 * k
@@ -364,12 +364,12 @@ def add_prolongation(
         ip1 = i + 1
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 kk = 2 * k
@@ -488,12 +488,12 @@ def add_prolongation_half(
         ip1 = i + 1
         ii = 2 * i
         iip1 = ii + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
             jj = 2 * j
             jjp1 = jj + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 kk = 2 * k
@@ -580,9 +580,9 @@ def divergence2(
     invh = np.float32(ncells_1d)
     for i in prange(ncells_1d):
         im1 = i - 1
-        for j in prange(ncells_1d):
+        for j in range(ncells_1d):
             jm1 = j - 1
-            for k in prange(ncells_1d):
+            for k in range(ncells_1d):
                 km1 = k - 1
                 out[i, j, k] = invh * (
                     (-a[im1, j, k, 0] + a[i, j, k, 0])
@@ -621,10 +621,10 @@ def divergence3(
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
         im1 = i - 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jp1 = j + 1
             jm1 = j - 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 kp1 = k + 1
                 km1 = k - 1
                 out[i, j, k] = inv2h * (
@@ -665,9 +665,9 @@ def derivative2(
     result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 kp1 = k + 1
                 minus_aijk = -a[i, j, k]
                 result[i, j, k, 0] = invh * (minus_aijk + a[ip1, j, k])
@@ -708,10 +708,10 @@ def derivative3(
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
         im1 = i - 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jp1 = j + 1
             jm1 = j - 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 kp1 = k + 1
                 km1 = k - 1
                 result[i, j, k, 0] = inv2h * (-a[im1, j, k] + a[ip1, j, k])
@@ -755,12 +755,12 @@ def derivative5(
         im1 = i - 1
         ip2 = i + 2
         im2 = i - 2
-        for j in prange(-2, ncells_1d - 2):
+        for j in range(-2, ncells_1d - 2):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
-            for k in prange(-2, ncells_1d - 2):
+            for k in range(-2, ncells_1d - 2):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -815,14 +815,14 @@ def derivative7(
         im2 = i - 2
         ip3 = i + 3
         im3 = i - 3
-        for j in prange(-3, ncells_1d - 3):
+        for j in range(-3, ncells_1d - 3):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
             jp3 = j + 3
             jm3 = j - 3
-            for k in prange(-3, ncells_1d - 3):
+            for k in range(-3, ncells_1d - 3):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -896,9 +896,9 @@ def derivative2_fR_n1(
     result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 kp1 = k + 1
                 minus_aijk = -a[i, j, k]
                 minus_bijk_2 = -b[i, j, k] ** 2
@@ -961,10 +961,10 @@ def derivative3_fR_n1(
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
         im1 = i - 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jp1 = j + 1
             jm1 = j - 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 kp1 = k + 1
                 km1 = k - 1
                 result[i, j, k, 0] = inv2h * (
@@ -1041,12 +1041,12 @@ def derivative5_fR_n1(
         im1 = i - 1
         ip2 = i + 2
         im2 = i - 2
-        for j in prange(-2, ncells_1d - 2):
+        for j in range(-2, ncells_1d - 2):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
-            for k in prange(-2, ncells_1d - 2):
+            for k in range(-2, ncells_1d - 2):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -1141,14 +1141,14 @@ def derivative7_fR_n1(
         im2 = i - 2
         ip3 = i + 3
         im3 = i - 3
-        for j in prange(-3, ncells_1d - 3):
+        for j in range(-3, ncells_1d - 3):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
             jp3 = j + 3
             jm3 = j - 3
-            for k in prange(-3, ncells_1d - 3):
+            for k in range(-3, ncells_1d - 3):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -1250,9 +1250,9 @@ def add_derivative2_fR_n1(
     invh_f = np.float32(ncells_1d * f)
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 kp1 = k + 1
                 minus_bijk_2 = -b[i, j, k] ** 2
                 force[i, j, k, 0] += invh_f * (minus_bijk_2 + b[ip1, j, k] ** 2)
@@ -1301,10 +1301,10 @@ def add_derivative3_fR_n1(
     for i in prange(-2, ncells_1d - 2):
         ip1 = i + 1
         im1 = i - 1
-        for j in prange(-2, ncells_1d - 2):
+        for j in range(-2, ncells_1d - 2):
             jp1 = j + 1
             jm1 = j - 1
-            for k in prange(-2, ncells_1d - 2):
+            for k in range(-2, ncells_1d - 2):
                 kp1 = k + 1
                 km1 = k - 1
                 force[i, j, k, 0] += inv2h_f * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
@@ -1356,12 +1356,12 @@ def add_derivative5_fR_n1(
         im1 = i - 1
         ip2 = i + 2
         im2 = i - 2
-        for j in prange(-2, ncells_1d - 2):
+        for j in range(-2, ncells_1d - 2):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
-            for k in prange(-2, ncells_1d - 2):
+            for k in range(-2, ncells_1d - 2):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -1430,14 +1430,14 @@ def add_derivative7_fR_n1(
         im2 = i - 2
         ip3 = i + 3
         im3 = i - 3
-        for j in prange(-2, ncells_1d - 2):
+        for j in range(-2, ncells_1d - 2):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
             jp3 = j + 3
             jm3 = j - 3
-            for k in prange(-2, ncells_1d - 2):
+            for k in range(-2, ncells_1d - 2):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -1510,9 +1510,9 @@ def derivative2_fR_n2(
     result = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 kp1 = k + 1
                 minus_aijk = -a[i, j, k]
                 minus_bijk_3 = -b[i, j, k] ** 3
@@ -1575,10 +1575,10 @@ def derivative3_fR_n2(
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
         im1 = i - 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jp1 = j + 1
             jm1 = j - 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 kp1 = k + 1
                 km1 = k - 1
                 result[i, j, k, 0] = inv2h * (
@@ -1649,12 +1649,12 @@ def derivative5_fR_n2(
         im1 = i - 1
         ip2 = i + 2
         im2 = i - 2
-        for j in prange(-2, ncells_1d - 2):
+        for j in range(-2, ncells_1d - 2):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
-            for k in prange(-2, ncells_1d - 2):
+            for k in range(-2, ncells_1d - 2):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -1749,14 +1749,14 @@ def derivative7_fR_n2(
         im2 = i - 2
         ip3 = i + 3
         im3 = i - 3
-        for j in prange(-3, ncells_1d - 3):
+        for j in range(-3, ncells_1d - 3):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
             jp3 = j + 3
             jm3 = j - 3
-            for k in prange(-3, ncells_1d - 3):
+            for k in range(-3, ncells_1d - 3):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -1858,9 +1858,9 @@ def add_derivative2_fR_n2(
     invh_f = np.float32(ncells_1d * f)
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 kp1 = k + 1
                 minus_bijk_3 = -b[i, j, k] ** 3
                 force[i, j, k, 0] += invh_f * (minus_bijk_3 + b[ip1, j, k] ** 3)
@@ -1909,10 +1909,10 @@ def add_derivative3_fR_n2(
     for i in prange(-1, ncells_1d - 1):
         ip1 = i + 1
         im1 = i - 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jp1 = j + 1
             jm1 = j - 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 kp1 = k + 1
                 km1 = k - 1
                 force[i, j, k, 0] += inv2h_f * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
@@ -1964,12 +1964,12 @@ def add_derivative5_fR_n2(
         im1 = i - 1
         ip2 = i + 2
         im2 = i - 2
-        for j in prange(-2, ncells_1d - 2):
+        for j in range(-2, ncells_1d - 2):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
-            for k in prange(-2, ncells_1d - 2):
+            for k in range(-2, ncells_1d - 2):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -2035,14 +2035,14 @@ def add_derivative7_fR_n2(
         im2 = i - 2
         ip3 = i + 3
         im3 = i - 3
-        for j in prange(-3, ncells_1d - 3):
+        for j in range(-3, ncells_1d - 3):
             jp1 = j + 1
             jm1 = j - 1
             jp2 = j + 2
             jm2 = j - 2
             jp3 = j + 3
             jm3 = j - 3
-            for k in prange(-3, ncells_1d - 3):
+            for k in range(-3, ncells_1d - 3):
                 kp1 = k + 1
                 km1 = k - 1
                 kp2 = k + 2
@@ -2665,7 +2665,7 @@ def invNGP_vec(
         i = np.int16(position[n, 0] * ncells_1d_f)
         j = np.int16(position[n, 1] * ncells_1d_f)
         k = np.int16(position[n, 2] * ncells_1d_f)
-        for m in prange(3):
+        for m in range(3):
             result[n, m] = grid[i, j, k, m]
     return result
 
@@ -2804,7 +2804,7 @@ def invCIC_vec(
         i2 = (i + signx) % ncells_1d
         j2 = (j + signy) % ncells_1d
         k2 = (k + signz) % ncells_1d
-        for m in prange(3):
+        for m in range(3):
             result[n, m] = (
                 wx * wy * wz * grid[i, j, k, m]
                 + wx * wy * dz * grid[i, j, k2, m]
@@ -3051,7 +3051,7 @@ def invTSC_vec(
         i_p1 = i - ncells_1d_m1
         j_p1 = j - ncells_1d_m1
         k_p1 = k - ncells_1d_m1
-        for m in prange(3):
+        for m in range(3):
             result[n, m] = (
                 wx_m1_y_m1_z_m1 * grid[i_m1, j_m1, k_m1, m]
                 + wx_m1_y_m1_z * grid[i_m1, j_m1, k, m]

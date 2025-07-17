@@ -62,10 +62,10 @@ def operator(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 p = h2 * b[i, j, k] - invsix * (
@@ -135,10 +135,10 @@ def residual_with_rhs(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 p = h2 * b[i, j, k] - invsix * (
@@ -251,8 +251,7 @@ def initialise_potential(
     u_scalaron = np.empty_like(b)
     u_scalaron_ravel = u_scalaron.ravel()
     b_ravel = b.ravel()
-    size = len(b_ravel)
-    for i in prange(size):
+    for i in prange(len(u_scalaron_ravel)):
         d0 = -threeh2 * b_ravel[i]
         C = (0.5 * (d1 + math.sqrt(d1**2 - 4.0 * d0**3))) ** inv3
         u_scalaron_ravel[i] = np.float32(-inv3 * (C + d0 / C))
@@ -309,12 +308,12 @@ def gauss_seidel(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(ncells_1d_coarse):
+        for j in range(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(ncells_1d_coarse):
+            for k in range(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -375,12 +374,12 @@ def gauss_seidel(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(ncells_1d_coarse):
+        for j in range(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(ncells_1d_coarse):
+            for k in range(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -492,12 +491,12 @@ def gauss_seidel_with_rhs(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(ncells_1d_coarse):
+        for j in range(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(ncells_1d_coarse):
+            for k in range(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -562,12 +561,12 @@ def gauss_seidel_with_rhs(
         iim2 = ii - 2
         iim1 = ii - 1
         iip1 = ii + 1
-        for j in prange(ncells_1d_coarse):
+        for j in range(ncells_1d_coarse):
             jj = 2 * j
             jjm2 = jj - 2
             jjm1 = jj - 1
             jjp1 = jj + 1
-            for k in prange(ncells_1d_coarse):
+            for k in range(ncells_1d_coarse):
                 kk = 2 * k
                 kkm2 = kk - 2
                 kkm1 = kk - 1
@@ -675,12 +674,12 @@ def residual_half(
         iim1 = ii - 1
         iim2 = iim1 - 1
         iip1 = ii + 1
-        for j in prange(-1, ncells_1d_coarse - 1):
+        for j in range(-1, ncells_1d_coarse - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjm2 = jjm1 - 1
             jjp1 = jj + 1
-            for k in prange(-1, ncells_1d_coarse - 1):
+            for k in range(-1, ncells_1d_coarse - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
@@ -778,12 +777,12 @@ def residual_error_half(
         iim1 = ii - 1
         iim2 = iim1 - 1
         iip1 = ii + 1
-        for j in prange(-1, ncells_1d_coarse - 1):
+        for j in range(-1, ncells_1d_coarse - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjm2 = jjm1 - 1
             jjp1 = jj + 1
-            for k in prange(-1, ncells_1d_coarse - 1):
+            for k in range(-1, ncells_1d_coarse - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
@@ -880,10 +879,10 @@ def residual_error(
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
-        for j in prange(-1, ncells_1d - 1):
+        for j in range(-1, ncells_1d - 1):
             jm1 = j - 1
             jp1 = j + 1
-            for k in prange(-1, ncells_1d - 1):
+            for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
                 p = h2 * b[i, j, k] - invsix * (
@@ -951,12 +950,12 @@ def restrict_residual_half(
         iim1 = ii - 1
         iim2 = iim1 - 1
         iip1 = ii + 1
-        for j in prange(-1, ncells_1d_coarse - 1):
+        for j in range(-1, ncells_1d_coarse - 1):
             jj = 2 * j
             jjm1 = jj - 1
             jjm2 = jjm1 - 1
             jjp1 = jj + 1
-            for k in prange(-1, ncells_1d_coarse - 1):
+            for k in range(-1, ncells_1d_coarse - 1):
                 kk = 2 * k
                 kkm1 = kk - 1
                 kkm2 = kkm1 - 1
@@ -1053,9 +1052,8 @@ def truncation_error(
     LRx = operator(mesh.restriction(x), mesh.restriction(b), q)
     RLx_ravel = RLx.ravel()
     LRx_ravel = LRx.ravel()
-    size = len(RLx_ravel)
     result = np.float32(0)
-    for i in prange(size):
+    for i in prange(len(RLx_ravel)):
         result += (four * RLx_ravel[i] - LRx_ravel[i]) ** 2
     return np.sqrt(result)
 
