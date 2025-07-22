@@ -13,27 +13,24 @@ import mesh
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1])"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def operator(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
-) -> npt.NDArray[np.float32]:
+    out: npt.NDArray[np.float32], x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
+) -> None:
     """Laplacian operator
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Example
     -------
@@ -45,7 +42,6 @@ def operator(
     ncells_1d = x.shape[0]
     h2 = np.float32(1.0 / ncells_1d**2)
     invsix = np.float32(1.0 / 6)
-    result = np.empty_like(x)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -55,7 +51,7 @@ def operator(
             for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
-                result[i, j, k] = x[i, j, k] + invsix * (
+                out[i, j, k] = x[i, j, k] + invsix * (
                     h2 * b[i, j, k]
                     - x[im1, j, k]
                     - x[i, jm1, k]
@@ -64,36 +60,34 @@ def operator(
                     - x[i, jp1, k]
                     - x[ip1, j, k]
                 )
-    return result
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4[:,:,::1])"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def residual_with_rhs(
+    out: npt.NDArray[np.float32],
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     rhs: npt.NDArray[np.float32],
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Residual of Laplacian operator \\
     residual = rhs - Operator
 
     Parameters
     ----------
+    out : 
+    npt.NDArray[np.float32]
+        Residual of Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
     rhs : npt.NDArray[np.float32]
         RHS of operator [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Residual of Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Example
     -------
@@ -106,7 +100,6 @@ def residual_with_rhs(
     ncells_1d = x.shape[0]
     h2 = np.float32(1.0 / ncells_1d**2)
     invsix = np.float32(1.0 / 6)
-    result = np.empty_like(x)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -116,7 +109,7 @@ def residual_with_rhs(
             for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
-                result[i, j, k] = (
+                out[i, j, k] = (
                     -x[i, j, k]
                     - invsix
                     * (
@@ -130,8 +123,6 @@ def residual_with_rhs(
                     )
                     + rhs[i, j, k]
                 )
-
-    return result
 
 
 @njit(["f4(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
@@ -227,8 +218,18 @@ def truncation_error(
     >>> error = truncation_error(x, b)
     """
     four = np.float32(4)  # Correction for grid discrepancy
-    RLx = mesh.restriction(operator(x, b))
-    LRx = operator(mesh.restriction(x), mesh.restriction(b))
+    ncells_1d_coarse = x.shape[0] // 2
+    Lx = np.empty_like(x)
+    RLx = np.empty((ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32)
+    LRx = np.empty_like(RLx)
+    x_c = np.empty_like(RLx)
+    b_c = np.empty_like(RLx)
+    
+    operator(Lx, x, b)
+    mesh.restriction(x_c, x)
+    mesh.restriction(b_c, b)
+    mesh.restriction(RLx, Lx)
+    operator(LRx, x_c, b_c)
     RLx_ravel = RLx.ravel()
     LRx_ravel = LRx.ravel()
     result = np.float32(0)

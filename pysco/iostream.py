@@ -71,19 +71,20 @@ def read_param_file(name: str) -> pd.Series:
 
 @utils.time_me
 def read_snapshot_particles_hdf5(
+    position: npt.NDArray[np.float32],
+    velocity: npt.NDArray[np.float32],
     filename: str,
-) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+) -> None:
     """Read particles in snapshot from HDF5 file
 
     Parameters
     ----------
+    position : npt.NDArray[np.float32]
+        Position [N_part, 3]
+    velocity : npt.NDArray[np.float32]
+        Velocity [N_part, 3]
     filename : str
         Filename
-
-    Returns
-    -------
-    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
-        Position, Velocity [N_part, 3]
 
     Examples
     --------
@@ -94,26 +95,26 @@ def read_snapshot_particles_hdf5(
 
     logging.warning(f"Read HDF5 snapshot {filename}")
     with h5py.File(filename, "r") as h5r:
-        position = h5r["position"][:]
-        velocity = h5r["velocity"][:]
-    return (position, velocity)
+        position[:] = h5r["position"][:]
+        velocity[:] = h5r["velocity"][:]
 
 
 @utils.time_me
 def read_snapshot_particles_parquet(
+    position: npt.NDArray[np.float32],
+    velocity: npt.NDArray[np.float32],
     filename: str,
-) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+) -> None:
     """Read particles in snapshot from parquet file
 
     Parameters
     ----------
+    position : npt.NDArray[np.float32]
+        Position [N_part, 3]
+    velocity : npt.NDArray[np.float32]
+        Velocity [N_part, 3]
     filename : str
         Filename
-
-    Returns
-    -------
-    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
-        Position, Velocity [N_part, 3]
 
     Examples
     --------
@@ -123,13 +124,12 @@ def read_snapshot_particles_parquet(
     import pyarrow.parquet as pq
 
     logging.warning(f"Read parquet snapshot {filename}")
-    position = np.ascontiguousarray(
-        np.array(pq.read_table(filename, columns=["x", "y", "z"])).T
+    position[:] = np.ascontiguousarray(
+        np.array(pq.read_table(filename, columns=["x", "y", "z"]))
     )
-    velocity = np.ascontiguousarray(
-        np.array(pq.read_table(filename, columns=["vx", "vy", "vz"])).T
+    velocity[:] = np.ascontiguousarray(
+        np.array(pq.read_table(filename, columns=["vx", "vy", "vz"]))
     )
-    return (position, velocity)
 
 
 @utils.time_me

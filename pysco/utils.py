@@ -136,20 +136,18 @@ def profiling(filename: str, Function: Callable, *args: float) -> None:
     stats.dump_stats(filename)
 
 
-def index_linear(ijk: npt.NDArray[np.int32], ncells_1d: int) -> npt.NDArray[np.int64]:
+def index_linear(out: npt.NDArray[np.int64], ijk: npt.NDArray[np.int32], ncells_1d: int) -> None:
     """Generate Linear index for particles
 
     Parameters
     ----------
+    out : npt.NDArray[np.int64]
+        Linear index [N_part, 3]
     ijk : npt.NDArray[np.int32]
-         i,j,k array [N_part, 3]
+        i,j,k array [N_part, 3]
     ncells_1d : int
         Number of cells along one direction
 
-    Returns
-    -------
-    npt.NDArray[np.int64]
-        Linear index [N_part, 3]
 
     Examples
     --------
@@ -159,7 +157,7 @@ def index_linear(ijk: npt.NDArray[np.int32], ncells_1d: int) -> npt.NDArray[np.i
     >>> ncells_1d = 32
     >>> index_linear = index_linear(ijk_array, ncells_1d)
     """
-    return (ijk[:, 0] * ncells_1d**2 + ijk[:, 1] * ncells_1d + ijk[:, 2]).astype(
+    out[:] = (ijk[:, 0] * ncells_1d**2 + ijk[:, 1] * ncells_1d + ijk[:, 2]).astype(
         np.int64
     )
 
@@ -239,6 +237,49 @@ def max_abs(x: npt.NDArray[np.float32]) -> np.float32:
     """
     return np.max(np.abs(x))
 
+@njit(fastmath=True, cache=True, parallel=True)
+def zero_initialise_f32(
+    x: npt.NDArray[np.float32]
+) -> None:
+    """Zero initialise an f32 array in parallel
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Array to initialise
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import zero_initialise_f32
+    >>> x_array = np.empty(10, dtype=np.float32)
+    >>> zero_initialise_f32(x_array)
+    """
+    zero = np.float32(0.0)
+    x_ravel = x.ravel()
+    for i in prange(len(x_ravel)):
+        x_ravel[i] = zero
+
+@njit(fastmath=True, cache=True, parallel=True)
+def zero_initialise_c64(
+    x: npt.NDArray[np.complex64]
+) -> None:
+    """Zero initialise a c64 array in parallel
+    Parameters
+    ----------
+    x : npt.NDArray[np.complex64]
+        Array to initialise
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import zero_initialise_c64
+    >>> x_array = np.empty(10, dtype=np.complex64)
+    >>> zero_initialise_c64(x_array)
+    """
+    zero = np.complex64(0.0)
+    x_ravel = x.ravel()
+    for i in prange(len(x_ravel)):
+        x_ravel[i] = zero
 
 @njit(fastmath=True, cache=True, parallel=True)
 def add_vector_scalar_inplace(
@@ -282,7 +323,7 @@ def prod_vector_vector_scalar_inplace(
     y: npt.NDArray[np.float32], x: npt.NDArray[np.float32], a: np.float32
 ) -> None:
     """prod vector times scalar inplace \\
-    y *= a*x
+    y *= a * x
 
     Parameters
     ----------
@@ -412,22 +453,20 @@ def prod_vector_scalar_inplace(y: npt.NDArray[np.float32], a: np.float32) -> Non
 
 @njit(fastmath=True, cache=True, parallel=True)
 def prod_vector_scalar(
-    x: npt.NDArray[np.float32], a: np.float32
-) -> npt.NDArray[np.float32]:
+    out: npt.NDArray[np.float32], x: npt.NDArray[np.float32], a: np.float32
+) -> None:
     """Vector times scalar \\
     return a*x
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Product array
     x : npt.NDArray[np.float32]
         Array
     a : np.float32
         Array
 
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Product array
 
     Examples
     --------
@@ -436,36 +475,33 @@ def prod_vector_scalar(
     >>> x_array = np.array([1.0, 2.0, 3.0])
     >>> product = prod_vector_scalar(x_array, 2.0)
     """
-    result = np.empty_like(x)
-    result_ravel = result.ravel()
+    #result = np.empty_like(x)
+    out_ravel = out.ravel()
     x_ravel = x.ravel()
-    for i in prange(len(result_ravel)):
-        result_ravel[i] = a * x_ravel[i]
-    return result
+    for i in prange(len(out_ravel)):
+        out_ravel[i] = a * x_ravel[i]
 
 
 @njit(fastmath=True, cache=True, parallel=True)
 def prod_add_vector_scalar_scalar(
+    out: npt.NDArray[np.float32],
     x: npt.NDArray[np.float32],
     a: np.float32,
     b: np.float32,
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Vector times scalar plus scalar \\
     return a*x + b
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Multiplied and added array
     x : npt.NDArray[np.float32]
         Array
     a : np.float32
         Scalar
     b : np.float32
         Scalar
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Multiplied and added array
 
     Examples
     --------
@@ -474,12 +510,10 @@ def prod_add_vector_scalar_scalar(
     >>> x_array = np.array([1.0, 2.0, 3.0])
     >>> product = prod_add_vector_scalar_scalar(x_array, 2.0, 1.0)
     """
-    result = np.empty_like(x)
-    result_ravel = result.ravel()
+    out_ravel = out.ravel()
     x_ravel = x.ravel()
-    for i in prange(len(result_ravel)):
-        result_ravel[i] = a * x_ravel[i] + b
-    return result
+    for i in prange(len(out_ravel)):
+        out_ravel[i] = a * x_ravel[i] + b
 
 
 @njit(fastmath=True, cache=True, parallel=True)
@@ -549,26 +583,24 @@ def prod_gradient_vector_inplace(
 
 @njit(fastmath=True, cache=True, parallel=True)
 def prod_add_vector_scalar_vector(
+    out: npt.NDArray[np.float32],
     x: npt.NDArray[np.float32],
     a: np.float32,
     b: npt.NDArray[np.float32],
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Vector times scalar plus vector \\
     return a*x + b
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Multiplied and added array
     x : npt.NDArray[np.float32]
         Array
     a : np.float32
         Scalar
     b : npt.NDArray[np.float32]
         Array
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Multiplied and added array
 
     Examples
     --------
@@ -579,13 +611,11 @@ def prod_add_vector_scalar_vector(
     >>> b_array = np.array([3.0, 4.0, 5.0])
     >>> prod_add_vector_scalar_vector(x_array, a_scalar, b_array)
     """
-    result = np.empty_like(x)
-    result_ravel = result.ravel()
+    out_ravel = out.ravel()
     x_ravel = x.ravel()
     b_ravel = b.ravel()
-    for i in prange(len(result_ravel)):
-        result_ravel[i] = a * x_ravel[i] + b_ravel[i]
-    return result
+    for i in prange(len(out_ravel)):
+        out_ravel[i] = a * x_ravel[i] + b_ravel[i]
 
 
 @njit(fastmath=True, cache=True, parallel=True)
@@ -621,8 +651,8 @@ def prod_minus_vector_inplace(
 
 @njit(fastmath=True, cache=True, parallel=True)
 def linear_operator(
-    x: npt.NDArray[np.float32], f1: np.float32, f2: np.float32
-) -> npt.NDArray[np.float32]:
+    out: npt.NDArray[np.float32], x: npt.NDArray[np.float32], f1: np.float32, f2: np.float32
+) -> None:
     """Linear operator on array
     
     result = f1 * x + f2
@@ -635,6 +665,8 @@ def linear_operator(
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Result array
     x : npt.NDArray[np.float32]
         Grid counts from interpolation
     f1 : np.float32
@@ -651,12 +683,10 @@ def linear_operator(
     >>> f2_scalar = 1.0
     >>> result = linear_operator(x_array, f1_scalar, f2_scalar)
     """
-    result = np.empty_like(x)
     x_ravel = x.ravel()
-    result_ravel = result.ravel()
-    for i in prange(len(result_ravel)):
-        result_ravel[i] = f1 * x_ravel[i] + f2
-    return result
+    out_ravel = out.ravel()
+    for i in prange(len(out_ravel)):
+        out_ravel[i] = f1 * x_ravel[i] + f2
 
 
 @njit(fastmath=True, cache=True, parallel=True)
@@ -783,7 +813,7 @@ def operator_fR_inplace(
 
 
 @njit(fastmath=True, cache=True, parallel=True)
-def injection(a: npt.NDArray, b: npt.NDArray) -> None:
+def injection(out: npt.NDArray, x: npt.NDArray) -> None:
     """Straight injection
 
     a[:] = b[:]
@@ -803,10 +833,10 @@ def injection(a: npt.NDArray, b: npt.NDArray) -> None:
     >>> b = np.random.rand(64)
     >>> injection(a, b)
     """
-    ar = a.ravel()
-    br = b.ravel()
-    for i in prange(len(ar)):
-        ar[i] = br[i]
+    out_ravel = out.ravel()
+    x_ravel = x.ravel()
+    for i in prange(len(out_ravel)):
+        out_ravel[i] = x_ravel[i]
 
 
 @njit(fastmath=True, cache=True, parallel=True)
@@ -872,7 +902,7 @@ def injection_from_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
 @njit(fastmath=True, cache=True, parallel=True)
 def injection_with_indices(
     idx: npt.NDArray[np.int32], a: npt.NDArray[np.float32]
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Reorder array according to indices
 
     a[:,:] = a[idx,:]
@@ -884,11 +914,6 @@ def injection_with_indices(
     a : npt.NDArray[np.float32]
         Mutable array
 
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Sorted array
-
     Examples
     --------
     >>> import numpy as np
@@ -897,16 +922,18 @@ def injection_with_indices(
     >>> idx = np.array([1,2,0])
     >>> sorted = injection_with_indices(idx, array)
     """
-    out = np.empty_like(a)
-    for i in prange(len(a)):
-        out[i] = a[idx[i]]
-    return out
+    tmp = np.empty_like(a)
+    size = len(a)
+    for i in prange(size):
+        tmp[i] = a[idx[i]]
+    for i in prange(size):
+        a[i] = tmp[i]
 
 
 @njit(fastmath=True, cache=True, parallel=True)
 def injection_with_indices2(
     idx: npt.NDArray[np.int32], a: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
-) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+) -> None:
     """Reorder array according to indices
 
     a[:,:] = a[idx,:]
@@ -921,11 +948,6 @@ def injection_with_indices2(
     b : npt.NDArray[np.float32]
         Mutable array
 
-    Returns
-    -------
-    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
-        Sorted arrays
-
     Examples
     --------
     >>> import numpy as np
@@ -935,13 +957,16 @@ def injection_with_indices2(
     >>> idx = np.array([1,2,0])
     >>> sorted1, sorted2 = injection_with_indices2(idx, array, array2)
     """
-    out_a = np.empty_like(a)
-    out_b = np.empty_like(b)
-    for i in prange(len(a)):
+    tmp_1 = np.empty_like(a)
+    tmp_2 = np.empty_like(b)
+    size = len(a)
+    for i in prange(size):
         idx_tmp = idx[i]
-        out_a[i] = a[idx_tmp]
-        out_b[i] = b[idx_tmp]
-    return out_a, out_b
+        tmp_1[i] = a[idx_tmp]
+        tmp_2[i] = b[idx_tmp]
+    for i in prange(size):
+        a[i] = tmp_1[i]
+        b[i] = tmp_2[i]
 
 
 @njit(fastmath=True, cache=True, parallel=True)
@@ -950,7 +975,7 @@ def injection_with_indices3(
     a: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     c: npt.NDArray[np.float32],
-) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+) -> None:
     """Reorder array according to indices
 
     a[:,:] = a[idx,:]
@@ -968,11 +993,6 @@ def injection_with_indices3(
     c : npt.NDArray[np.float32]
         Mutable array
 
-    Returns
-    -------
-    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
-        Sorted arrays
-
     Examples
     --------
     >>> import numpy as np
@@ -983,15 +1003,19 @@ def injection_with_indices3(
     >>> idx = np.array([1,2,0])
     >>> sorted1, sorted2, sorted3 = injection_with_indices3(idx, array1, array2, array3)
     """
-    out_a = np.empty_like(a)
-    out_b = np.empty_like(b)
-    out_c = np.empty_like(c)
-    for i in prange(len(a)):
+    tmp_1 = np.empty_like(a)
+    tmp_2 = np.empty_like(b)
+    tmp_3 = np.empty_like(c)
+    size = len(a)
+    for i in prange(size):
         idx_tmp = idx[i]
-        out_a[i] = a[idx_tmp]
-        out_b[i] = b[idx_tmp]
-        out_c[i] = c[idx_tmp]
-    return out_a, out_b, out_c
+        tmp_1[i] = a[idx_tmp]
+        tmp_2[i] = b[idx_tmp]
+        tmp_3[i] = c[idx_tmp]
+    for i in prange(size):
+        a[i] = tmp_1[i]
+        b[i] = tmp_2[i]
+        c[i] = tmp_3[i]
 
 
 @time_me
@@ -1029,47 +1053,43 @@ def reorder_particles(
     >>> acceleration = np.random.rand(64, 3).astype(np.float32)
     >>> position, velocity, acceleration = reorder_particles(position, velocity, acceleration)
     """
-    index = morton.positions_to_keys(position)
     nthreads = numba.get_num_threads()
+    index = np.empty(position.shape[0])
+    arg = np.empty_like(index)
+
+    morton.positions_to_keys(index, position)
     if nthreads > 1:
-        arg = argsort_par(index, nthreads)
+        argsort_par(arg, index, nthreads)
     else:
         arg = np.argsort(index)
     index = 0
     if acceleration is not None:
-        position = injection_with_indices(arg, position)
-        velocity = injection_with_indices(arg, velocity)
-        acceleration = injection_with_indices(arg, acceleration)
+        injection_with_indices3(arg, position, velocity, acceleration)
         # FIXME: seems to be a memory leak here (Numba bug?).
         #        If memory is an issue, uncomment the following lines instead (not parallel though)
         # position[:] = position[arg, :]
         # velocity[:] = velocity[arg, :]
         # acceleration[:] = acceleration[arg, :]
-        return position, velocity, acceleration
     elif velocity is not None:
-        position = injection_with_indices(arg, position)
-        velocity = injection_with_indices(arg, velocity)
-        return position, velocity
+        injection_with_indices2(arg, position, velocity)
+        
     else:
-        return injection_with_indices(arg, position)
+        injection_with_indices(arg, position)
 
 
 @time_me
-@njit(["i8[:](i8[:], i8)"], fastmath=True, cache=True, parallel=True)
-def argsort_par(indices: npt.NDArray[np.int64], nthreads: int) -> npt.NDArray[np.int64]:
+@njit(["void(i8[:], i8[:], i8)"], fastmath=True, cache=True, parallel=True)
+def argsort_par(out: npt.NDArray[np.int64], indices: npt.NDArray[np.int64], nthreads: int) -> None:
     """Parallel partial argsort algorithm
 
     Parameters
     ----------
+    out : npt.NDArray[np.int64]
+        Output array for sorted indices [N_part]
     indices : npt.NDArray[np.int64]
         Morton index array [N_part]
     nthreads : int
         Number of threads
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Sorted index array
 
     Examples
     --------
@@ -1080,7 +1100,6 @@ def argsort_par(indices: npt.NDArray[np.int64], nthreads: int) -> npt.NDArray[np
     """
     size = len(indices)
     group, remainder = np.divmod(size, nthreads)
-    sorted = np.empty_like(indices)
     for i in prange(nthreads):
         if remainder == 0:
             imin = i * group
@@ -1091,8 +1110,7 @@ def argsort_par(indices: npt.NDArray[np.int64], nthreads: int) -> npt.NDArray[np
         else:
             imin = remainder * (group + 1) + (i - remainder) * group
             imax = imin + group
-        sorted[imin:imax] = np.argsort(indices[imin:imax]) + imin
-    return sorted
+        out[imin:imax] = np.argsort(indices[imin:imax]) + imin
 
 
 @njit(fastmath=True, cache=True, parallel=True)

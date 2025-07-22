@@ -28,31 +28,30 @@ import math
 # @utils.profile_me
 @utils.time_me
 def pm(
+    acceleration: npt.NDArray[np.float32],
+    potential: npt.NDArray[np.float32],
+    additional_field: npt.NDArray[np.float32],
     position: npt.NDArray[np.float32],
     param: pd.Series,
-    potential: npt.NDArray[np.float32] = np.empty(0, dtype=np.float32),
-    additional_field: npt.NDArray[np.float32] = np.empty(0, dtype=np.float32),
     tables: List[interp1d] = [],
-) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+) -> None:
     """Compute Particle-Mesh acceleration
 
     Parameters
     ----------
+    acceleration : npt.NDArray[np.float32]
+        Acceleration [N_part, 3]
+    potential : npt.NDArray[np.float32]
+        Gravitational potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    additional_field : npt.NDArray[np.float32]
+        Additional potential [N_cells_1d, N_cells_1d, N_cells_1d]
     position : npt.NDArray[np.float32]
         Positions [N_part, 3]
     param : pd.Series
         Parameter container
-    potential : npt.NDArray[np.float32], optional
-        Gravitational potential [N_cells_1d, N_cells_1d,N_cells_1d], by default np.empty(0, dtype=np.float32)
-    additional_field : npt.NDArray[np.float32], optional
-        Additional potential [N_cells_1d, N_cells_1d,N_cells_1d], by default np.empty(0, dtype=np.float32)
     tables : List[interp1d], optional
         Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
 
-    Returns
-    -------
-    Tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
-        Acceleration, Potential, Additional field [N_cells_1d, N_cells_1d,N_cells_1d]
 
     Examples
     --------
@@ -76,17 +75,18 @@ def pm(
 
     MASS_SCHEME = param["mass_scheme"].casefold()
     THEORY = param["theory"].casefold()
-
-    match MASS_SCHEME:
+    density = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    utils.zero_initialise_f32(density)
+    match MASS_SCHEME: 
         case "cic":
             param["MAS_index"] = 2
-            density = mesh.CIC(position, ncells_1d)
+            mesh.CIC(density, position, ncells_1d)
         case "tsc":
             param["MAS_index"] = 3
             if param["nthreads"] >= 4:
-                density = mesh.TSC(position, ncells_1d)
+                mesh.TSC(density, position, ncells_1d)
             else:
-                density = mesh.TSC_seq(position, ncells_1d)
+                mesh.TSC_seq(density, position, ncells_1d)
         case _:
             raise NotImplementedError(
                 f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'"
@@ -132,7 +132,8 @@ def pm(
 
     LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
     if param["save_pk"] and "multigrid" == LINEAR_NEWTON_SOLVER:
-        density_fourier = fourier.fft_3D_real(density, param["nthreads"])
+        density_fourier = np.empty((ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype=np.complex64)
+        fourier.fft_3D_real(density_fourier, density, param["nthreads"])
         k, Pk, Nmodes = fourier.fourier_grid_to_Pk(density_fourier, param["MAS_index"])
         density_fourier = 0
         Pk *= (param["boxlen"] / len(density) ** 2) ** 3
@@ -140,7 +141,7 @@ def pm(
         iostream.write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
 
     param["compute_additional_field"] = True
-    additional_field = get_additional_field(additional_field, density, param, tables)
+    get_additional_field(additional_field, density, param, tables)
 
     # TODO: Try to keep Phidot and initialise Phi_i = Phi_(i-1) + Phidot*dt
     param["compute_additional_field"] = False
@@ -148,13 +149,14 @@ def pm(
     rhs = density
     del density
 
+    force = np.empty((ncells_1d, ncells_1d, ncells_1d, 3), dtype=np.float32)
     match LINEAR_NEWTON_SOLVER:
         case "multigrid":
-            potential = initialise_potential(potential, rhs, param, tables)
-            potential = multigrid.linear(potential, rhs, param)
+            initialise_potential(potential, rhs, param, tables)
+            multigrid.linear(potential, rhs, param)
             rhs = 0
         case "fft" | "fft_7pt":
-            potential = fft(rhs, param)
+            fft(potential, rhs, param)
             rhs = 0
         case "full_fft":
             pass
@@ -178,7 +180,7 @@ def pm(
             ** 2
         )  # m -> km -> BU
         if LINEAR_NEWTON_SOLVER == "full_fft":
-            force = fft_force(rhs, param, param["save_pk"])
+            fft_force(force, rhs, param)
             rhs = 0
             mesh.add_derivative_fR(
                 force,
@@ -188,7 +190,8 @@ def pm(
                 param["gradient_stencil_order"],
             )
         else:
-            force = mesh.derivative_fR(
+            mesh.derivative_fR(
+                force,
                 potential,
                 additional_field,
                 half_c2,
@@ -197,22 +200,20 @@ def pm(
             )
     else:
         if LINEAR_NEWTON_SOLVER == "full_fft":
-            force = fft_force(rhs, param, param["save_pk"])
+            fft_force(force, rhs, param)
             rhs = 0
         else:
-            force = mesh.derivative(potential, param["gradient_stencil_order"])
+            mesh.derivative(force, potential, param["gradient_stencil_order"])
 
     match MASS_SCHEME:
         case "cic":
-            acceleration = mesh.invCIC_vec(force, position)
+            mesh.invCIC_vec(acceleration, force, position)
         case "tsc":
-            acceleration = mesh.invTSC_vec(force, position)
+            mesh.invTSC_vec(acceleration, force, position)
         case _:
             raise NotImplementedError(
                 f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'"
             )
-    force = 0
-    return (acceleration, potential, additional_field)
 
 
 def initialise_potential(
@@ -220,7 +221,7 @@ def initialise_potential(
     rhs: npt.NDArray[np.float32],
     param: pd.Series,
     tables: List[interp1d],
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Initialise the potential to solve the Poisson equation\\
     Computes the first guess of the potential. If the potential has not been computed previously, give
     the value from one Jacobi sweep using the rhs. Otherwise, rescale the potential from previous step using param and tables.
@@ -235,11 +236,6 @@ def initialise_potential(
         Parameter container
     tables : List[interp1d], optional
         Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
-    
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Potential [N_cells_1d, N_cells_1d,N_cells_1d]
 
     Examples
     --------
@@ -252,7 +248,7 @@ def initialise_potential(
     >>> tables = [interp1d([0, 1], [1, 2])]*13
     >>> potential = initialise_potential(potential, rhs, param, tables)
     """
-    if len(potential) == 0:
+    if param["first_step"]:
         logging.info("Assign potential from density field")
         if (
             param["compute_additional_field"]
@@ -260,15 +256,15 @@ def initialise_potential(
         ):
             q = param["fR_q"]
             if param["fR_n"] == 1:
-                potential = cubic.initialise_potential(rhs, q)
+                cubic.initialise_potential(potential, rhs, q)
             elif param["fR_n"] == 2:
-                potential = quartic.initialise_potential(rhs, q)
+                quartic.initialise_potential(potential, rhs, q)
             else:
                 raise NotImplementedError(
                     f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
                 )
         else:
-            potential = laplacian.initialise_potential(rhs)
+            laplacian.initialise_potential(potential, rhs)
     else:
         logging.info("Rescale potential from previous step for Newtonian potential")
         if not param["compute_additional_field"]:
@@ -279,18 +275,14 @@ def initialise_potential(
             )
             utils.prod_vector_scalar_inplace(potential, scaling)
 
-    return potential
-
 
 def get_additional_field(
     additional_field: npt.NDArray[np.float32],
     density: npt.NDArray[np.float32],
     param: pd.Series,
     tables: List[interp1d],
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Get additional field for MG theories
-
-    Returns empty array for Newtonian mode
 
     Parameters
     ----------
@@ -302,11 +294,6 @@ def get_additional_field(
         Parameter container
     tables : List[interp1d], optional
         Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Additional field
 
     Examples
     --------
@@ -322,7 +309,7 @@ def get_additional_field(
     THEORY = param["theory"].casefold()
     match THEORY:
         case "newton" | "parametrized":
-            return np.empty(0, dtype=np.float32)
+            pass
         case "fr":
             Rbar = 3 * param["Om_m"] * param["aexp"] ** (-3) + 12 * param["Om_lambda"]
             Rbar0 = 3 * param["Om_m"] + 12 * param["Om_lambda"]
@@ -331,9 +318,7 @@ def get_additional_field(
                 * ((Rbar0 / Rbar) ** (param["fR_n"] + 1))
                 * 10.0 ** (-param["fR_logfR0"])
             )
-            c2 = (
-                c.value * 1e-3 * param["unit_t"] / (param["unit_l"] * param["aexp"])
-            ) ** 2  # m -> km -> BU
+            c2 = (c.value * 1e-3 * param["unit_t"] / (param["unit_l"] * param["aexp"])) ** 2  # m -> km -> BU
             f1 = np.float32(param["aexp"] * param["Om_m"] / (c2 * 6)) / (-fR_a)
             f2 = (
                 np.float32(
@@ -342,36 +327,30 @@ def get_additional_field(
                 / (6 * c2)
                 / (-fR_a)
             )
-            dens_term = utils.linear_operator(density, f1, f2)
+            dens_term = np.empty_like(density)
+            utils.linear_operator(dens_term, density, f1, f2)
 
             q = np.float32(-param["aexp"] ** 4 * Rbar / (18 * c2)) / (-fR_a)
             param["fR_q"] = q
-            additional_field = initialise_potential(
-                additional_field, dens_term, param, tables
-            )
-            u_scalaron = additional_field
-            u_scalaron = multigrid.FAS(u_scalaron, dens_term, param)
+            initialise_potential(additional_field, dens_term, param, tables)
+            multigrid.FAS(additional_field, dens_term, param)
             if (param["nsteps"]) % 10 == 0:
                 logging.info(
-                    f"{np.mean(u_scalaron)=}, should be close to 1 (actually <1/u_sclaron> should be conserved)"
+                    f"{np.mean(additional_field)=}, should be close to 1 (actually <1/u_sclaron> should be conserved)"
                 )
             logging.info(f"{fR_a=}")
-            return u_scalaron
         case "mond":
             rhs_poisson(density, additional_field, param)
             LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
             if LINEAR_NEWTON_SOLVER == "multigrid":
-                additional_field = initialise_potential(
-                    additional_field, density, param, tables
-                )
-                additional_field = multigrid.linear(additional_field, density, param)
+                initialise_potential(additional_field, density, param, tables)
+                multigrid.linear(additional_field, density, param)
             elif LINEAR_NEWTON_SOLVER == "fft_7pt":
-                additional_field = fft(density, param)
+                fft(additional_field, density, param)
             else:
                 raise NotImplementedError(
                     f"{param['linear_newton_solver']=}, should be 'multigrid' or 'fft_7pt'"
                 )
-            return additional_field
         case _:
             raise NotImplementedError(
                 f"{param['theory']=}, should be 'newton', 'fr', 'parametrized' or 'mond'"
@@ -451,22 +430,20 @@ def rhs_poisson(
 
 @utils.time_me
 def fft(
+    out: npt.NDArray[np.float32],
     rhs: npt.NDArray[np.float32],
     param: pd.Series,
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Solves the Newtonian linear Poisson equation using Fast Fourier Transforms
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d,N_cells_1d]
     rhs : npt.NDArray[np.float32]
         Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
     param : pd.Series
         Parameter container
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Potential [N_cells_1d, N_cells_1d,N_cells_1d]
 
     Examples
     --------
@@ -487,7 +464,9 @@ def fft(
     >>> potential = fft(rhs, param)
     """
     MAS_index = param["MAS_index"]
-    rhs_fourier = fourier.fft_3D_real(rhs, param["nthreads"])
+    ncells_1d = rhs.shape[0]
+    rhs_fourier = np.empty((ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype=np.complex64)
+    fourier.fft_3D_real(rhs_fourier, rhs, param["nthreads"])
     LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
     compute_MOND_potential = (
         param["compute_additional_field"] is False
@@ -519,27 +498,25 @@ def fft(
                 f"{LINEAR_NEWTON_SOLVER=}, should be 'fft' or 'fft_7pt'"
             )
 
-    return fourier.ifft_3D_real(rhs_fourier, param["nthreads"])
+    fourier.ifft_3D_real(out, rhs_fourier, param["nthreads"])
 
 
 @utils.time_me
 def fft_force(
+    out: npt.NDArray[np.float32],
     rhs: npt.NDArray[np.float32],
     param: pd.Series,
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Solves the Newtonian linear Poisson equation using Fast Fourier Transforms and outputs Force
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Force [N_cells_1d, N_cells_1d,N_cells_1d, 3]
     rhs : npt.NDArray[np.float32]
         Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
     param : pd.Series
         Parameter container
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Force [3, N_cells_1d, N_cells_1d,N_cells_1d]
 
     Examples
     --------
@@ -557,12 +534,15 @@ def fft_force(
     >>> force = fft_force(rhs, param)
     """
     MAS_index = param["MAS_index"]
-    rhs_fourier = fourier.fft_3D_real(rhs, param["nthreads"])
+    ncells_1d = rhs.shape[0]
+    rhs_fourier = np.empty((ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype=np.complex64)
+    force = np.empty((ncells_1d, ncells_1d, ncells_1d // 2 + 1, 3), dtype=np.complex64)
+    fourier.fft_3D_real(rhs_fourier, rhs, param["nthreads"])
 
     if MAS_index == 0:
-        force = fourier.gradient_inverse_laplacian(rhs_fourier)
+        fourier.gradient_inverse_laplacian(force, rhs_fourier)
     else:
-        force = fourier.gradient_inverse_laplacian_compensated(rhs_fourier, MAS_index)
+        fourier.gradient_inverse_laplacian_compensated(force, rhs_fourier, MAS_index)
 
     if "save_pk" in param:
         if param["save_pk"]:
@@ -576,64 +556,4 @@ def fft_force(
             k *= 2 * np.pi / param["boxlen"]
             iostream.write_power_spectrum_to_ascii_file(k, Pk, Nmodes, param)
     rhs_fourier = 0
-    return fourier.ifft_3D_real_grad(force, param["nthreads"])
-
-
-def force_3d(
-    rhs: npt.NDArray[np.float32],
-    param: pd.Series,
-) -> npt.NDArray[np.float32]:
-    """Solves the Newtonian linear Poisson equation and outputs Force
-
-    Parameters
-    ----------
-    rhs : npt.NDArray[np.float32]
-        Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
-    param : pd.Series
-        Parameter container
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Force [3, N_cells_1d, N_cells_1d,N_cells_1d]
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> import pandas as pd
-    >>> from pysco.solver import force_3d
-    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> param = pd.Series({
-        "nthreads": 2,
-        "boxlen": 100.0,
-        "npart": 16**3,
-        "theory": "newton",
-        "linear_newton_solver": "fft",
-        "gradient_stencil_order": 2,
-        "compute_additional_field": False,
-        "aexp": 1.0,
-        "Om_m": 0.3,
-        'MAS_index':0})
-    >>> result = force_3d(rhs, param)
-    """
-
-    param["MAS_index"] = 0
-    LINEAR_NEWTON_SOLVER = param["linear_newton_solver"].casefold()
-    match LINEAR_NEWTON_SOLVER:
-        case "multigrid":
-            potential = np.empty(0, dtype=np.float32)
-            table = []
-            param["compute_additional_field"] = False
-            potential = initialise_potential(potential, rhs, param, table)
-            potential = multigrid.linear(potential, rhs, param)
-            force = mesh.derivative(potential, param["gradient_stencil_order"])
-            potential = 0
-        case "fft" | "fft_7pt":
-            potential = fft(rhs, param)
-            force = mesh.derivative(potential, param["gradient_stencil_order"])
-            potential = 0
-        case "full_fft":
-            force = fft_force(rhs, param)
-        case _:
-            raise NotImplementedError(f"Unsupported {LINEAR_NEWTON_SOLVER=}")
-    return force
+    fourier.ifft_3D_real_grad(out, force, param["nthreads"])

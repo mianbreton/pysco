@@ -24,7 +24,7 @@ def linear(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     param: pd.Series,
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Compute linear Multigrid
 
     Parameters
@@ -35,11 +35,6 @@ def linear(
         Right-hand side of Poisson Equation (density) [N_cells_1d, N_cells_1d,N_cells_1d]
     param : pd.Series
         Parameter container
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Potential [N_cells_1d, N_cells_1d,N_cells_1d]
 
     Examples
     --------
@@ -80,7 +75,6 @@ def linear(
         if residual_error_tmp < tolerance or residual_err / residual_error_tmp < 2:
             break
         residual_err = residual_error_tmp
-    return x
 
 
 # @utils.profile_me
@@ -89,7 +83,7 @@ def FAS(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     param: pd.Series,
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Compute Multigrid with Full Approximation Scheme
 
     Parameters
@@ -100,11 +94,6 @@ def FAS(
         Density term (can be Right-hand side of Poisson Equation) [N_cells_1d, N_cells_1d,N_cells_1d]
     param : pd.Series
         Parameter container
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Potential [N_cells_1d, N_cells_1d,N_cells_1d]
 
     Examples
     --------
@@ -135,7 +124,6 @@ def FAS(
         if residual_error_tmp < tolerance or residual_err / residual_error_tmp < 2:
             break
         residual_err = residual_error_tmp
-    return x
 
 
 @utils.time_me
@@ -160,7 +148,7 @@ def truncation_error(
     Returns
     -------
     np.float32
-        Truncation error [N_cells_1d, N_cells_1d, N_cells_1d]
+        Truncation error
 
     Examples
     --------
@@ -182,9 +170,7 @@ def truncation_error(
         elif param["fR_n"] == 2:
             return quartic.truncation_error(x, b, q)
         else:
-            raise NotImplementedError(
-                f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
-            )
+            raise NotImplementedError(f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}")
     else:
         return laplacian_reformulated.truncation_error(x, b)
 
@@ -223,9 +209,7 @@ def normalisation_residual(
     >>> parameters = pd.Series({"theory": "newton"})
     >>> norm = normalisation_residual(parameters)
     """
-    return np.float32(
-        4
-    )  # Currently, all the model considered are based on (linear and non-linear) Laplacians
+    return np.float32(4)  # Currently, all the model considered are based on (linear and non-linear) Laplacians
 
 
 @utils.time_me
@@ -249,7 +233,7 @@ def residual_error(
 
     Returns
     -------
-    npt.NDArray[np.float32]
+    np.float32
         Error on residual: sqrt[Sum(residual^2)]
 
     Examples
@@ -285,15 +269,18 @@ def residual_error(
 
 
 def restrict_residual(
+    out: npt.NDArray[np.float32],
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     param: pd.Series,
     rhs: npt.NDArray[np.float32] = np.empty(0, dtype=np.float32),
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Restricts the residual of the field
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Residual field restricted
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d,N_cells_1d]
     b : npt.NDArray[np.float32]
@@ -302,11 +289,6 @@ def restrict_residual(
         Parameter container
     rhs : npt.NDArray[np.float32], optional
         Right-hand side of non-linear equation [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Residual field restricted
 
     Examples
     --------
@@ -329,23 +311,35 @@ def restrict_residual(
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
             if len(rhs) == 0:
-                return mesh.minus_restriction(cubic.operator(x, b, q))
+                Lu = np.empty_like(x)
+                cubic.operator(Lu, x, b, q)
+                mesh.minus_restriction(out, Lu)
             else:
-                return mesh.restriction(cubic.residual_with_rhs(x, b, q, rhs))
+                residual = np.empty_like(x)
+                cubic.residual_with_rhs(residual, x, b, q, rhs)
+                mesh.restriction(out, residual)
         elif param["fR_n"] == 2:
             if len(rhs) == 0:
-                return mesh.minus_restriction(quartic.operator(x, b, q))
+                Lu = np.empty_like(x)
+                quartic.operator(Lu, x, b, q)
+                mesh.minus_restriction(out, Lu)
             else:
-                return mesh.restriction(quartic.residual_with_rhs(x, b, q, rhs))
+                residual = np.empty_like(x)
+                quartic.residual_with_rhs(residual, x, b, q, rhs)
+                mesh.restriction(out, residual)
         else:
             raise NotImplemented(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
             )
     else:
         if len(rhs) == 0:
-            return mesh.minus_restriction(laplacian_reformulated.operator(x, b))
+            Lu = np.empty_like(x)
+            laplacian_reformulated.operator(Lu, x, b)
+            mesh.minus_restriction(out, Lu)
         else:
-            return mesh.restriction(laplacian_reformulated.residual_with_rhs(x, b, rhs))
+            residual = np.empty_like(x)
+            laplacian_reformulated.residual_with_rhs(residual, x, b, rhs)
+            mesh.restriction(out, residual)
 
 
 def smoothing(
@@ -411,27 +405,25 @@ def smoothing(
 
 
 def operator(
+    out: npt.NDArray[np.float32],
     x: npt.NDArray[np.float32],
     param: pd.Series,
     b: npt.NDArray[np.float32] = np.empty(0, dtype=np.float32),
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Smooth field with several Gauss-Seidel iterations \\
     Depending on the theory of gravity and if we compute the additional field or the main field
     (used in the equations of motion), the smoothing procedure will be different
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Operator
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     param : pd.Series
         Parameter container
     b : npt.NDArray[np.float32], optional
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-    
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Operator
 
     Examples
     --------
@@ -459,15 +451,15 @@ def operator(
     if param["compute_additional_field"] and "fr" == param["theory"].casefold():
         q = np.float32(param["fR_q"])
         if param["fR_n"] == 1:
-            return cubic.operator(x, b, q)
+            cubic.operator(out, x, b, q)
         elif param["fR_n"] == 2:
-            return quartic.operator(x, b, q)
+            quartic.operator(out, x, b, q)
         else:
             raise NotImplementedError(
                 f"Only f(R) with n = 1 and 2, currently {param['fR_n']=}"
             )
     else:
-        return laplacian_reformulated.operator(x, b)
+        laplacian_reformulated.operator(out, x, b)
 
 
 @utils.time_me
@@ -504,16 +496,20 @@ def V_cycle(
     >>> # Call the V_cycle_FAS function
     >>> V_cycle(x, b, param)
     """
+    ncells_1d_coarse = x.shape[0] // 2
+    res_c = np.empty((ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32)
+    x_corr_c = np.empty_like(res_c)
+
     laplacian.smoothing(x, b, param["Npre"])
-    res_c = laplacian.restrict_residual(x, b)
-    x_corr_c = laplacian.initialise_potential(res_c)
+    laplacian.restrict_residual(res_c, x, b)
+    laplacian.initialise_potential(x_corr_c, res_c)
+
     if nlevel >= (param["ncoarse"] - 3):
         laplacian.smoothing(x_corr_c, res_c, param["Npre"])
     else:
         V_cycle(x_corr_c, res_c, param, nlevel + 1)
-    res_c = 0
+
     mesh.add_prolongation(x, x_corr_c)
-    x_corr_c = 0
     laplacian.smoothing(x, b, param["Npost"])
 
 
@@ -554,28 +550,29 @@ def V_cycle_FAS(
     >>> # Call the V_cycle_FAS function
     >>> V_cycle_FAS(x, b, param)
     """
+    ncells_1d_coarse = x.shape[0] // 2
+    res_c = np.empty((ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32)
+    x_c = np.empty_like(res_c)
+    x_corr_c = np.empty_like(res_c)
+    b_c = np.empty_like(res_c)
+    L_c = np.empty_like(res_c)
+
     smoothing(x, b, param["Npre"], param, rhs)
-    res_c = restrict_residual(x, b, param, rhs)
-    x_c = mesh.restriction(x)
-    x_corr_c = x_c.copy()
-    b_c = mesh.restriction(b)
-    L_c = operator(x_c, param, b_c)
+    restrict_residual(res_c, x, b, param, rhs)
+    mesh.restriction(x_c, x)
+    mesh.restriction(b_c, b)
+    utils.injection(x_corr_c, x_c)
+    operator(L_c, x_c, param, b_c)
     normalisation_grid_factor = normalisation_residual(param)
-    utils.linear_operator_vectors_inplace(
-        res_c, normalisation_grid_factor, L_c, np.float32(1)
-    )
-    L_c = 0
+    utils.linear_operator_vectors_inplace(res_c, normalisation_grid_factor, L_c, np.float32(1))
 
     if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, param["Npre"], param, res_c)
     else:
         V_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
-    res_c = 0
-    b_c = 0
+
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
-    x_c = 0
     mesh.add_prolongation(x, x_corr_c)
-    x_corr_c = 0
     smoothing(x, b, param["Npost"], param, rhs)
 
 
@@ -613,28 +610,31 @@ def F_cycle(
     >>> # Call the F_cycle function
     >>> F_cycle(x, b, param)
     """
+    ncells_1d_coarse = x.shape[0] // 2
+    res_c = np.empty((ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32)
+    x_corr_c = np.empty_like(res_c)
+
     laplacian.smoothing(x, b, param["Npre"])
-    res_c = laplacian.restrict_residual(x, b)
-    x_corr_c = laplacian.initialise_potential(res_c)
+    laplacian.restrict_residual(res_c, x, b)
+    laplacian.initialise_potential(x_corr_c, res_c)
 
     if nlevel >= (param["ncoarse"] - 3):
         laplacian.smoothing(x_corr_c, res_c, param["Npre"])
     else:
         F_cycle(x_corr_c, res_c, param, nlevel + 1)
-    res_c = 0
+
     mesh.add_prolongation(x, x_corr_c)
-    x_corr_c = 0
     laplacian.smoothing(x, b, param["Npre"])
 
-    res_c = laplacian.restrict_residual(x, b)
-    x_corr_c = laplacian.initialise_potential(res_c)
+    laplacian.restrict_residual(res_c, x, b)
+    laplacian.initialise_potential(x_corr_c, res_c)
+
     if nlevel >= (param["ncoarse"] - 3):
         laplacian.smoothing(x_corr_c, res_c, param["Npre"])
     else:
         V_cycle(x_corr_c, res_c, param, nlevel + 1)
-    res_c = 0
+        
     mesh.add_prolongation(x, x_corr_c)
-    x_corr_c = 0
     laplacian.smoothing(x, b, param["Npost"])
 
 
@@ -675,46 +675,49 @@ def F_cycle_FAS(
     >>> # Call the F_cycle_FAS function
     >>> F_cycle_FAS(x, b, param)
     """
+    ncells_1d_coarse = x.shape[0] // 2
+    res_c = np.empty((ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32)
+    x_corr_c = np.empty_like(res_c)
+    x_c = np.empty_like(res_c)
+    b_c = np.empty_like(res_c)
+    L_c = np.empty_like(res_c)
+
     smoothing(x, b, param["Npre"], param, rhs)
-    res_c = restrict_residual(x, b, param, rhs)
-    x_c = mesh.restriction(x)
-    x_corr_c = x_c.copy()
-    b_c = mesh.restriction(b)
-    L_c = operator(x_c, param, b_c)
+    restrict_residual(res_c, x, b, param, rhs)
+    mesh.restriction(x_c, x)
+    mesh.restriction(b_c, b)
+    utils.injection(x_corr_c, x_c)
+    operator(L_c, x_c, param, b_c)
     normalisation_grid_factor = normalisation_residual(param)
     utils.linear_operator_vectors_inplace(
         res_c, normalisation_grid_factor, L_c, np.float32(1)
     )
-    L_c = 0
+
     if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, param["Npre"], param, res_c)
     else:
         F_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
-    res_c = 0
+
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
     mesh.add_prolongation(x, x_corr_c)
-    x_corr_c = 0
     smoothing(x, b, param["Npre"], param, rhs)
 
-    res_c = restrict_residual(x, b, param, rhs)
-    x_c = mesh.restriction(x)
-    x_corr_c = x_c.copy()
-    L_c = operator(x_c, param, b_c)
+    restrict_residual(res_c, x, b, param, rhs)
+    mesh.restriction(x_c, x)
+    utils.injection(x_corr_c, x_c)
+    operator(L_c, x_c, param, b_c)
     normalisation_grid_factor = normalisation_residual(param)
     utils.linear_operator_vectors_inplace(
         res_c, normalisation_grid_factor, L_c, np.float32(1)
     )
-    L_c = 0
 
     if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, param["Npre"], param, res_c)
     else:
         V_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
-    res_c = 0
+
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
-    x_c = 0
     mesh.add_prolongation(x, x_corr_c)
-    x_corr_c = 0
     smoothing(x, b, param["Npost"], param, rhs)
 
 
@@ -752,27 +755,30 @@ def W_cycle(
     >>> # Call the W_cycle function
     >>> W_cycle(x, b, param)
     """
+    ncells_1d_coarse = x.shape[0] // 2
+    res_c = np.empty((ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32)
+    x_corr_c = np.empty_like(res_c)
+
     laplacian.smoothing(x, b, param["Npre"])
-    res_c = laplacian.restrict_residual(x, b)
-    x_corr_c = laplacian.initialise_potential(res_c)
+    laplacian.restrict_residual(res_c, x, b)
+    laplacian.initialise_potential(x_corr_c, res_c)
+
     if nlevel >= (param["ncoarse"] - 3):
         laplacian.smoothing(x_corr_c, res_c, param["Npre"])
     else:
         W_cycle(x_corr_c, res_c, param, nlevel + 1)
-    res_c = 0
+
     mesh.add_prolongation(x, x_corr_c)
-    x_corr_c = 0
     laplacian.smoothing(x, b, param["Npre"])
 
-    res_c = laplacian.restrict_residual(x, b)
-    x_corr_c = laplacian.initialise_potential(res_c)
+    laplacian.restrict_residual(res_c, x, b)
+    laplacian.initialise_potential(x_corr_c, res_c)
+
     if nlevel >= (param["ncoarse"] - 3):
         laplacian.smoothing(x_corr_c, res_c, param["Npre"])
     else:
         W_cycle(x_corr_c, res_c, param, nlevel + 1)
-    res_c = 0
     mesh.add_prolongation(x, x_corr_c)
-    x_corr_c = 0
     laplacian.smoothing(x, b, param["Npost"])
 
 
@@ -813,46 +819,44 @@ def W_cycle_FAS(
     >>> # Call the W_cycle_FAS function
     >>> W_cycle_FAS(x, b, param)
     """
+    ncells_1d_coarse = x.shape[0] // 2
+    res_c = np.empty((ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32)
+    x_corr_c = np.empty_like(res_c)
+    x_c = np.empty_like(res_c)
+    b_c = np.empty_like(res_c)
+    L_c = np.empty_like(res_c)
+
     smoothing(x, b, param["Npre"], param, rhs)
-    res_c = restrict_residual(x, b, param, rhs)
-    x_c = mesh.restriction(x)
-    x_corr_c = x_c.copy()
-    b_c = mesh.restriction(b)
-    L_c = operator(x_c, param, b_c)
+    restrict_residual(res_c, x, b, param, rhs)
+    mesh.restriction(x_c, x)
+    mesh.restriction(b_c, b)
+    utils.injection(x_corr_c, x_c)
+    operator(L_c, x_c, param, b_c)
     normalisation_grid_factor = normalisation_residual(param)
     utils.linear_operator_vectors_inplace(
         res_c, normalisation_grid_factor, L_c, np.float32(1)
     )
-    L_c = 0
 
     if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, param["Npre"], param, res_c)
     else:
         W_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
-    res_c = 0
+
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
-    x_c = 0
     mesh.add_prolongation(x, x_corr_c)
-    x_corr_c = 0
     smoothing(x, b, param["Npre"], param, rhs)
 
-    res_c = restrict_residual(x, b, param, rhs)
-    x_c = mesh.restriction(x)
-    x_corr_c = x_c.copy()
-    L_c = operator(x_c, param, b_c)
+    restrict_residual(res_c, x, b, param, rhs)
+    mesh.restriction(x_c, x)
+    utils.injection(x_corr_c, x_c)
+    operator(L_c, x_c, param, b_c)
     normalisation_grid_factor = normalisation_residual(param)
-    utils.linear_operator_vectors_inplace(
-        res_c, normalisation_grid_factor, L_c, np.float32(1)
-    )
-    L_c = 0
+    utils.linear_operator_vectors_inplace(res_c, normalisation_grid_factor, L_c, np.float32(1))
 
     if nlevel >= (param["ncoarse"] - 3):
         smoothing(x_corr_c, b_c, param["Npre"], param, res_c)
     else:
         W_cycle_FAS(x_corr_c, b_c, param, nlevel + 1, res_c)
-    res_c = 0
     utils.add_vector_scalar_inplace(x_corr_c, x_c, np.float32(-1))
-    x_c = 0
     mesh.add_prolongation(x, x_corr_c)
-    x_corr_c = 0
     smoothing(x, b, param["Npost"], param, rhs)

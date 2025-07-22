@@ -110,18 +110,15 @@ def key(x: np.float32, y: np.float32, z: np.float32) -> np.int64:
 
 
 @njit(fastmath=True, cache=True, parallel=True)
-def positions_to_keys(positions: npt.NDArray[np.float32]) -> npt.NDArray[np.int64]:
+def positions_to_keys(keys: npt.NDArray[np.int64], positions: npt.NDArray[np.float32]) -> None:
     """Compute Morton index array from position array
 
     Parameters
     ----------
+    keys : npt.NDArray[np.int64]
+        Morton indices [N_part]
     positions : npt.NDArray[np.float32]
         Position [N_part, 3]
-
-    Returns
-    -------
-    npt.NDArray[np.int64]
-        Morton indices [N_part]
 
     Examples
     --------
@@ -131,10 +128,8 @@ def positions_to_keys(positions: npt.NDArray[np.float32]) -> npt.NDArray[np.int6
     >>> keys = positions_to_keys(positions)
     """
     size = positions.shape[0]
-    keys = np.empty(size, dtype=np.int64)
     for i in prange(size):
         keys[i] = key(positions[i, 0], positions[i, 1], positions[i, 2])
-    return keys
 
 
 @njit(fastmath=True, cache=True)
@@ -225,18 +220,15 @@ def key_to_position3d(key: np.int64) -> Tuple[np.float32, np.float32, np.float32
 
 
 @njit(fastmath=True, cache=True, parallel=True)
-def keys_to_positions(keys: npt.NDArray[np.int64]) -> npt.NDArray[np.float32]:
+def keys_to_positions(positions: npt.NDArray[np.float32], keys: npt.NDArray[np.int64]) -> None:
     """Compute position array from Morton indices
 
     Parameters
     ----------
+    positions : npt.NDArray[np.float32]
+        Position [N_part, 3]
     keys : npt.NDArray[np.int64]
         Morton indices [N_part]
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Position [N_part, 3]
 
     Examples
     --------
@@ -247,13 +239,11 @@ def keys_to_positions(keys: npt.NDArray[np.int64]) -> npt.NDArray[np.float32]:
     >>> positions = keys_to_positions(keys)
     """
     size = keys.shape[0]
-    positions = np.empty((size, 3), dtype=np.float32)
     for i in prange(size):
         key = keys[i]
         positions[i, 0] = key_to_position(key >> 2)
         positions[i, 1] = key_to_position(key >> 1)
         positions[i, 2] = key_to_position(key)
-    return positions
 
 
 @njit(fastmath=True, cache=True)

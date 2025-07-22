@@ -12,14 +12,14 @@ import math
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def operator(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
-) -> npt.NDArray[np.float32]:
+    out: npt.NDArray[np.float32], x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
+) -> None:
     """Quartic operator
 
     u^4 + pu + q = 0\\
@@ -29,17 +29,14 @@ def operator(
     
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Quartic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
     q : np.float32
         Constant term in quartic equation
-        
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Quartic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Example
     -------
@@ -54,7 +51,6 @@ def operator(
     h2 = np.float32(1.0 / ncells_1d**2)
     qh2 = q * h2
     invsix = np.float32(1.0 / 6)
-    result = np.empty_like(x)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -73,22 +69,22 @@ def operator(
                     + x[ip1, j, k] ** 3
                 )
                 x_tmp = x[i, j, k]
-                result[i, j, k] = x_tmp**4 + p * x_tmp + qh2
-    return result
+                out[i, j, k] = x_tmp**4 + p * x_tmp + qh2
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4, f4[:,:,::1])"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4, f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def residual_with_rhs(
+    out: npt.NDArray[np.float32],
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     q: np.float32,
     rhs: npt.NDArray[np.float32],
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Quartic residual with rhs
 
     u^4 + pu + q = rhs\\
@@ -98,6 +94,8 @@ def residual_with_rhs(
     
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Quartic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
@@ -106,11 +104,6 @@ def residual_with_rhs(
         Constant term in quartic equation
     rhs : npt.NDArray[np.float32]
         RHS term [N_cells_1d, N_cells_1d, N_cells_1d]
-        
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Quartic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Example
     -------
@@ -126,7 +119,6 @@ def residual_with_rhs(
     h2 = np.float32(1.0 / ncells_1d**2)
     qh2 = q * h2
     invsix = np.float32(1.0 / 6)
-    result = np.empty_like(x)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -145,8 +137,7 @@ def residual_with_rhs(
                     + x[ip1, j, k] ** 3
                 )
                 x_tmp = x[i, j, k]
-                result[i, j, k] = -(x_tmp**4) - p * x_tmp - qh2 + rhs[i, j, k]
-    return result
+                out[i, j, k] = -(x_tmp**4) - p * x_tmp - qh2 + rhs[i, j, k]
 
 
 @njit(
@@ -179,8 +170,8 @@ def solution_quartic_equation(
     >>> p = np.float32(0.1)
     >>> q = np.float32(0.01)
     >>> result = solution_quartic_equation(p, q)
-    """  # TODO: Try if not better to use double precision but less checking conditions
-    zero = np.float64(0)
+    """
+    zero = np.float64(0.)
     pp = np.float64(p)
     qq = np.float64(q)
     if pp == zero:
@@ -206,12 +197,13 @@ def solution_quartic_equation(
 
 # @utils.time_me
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4)"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def initialise_potential(
+    out: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
     q: np.float32,
 ) -> npt.NDArray[np.float32]:
@@ -223,15 +215,12 @@ def initialise_potential(
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Reduced scalaron field initialised
     b : npt.NDArray[np.float32]
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
     q : np.float32
         Constant value in the quartic equation
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Reduced scalaron field initialised
 
     Example
     -------
@@ -247,16 +236,14 @@ def initialise_potential(
     inv3 = np.float64(1.0 / 3)
     twentyseven = np.float64(27)
     d0 = np.float64(12 * h2 * q)
-    u_scalaron = np.empty_like(b)
-    u_scalaron_ravel = u_scalaron.ravel()
+    out_ravel = out.ravel()
     b_ravel = b.ravel()
-    for i in prange(len(u_scalaron_ravel)):
+    for i in prange(len(out_ravel)):
         p = h2 * np.float64(b_ravel[i])
         d1 = twentyseven * p**2
         Q = (half * (d1 + math.sqrt(d1**2 - four * d0**3))) ** inv3
         S = half * math.sqrt((Q + d0 / Q) * inv3)
-        u_scalaron_ravel[i] = -S + half * math.sqrt(-four * S**2 + p / S)
-    return u_scalaron
+        out_ravel[i] = -S + half * math.sqrt(-four * S**2 + p / S)
 
 
 # @utils.time_me
@@ -626,217 +613,6 @@ def gauss_seidel_with_rhs(
                 )
 
 
-@njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
-def residual_half(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
-) -> npt.NDArray[np.float32]:
-    """Residual of the quartic operator on half the mesh \\
-    residual = -(u^4 + p*u + q)  \\
-    This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
-    in this case we can compute the residual for only half the points.
-
-    Parameters
-    ----------
-    x : npt.NDArray[np.float32]
-        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-    b : npt.NDArray[np.float32]
-        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    q : np.float32
-        Constant value in the quartic equation
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Residual
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from pysco.quartic import residual_half
-    >>> x = np.ones((32, 32, 32), dtype=np.float32)
-    >>> b = np.ones((32, 32, 32), dtype=np.float32)
-    >>> q = 0.01
-    >>> residual = residual_half(x, b, q)
-    """
-    invsix = np.float32(1.0 / 6)
-    ncells_1d = x.shape[0]
-    ncells_1d_coarse = ncells_1d // 2
-    h2 = np.float32(1.0 / ncells_1d**2)
-    qh2 = q * h2
-    result = np.zeros_like(x)
-    for i in prange(-1, ncells_1d_coarse - 1):
-        ii = 2 * i
-        iim1 = ii - 1
-        iim2 = iim1 - 1
-        iip1 = ii + 1
-        for j in range(-1, ncells_1d_coarse - 1):
-            jj = 2 * j
-            jjm1 = jj - 1
-            jjm2 = jjm1 - 1
-            jjp1 = jj + 1
-            for k in range(-1, ncells_1d_coarse - 1):
-                kk = 2 * k
-                kkm1 = kk - 1
-                kkm2 = kkm1 - 1
-                kkp1 = kk + 1
-
-                x3_001 = x[iim1, jjm1, kk] ** 3
-                x3_010 = x[iim1, jj, kkm1] ** 3
-                x3_100 = x[ii, jjm1, kkm1] ** 3
-                x3_111 = x[ii, jj, kk] ** 3
-                p = h2 * b[iim1, jjm1, kkm1] - invsix * (
-                    +x3_001
-                    + x3_010
-                    + x3_100
-                    + x[iim2, jjm1, kkm1] ** 3
-                    + x[iim1, jjm2, kkm1] ** 3
-                    + x[iim1, jjm1, kkm2] ** 3
-                )
-                x_tmp = x[iim1, jjm1, kkm1]
-                result[iim1, jjm1, kkm1] = -((x_tmp) ** 4) - p * x_tmp - qh2
-                p = h2 * b[iim1, jj, kk] - invsix * (
-                    +x3_001
-                    + x3_010
-                    + x3_111
-                    + x[iim2, jj, kk] ** 3
-                    + x[iim1, jj, kkp1] ** 3
-                    + x[iim1, jjp1, kk] ** 3
-                )
-                x_tmp = x[iim1, jj, kk]
-                result[iim1, jj, kk] = -((x_tmp) ** 4) - p * x_tmp - qh2
-                p = h2 * b[ii, jjm1, kk] - invsix * (
-                    x3_001
-                    + x3_100
-                    + x3_111
-                    + x[ii, jjm2, kk] ** 3
-                    + x[ii, jjm1, kkp1] ** 3
-                    + x[iip1, jjm1, kk] ** 3
-                )
-                x_tmp = x[ii, jjm1, kk]
-                result[ii, jjm1, kk] = -((x_tmp) ** 4) - p * x_tmp - qh2
-                p = h2 * b[ii, jj, kkm1] - invsix * (
-                    x3_010
-                    + x3_100
-                    + x3_111
-                    + x[ii, jj, kkm2] ** 3
-                    + x[ii, jjp1, kkm1] ** 3
-                    + x[iip1, jj, kkm1] ** 3
-                )
-                x_tmp = x[ii, jj, kkm1]
-                result[ii, jj, kkm1] = -((x_tmp) ** 4) - p * x_tmp - qh2
-
-    return result
-
-
-@njit(["f4(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
-def residual_error_half(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
-) -> np.float32:
-    """Error on half of the residual of the quartic operator  \\
-    residual = u^4 + p*u + q  \\
-    error = sqrt[sum(residual**2)] \\
-    This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
-    in this case we can compute the residual for only half the points.
-
-    Parameters
-    ----------
-    x : npt.NDArray[np.float32]
-        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-    b : npt.NDArray[np.float32]
-        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    q : np.float32
-        Constant value in the quartic equation
-
-    Returns
-    -------
-    np.float32
-        Residual error
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from pysco.quartic import residual_error_half
-    >>> x = np.ones((32, 32, 32), dtype=np.float32)
-    >>> b = np.ones((32, 32, 32), dtype=np.float32)
-    >>> q = 0.01
-    >>> error = residual_error_half(x, b, q)
-    """
-    invsix = np.float32(1.0 / 6)
-    ncells_1d = x.shape[0]
-    ncells_1d_coarse = ncells_1d // 2
-    h2 = np.float32(1.0 / ncells_1d**2)
-    qh2 = q * h2
-    result = np.float32(0)
-    for i in prange(-1, ncells_1d_coarse - 1):
-        ii = 2 * i
-        iim1 = ii - 1
-        iim2 = iim1 - 1
-        iip1 = ii + 1
-        for j in range(-1, ncells_1d_coarse - 1):
-            jj = 2 * j
-            jjm1 = jj - 1
-            jjm2 = jjm1 - 1
-            jjp1 = jj + 1
-            for k in range(-1, ncells_1d_coarse - 1):
-                kk = 2 * k
-                kkm1 = kk - 1
-                kkm2 = kkm1 - 1
-                kkp1 = kk + 1
-
-                x3_001 = x[iim1, jjm1, kk] ** 3
-                x3_010 = x[iim1, jj, kkm1] ** 3
-                x3_100 = x[ii, jjm1, kkm1] ** 3
-                x3_111 = x[ii, jj, kk] ** 3
-                p = h2 * b[iim1, jjm1, kkm1] - invsix * (
-                    +x3_001
-                    + x3_010
-                    + x3_100
-                    + x[iim2, jjm1, kkm1] ** 3
-                    + x[iim1, jjm2, kkm1] ** 3
-                    + x[iim1, jjm1, kkm2] ** 3
-                )
-                x_tmp = x[iim1, jjm1, kkm1]
-                x1 = x_tmp**4 + p * x_tmp + qh2
-                p = h2 * b[iim1, jj, kk] - invsix * (
-                    +x3_001
-                    + x3_010
-                    + x3_111
-                    + x[iim2, jj, kk] ** 3
-                    + x[iim1, jj, kkp1] ** 3
-                    + x[iim1, jjp1, kk] ** 3
-                )
-                x_tmp = x[iim1, jj, kk]
-                x2 = x_tmp**4 + p * x_tmp + qh2
-                p = h2 * b[ii, jjm1, kk] - invsix * (
-                    x3_001
-                    + x3_100
-                    + x3_111
-                    + x[ii, jjm2, kk] ** 3
-                    + x[ii, jjm1, kkp1] ** 3
-                    + x[iip1, jjm1, kk] ** 3
-                )
-                x_tmp = x[ii, jjm1, kk]
-                x3 = x_tmp**4 + p * x_tmp + qh2
-                p = h2 * b[ii, jj, kkm1] - invsix * (
-                    x3_010
-                    + x3_100
-                    + x3_111
-                    + x[ii, jj, kkm2] ** 3
-                    + x[ii, jjp1, kkm1] ** 3
-                    + x[iip1, jj, kkm1] ** 3
-                )
-                x_tmp = x[ii, jj, kkm1]
-                x4 = x_tmp**4 + p * x_tmp + qh2
-
-                result += x1**2 + x2**2 + x3**2 + x4**2
-
-    return np.sqrt(result)
-
 
 @njit(["f4(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
 def residual_error(
@@ -900,118 +676,6 @@ def residual_error(
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
-def restrict_residual_half(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
-) -> npt.NDArray[np.float32]:
-    """Restriction of residual of the quartic operator on half the mesh \\
-    residual = -(u^4 + p*u + q)  \\
-    This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
-    in this case we can compute the residual for only half the points.
-
-    Parameters
-    ----------
-    x : npt.NDArray[np.float32]
-        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-    b : npt.NDArray[np.float32]
-        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    q : np.float32
-        Constant value in the quartic equation
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Restricted half residual
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from pysco.quartic import restrict_residual_half
-    >>> x = np.ones((32, 32, 32), dtype=np.float32)
-    >>> b = np.ones((32, 32, 32), dtype=np.float32)
-    >>> q = 0.01
-    >>> restricted_residual = restrict_residual_half(x, b, q)
-    """
-    invsix = np.float32(1.0 / 6)
-    inveight = np.float32(0.125)
-    ncells_1d = x.shape[0]
-    ncells_1d_coarse = ncells_1d // 2
-    h2 = np.float32(1.0 / ncells_1d**2)
-    qh2 = q * h2
-    result = np.empty(
-        (ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32
-    )
-    for i in prange(-1, ncells_1d_coarse - 1):
-        ii = 2 * i
-        iim1 = ii - 1
-        iim2 = iim1 - 1
-        iip1 = ii + 1
-        for j in range(-1, ncells_1d_coarse - 1):
-            jj = 2 * j
-            jjm1 = jj - 1
-            jjm2 = jjm1 - 1
-            jjp1 = jj + 1
-            for k in range(-1, ncells_1d_coarse - 1):
-                kk = 2 * k
-                kkm1 = kk - 1
-                kkm2 = kkm1 - 1
-                kkp1 = kk + 1
-
-                x3_001 = x[iim1, jjm1, kk] ** 3
-                x3_010 = x[iim1, jj, kkm1] ** 3
-                x3_100 = x[ii, jjm1, kkm1] ** 3
-                x3_111 = x[ii, jj, kk] ** 3
-
-                p = h2 * b[iim1, jjm1, kkm1] - invsix * (
-                    +x3_001
-                    + x3_010
-                    + x3_100
-                    + x[iim2, jjm1, kkm1] ** 3
-                    + x[iim1, jjm2, kkm1] ** 3
-                    + x[iim1, jjm1, kkm2] ** 3
-                )
-                x_tmp = x[iim1, jjm1, kkm1]
-                x1 = -((x_tmp) ** 4) - p * x_tmp - qh2
-                p = h2 * b[ii, jj, kkm1] - invsix * (
-                    x3_010
-                    + x3_100
-                    + x3_111
-                    + x[ii, jj, kkm2] ** 3
-                    + x[ii, jjp1, kkm1] ** 3
-                    + x[iip1, jj, kkm1] ** 3
-                )
-                x_tmp = x[ii, jj, kkm1]
-                x2 = -((x_tmp) ** 4) - p * x_tmp - qh2
-                p = h2 * b[ii, jjm1, kk] - invsix * (
-                    x3_001
-                    + x3_100
-                    + x3_111
-                    + x[ii, jjm2, kk] ** 3
-                    + x[ii, jjm1, kkp1] ** 3
-                    + x[iip1, jjm1, kk] ** 3
-                )
-                x_tmp = x[ii, jjm1, kk]
-                x3 = -((x_tmp) ** 4) - p * x_tmp - qh2
-                p = h2 * b[iim1, jj, kk] - invsix * (
-                    +x3_001
-                    + x3_010
-                    + x3_111
-                    + x[iim2, jj, kk] ** 3
-                    + x[iim1, jj, kkp1] ** 3
-                    + x[iim1, jjp1, kk] ** 3
-                )
-                x_tmp = x[iim1, jj, kk]
-                x4 = -((x_tmp) ** 4) - p * x_tmp - qh2
-
-                result[i, j, k] = inveight * (x1 + x2 + x3 + x4)
-    return result
-
-
-@njit(
     ["f4(f4[:,:,::1], f4[:,:,::1], f4)"],
     fastmath=True,
     cache=True,
@@ -1049,8 +713,18 @@ def truncation_error(
     >>> error = truncation_error(x, b, q)
     """
     four = np.float32(4)  # Correction for grid discrepancy
-    RLx = mesh.restriction(operator(x, b, q))
-    LRx = operator(mesh.restriction(x), mesh.restriction(b), q)
+    ncells_1d_coarse = x.shape[0] // 2
+    RLx = np.empty((ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32)
+    Lx = np.empty_like(x)
+    x_c = np.empty_like(RLx)
+    b_c = np.empty_like(RLx)
+    LRx = np.empty_like(RLx)
+
+    operator(Lx, x, b, q)
+    mesh.restriction(x_c, x)
+    mesh.restriction(b_c, b)
+    mesh.restriction(RLx, Lx)
+    operator(LRx, x_c, b_c, q)
     RLx_ravel = RLx.ravel()
     LRx_ravel = LRx.ravel()
     result = np.float32(0)

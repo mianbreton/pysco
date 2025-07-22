@@ -101,22 +101,19 @@ def fourier_grid_to_Pk(
 
 
 @utils.time_me
-def fft_3D_real(x: npt.NDArray[np.float32], threads: int) -> npt.NDArray[np.complex64]:
+def fft_3D_real(out: npt.NDArray[np.complex64], x: npt.NDArray[np.float32], threads: int) -> None:
     """Fast Fourier Transform with real inputs
 
     Uses FFTW library
 
     Parameters
     ----------
+    out : npt.NDArray[np.complex64]
+        Fourier-space grid [N, N, N // 2 + 1]
     x : npt.NDArray[np.float32]
         Real grid [N, N, N]
     threads : int
         Number of threads
-
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Fourier-space grid [N, N, N // 2 + 1]
 
     Examples
     --------
@@ -127,13 +124,12 @@ def fft_3D_real(x: npt.NDArray[np.float32], threads: int) -> npt.NDArray[np.comp
     >>> fourier_grid = fft_3D_real(real_grid, num_threads)
     """
     if "pyfftw" not in sys.modules:
-        return np.ascontiguousarray(np.fft.rfftn(x).astype(np.complex64))
+        out[:] = np.ascontiguousarray(np.fft.rfftn(x).astype(np.complex64))
+        return
 
     ncells_1d = len(x)
     x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="float32")
-    x_out = pyfftw.empty_aligned(
-        (ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64"
-    )
+    x_out = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64")
     fftw_plan = pyfftw.FFTW(
         x_in,
         x_out,
@@ -144,26 +140,23 @@ def fft_3D_real(x: npt.NDArray[np.float32], threads: int) -> npt.NDArray[np.comp
     )
     utils.injection(x_in, x)
     fftw_plan(x_in, x_out)
-    return x_out
+    utils.injection(out, x_out)
 
 
 @utils.time_me
-def fft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.complex64]:
+def fft_3D(out: npt.NDArray[np.complex64], x: npt.NDArray[np.complex64], threads: int) -> None:
     """Fast Fourier Transform with real and imaginary inputs
 
     Uses FFTW library
 
     Parameters
     ----------
+    out : npt.NDArray[np.complex64]
+        Fourier-space grid [N, N, N]
     x : npt.NDArray[np.complex64]
         Real grid [N, N, N]
     threads : int
         Number of threads
-
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Fourier-space grid [N, N, N]
 
     Examples
     --------
@@ -174,7 +167,8 @@ def fft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.complex
     >>> fourier_grid = fft_3D(complex_grid, num_threads)
     """
     if "pyfftw" not in sys.modules:
-        return np.ascontiguousarray(np.fft.fftn(x).astype(np.complex64))
+        out[:] = np.ascontiguousarray(np.fft.fftn(x).astype(np.complex64))
+        return
 
     ncells_1d = len(x)
     x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="complex64")
@@ -189,28 +183,26 @@ def fft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.complex
     )
     utils.injection(x_in, x)
     fftw_plan(x_in, x_out)
-    return x_out
+    utils.injection(out, x_out)
 
 
 @utils.time_me
 def fft_3D_grad(
-    x: npt.NDArray[np.complex64], threads: int
-) -> npt.NDArray[np.complex64]:
+    out: npt.NDArray[np.complex64], x: npt.NDArray[np.complex64], threads: int
+) -> None:
     """Fast Fourier Transform with real and imaginary inputs
 
     Uses FFTW library
 
     Parameters
     ----------
+    out : npt.NDArray[np.complex64]
+        Fourier-space grid [N, N, N, 3]
     x : npt.NDArray[np.complex64]
         Real grid [N, N, N, 3]
     threads : int
         Number of threads
 
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Fourier-space grid [N, N, N, 3]
 
     Examples
     --------
@@ -221,7 +213,8 @@ def fft_3D_grad(
     >>> fourier_grid = fft_3D_grad(complex_grid_3d, num_threads)
     """
     if "pyfftw" not in sys.modules:
-        return np.ascontiguousarray(np.fft.fftn(x, axes=(0, 1, 2)).astype(np.complex64))
+        out[:] = np.ascontiguousarray(np.fft.fftn(x, axes=(0, 1, 2)).astype(np.complex64))
+        return
 
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
@@ -235,35 +228,26 @@ def fft_3D_grad(
         direction="FFTW_FORWARD",
         threads=threads,
     )
-
-    result = np.empty((ncells_1d, ncells_1d, ncells_1d, ndim), dtype=np.complex64)
-
     for i in range(ndim):
         utils.injection_from_gradient(x_in, x, i)
         fftw_plan(x_in, x_out)
-        utils.injection_to_gradient(result, x_out, i)
-    x_in = 0
-    x_out = 0
-    return result
+        utils.injection_to_gradient(out, x_out, i)
 
 
 @utils.time_me
-def ifft_3D_real(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.float32]:
+def ifft_3D_real(out: npt.NDArray[np.float32], x: npt.NDArray[np.complex64], threads: int) -> None:
     """Inverse Fast Fourier Transform with real outputs
 
     Uses FFTW library
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Configuration-space grid [N, N, N]
     x : npt.NDArray[np.complex64]
         Fourier-space real grid [N, N, N//2 + 1]
     threads : int
         Number of threads
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Configuration-space grid [N, N, N]
 
     Examples
     --------
@@ -274,12 +258,11 @@ def ifft_3D_real(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.f
     >>> result = ifft_3D_real(complex_grid, num_threads)
     """
     if "pyfftw" not in sys.modules:
-        return np.ascontiguousarray(np.fft.irfftn(x).astype(np.float32))
+        out[:] = np.ascontiguousarray(np.fft.irfftn(x).astype(np.float32))
+        return
 
-    ncells_1d = len(x)
-    x_in = pyfftw.empty_aligned(
-        (ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64"
-    )
+    ncells_1d = out.shape[0]
+    x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64")
     x_out = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="float32")
     fftw_plan = pyfftw.FFTW(
         x_in,
@@ -291,26 +274,23 @@ def ifft_3D_real(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.f
     )
     utils.injection(x_in, x)
     fftw_plan(x_in, x_out)
-    return x_out
+    utils.injection(out, x_out)
 
 
 @utils.time_me
-def ifft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.complex64]:
+def ifft_3D(out: npt.NDArray[np.complex64], x: npt.NDArray[np.complex64], threads: int) -> None:
     """Inverse Fast Fourier Transform with real and imaginary inputs
 
     Uses FFTW library
 
     Parameters
     ----------
+    out : npt.NDArray[np.complex64]
+        Configuration-space grid [N, N, N]
     x : npt.NDArray[np.complex64]
         Fourier-space grid [N, N, N]
     threads : int
         Number of threads
-
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Configuration-space grid [N, N, N]
 
     Examples
     --------
@@ -321,9 +301,10 @@ def ifft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.comple
     >>> result = ifft_3D(complex_grid, num_threads)
     """
     if "pyfftw" not in sys.modules:
-        return np.ascontiguousarray(np.fft.ifftn(x).astype(np.complex64))
+        out[:] = np.ascontiguousarray(np.fft.ifftn(x).astype(np.complex64))
+        return
 
-    ncells_1d = len(x)
+    ncells_1d = out.shape[0]
     x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="complex64")
     x_out = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="complex64")
     fftw_plan = pyfftw.FFTW(
@@ -336,28 +317,26 @@ def ifft_3D(x: npt.NDArray[np.complex64], threads: int) -> npt.NDArray[np.comple
     )
     utils.injection(x_in, x)
     fftw_plan(x_in, x_out)
-    return x_out
+    utils.injection(out, x_out)
 
 
 @utils.time_me
 def ifft_3D_real_grad(
-    x: npt.NDArray[np.complex64], threads: int
-) -> npt.NDArray[np.float32]:
+    out: npt.NDArray[np.float32], x: npt.NDArray[np.complex64], threads: int
+) -> None:
     """Inverse Fast Fourier Transform gradient field with real output
 
     Uses FFTW library
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Configuration-space grid [N, N, N, 3]
     x : npt.NDArray[np.complex64]
         Fourier-space real grid [N, N, N//2 + 1, 3]
     threads : int
         Number of threads
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Configuration-space grid [N, N, N, 3]
+    
 
     Examples
     --------
@@ -368,13 +347,12 @@ def ifft_3D_real_grad(
     >>> result = ifft_3D_real_grad(complex_grid_3d, num_threads)
     """
     if "pyfftw" not in sys.modules:
-        return np.ascontiguousarray(np.fft.irfftn(x, axes=(0, 1, 2)).astype(np.float32))
+        out[:] = np.ascontiguousarray(np.fft.irfftn(x, axes=(0, 1, 2)).astype(np.float32))
+        return
 
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
-    x_in = pyfftw.empty_aligned(
-        (ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64"
-    )
+    x_in = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d // 2 + 1), dtype="complex64")
     x_out = pyfftw.empty_aligned((ncells_1d, ncells_1d, ncells_1d), dtype="float32")
     fftw_plan = pyfftw.FFTW(
         x_in,
@@ -384,37 +362,28 @@ def ifft_3D_real_grad(
         direction="FFTW_BACKWARD",
         threads=threads,
     )
-
-    result = np.empty((ncells_1d, ncells_1d, ncells_1d, ndim), dtype=np.float32)
-
     for i in range(ndim):
         utils.injection_from_gradient(x_in, x, i)
         fftw_plan(x_in, x_out)
-        utils.injection_to_gradient(result, x_out, i)
-    x_in = 0
-    x_out = 0
-    return result
+        utils.injection_to_gradient(out, x_out, i)
 
 
 @utils.time_me
 def ifft_3D_grad(
-    x: npt.NDArray[np.complex64], threads: int
-) -> npt.NDArray[np.complex64]:
+    out: npt.NDArray[np.complex64], x: npt.NDArray[np.complex64], threads: int
+) -> None:
     """Inverse Fast Fourier Transform gradient field with real and imaginary inputs
 
     Uses FFTW library
 
     Parameters
     ----------
+    out : npt.NDArray[np.complex64]
+        Configuration-space grid [N, N, N, 3]
     x : npt.NDArray[np.complex64]
         Fourier-space grid [N, N, N, 3]
     threads : int
         Number of threads
-
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Configuration-space grid [N, N, N, 3]
 
     Examples
     --------
@@ -425,9 +394,8 @@ def ifft_3D_grad(
     >>> result = ifft_3D_grad(complex_grid_3d, num_threads)
     """
     if "pyfftw" not in sys.modules:
-        return np.ascontiguousarray(
-            np.fft.ifftn(x, axes=(0, 1, 2)).astype(np.complex64)
-        )
+        out[:] = np.ascontiguousarray(np.fft.ifftn(x, axes=(0, 1, 2)).astype(np.complex64))
+        return
 
     ndim = x.shape[-1]
     ncells_1d = x.shape[0]
@@ -442,15 +410,10 @@ def ifft_3D_grad(
         threads=threads,
     )
 
-    result = np.empty((ncells_1d, ncells_1d, ncells_1d, ndim), dtype=np.complex64)
-
     for i in range(ndim):
         utils.injection_from_gradient(x_in, x, i)
         fftw_plan(x_in, x_out)
-        utils.injection_to_gradient(result, x_out, i)
-    x_in = 0
-    x_out = 0
-    return result
+        utils.injection_to_gradient(out, x_out, i)
 
 
 @utils.time_me
@@ -597,26 +560,24 @@ def inverse_laplacian_7pt(
 
 @utils.time_me
 @njit(
-    ["c8[:,:,:,::1](c8[:,:,::1])"],
+    ["void(c8[:,:,:,::1], c8[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
     error_model="numpy",
 )
 def gradient_inverse_laplacian(
+    out: npt.NDArray[np.complex64],
     x: npt.NDArray[np.complex64],
-) -> npt.NDArray[np.complex64]:
+) -> None:
     """Compute gradient of inverse_laplacian in Fourier-space
 
     Parameters
     ----------
+    out : npt.NDArray[np.complex64]
+        Gradient of inverse_laplacian [N, N, N//2 + 1, 3]
     x : npt.NDArray[np.complex64]
         Fourier-space field [N, N, N//2 + 1]
-
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Gradient of inverse_laplacian [N, N, N//2 + 1, 3]
 
     Examples
     --------
@@ -629,7 +590,6 @@ def gradient_inverse_laplacian(
     invtwopi = np.float32(0.5 / np.pi)
     ncells_1d = len(x)
     middle = ncells_1d // 2
-    result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     for i in prange(ncells_1d):
         if i >= middle:
             kx = np.float32(i - ncells_1d)
@@ -646,37 +606,34 @@ def gradient_inverse_laplacian(
                 kz = np.float32(k)
                 invk2 = invtwopi / (kx2_ky2 + kz**2)
                 x_k2_tmp = minus_ii * invk2 * x[i, j, k]
-                result[i, j, k, 0] = x_k2_tmp * kx
-                result[i, j, k, 1] = x_k2_tmp * ky
-                result[i, j, k, 2] = x_k2_tmp * kz
-    result[0, 0, 0, :] = 0
-    return result
+                out[i, j, k, 0] = x_k2_tmp * kx
+                out[i, j, k, 1] = x_k2_tmp * ky
+                out[i, j, k, 2] = x_k2_tmp * kz
+    out[0, 0, 0, :] = 0
 
 
 @utils.time_me
 @njit(
-    ["c8[:,:,:,::1](c8[:,:,::1], i8)"],
+    ["void(c8[:,:,:,::1], c8[:,:,::1], i8)"],
     fastmath=True,
     cache=True,
     parallel=True,
     error_model="numpy",
 )
 def gradient_inverse_laplacian_compensated(
+    out: npt.NDArray[np.complex64],
     x: npt.NDArray[np.complex64], p: int
-) -> npt.NDArray[np.complex64]:
+) -> None:
     """Compute gradient of inverse_laplacian in Fourier-space with compensated Kernel (Jing 2005)
 
     Parameters
     ----------
+    out : npt.NDArray[np.complex64]
+        Gradient of inverse_laplacian [N, N, N//2 + 1, 3]
     x : npt.NDArray[np.complex64]
         Fourier-space field [N, N, N//2 + 1]
     MAS : int
         Compensation order (NGP = 1, CIC = 2, TSC = 3)
-
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Gradient of inverse_laplacian [N, N, N//2 + 1, 3]
 
     Examples
     --------
@@ -692,7 +649,6 @@ def gradient_inverse_laplacian_compensated(
     h = np.float32(1.0 / ncells_1d)
     minus_twop = -2 * p
     middle = ncells_1d // 2
-    result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     for i in prange(ncells_1d):
         if i >= middle:
             kx = np.float32(i - ncells_1d)
@@ -712,35 +668,32 @@ def gradient_inverse_laplacian_compensated(
                 w_xyz = w_xy * np.sinc(kz * h)
                 invk2 = invtwopi / (kx2_ky2 + kz**2)
                 x_k2_tmp = minus_ii * w_xyz**minus_twop * invk2 * x[i, j, k]
-                result[i, j, k, 0] = x_k2_tmp * kx
-                result[i, j, k, 1] = x_k2_tmp * ky
-                result[i, j, k, 2] = x_k2_tmp * kz
-    result[0, 0, 0, :] = 0
-    return result
+                out[i, j, k, 0] = x_k2_tmp * kx
+                out[i, j, k, 1] = x_k2_tmp * ky
+                out[i, j, k, 2] = x_k2_tmp * kz
+    out[0, 0, 0, :] = 0
 
 
 @utils.time_me
 @njit(
-    ["c8[:,:,:,::1](c8[:,:,::1])"],
+    ["void(c8[:,:,:,::1], c8[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
     error_model="numpy",
 )
 def gradient(
+    out: npt.NDArray[np.complex64],
     x: npt.NDArray[np.complex64],
-) -> npt.NDArray[np.complex64]:
+) -> None:
     """Compute gradient in Fourier-space
 
     Parameters
     ----------
+    out : npt.NDArray[np.complex64]
+        Gradient [N, N, N//2 + 1, 3]
     x : npt.NDArray[np.complex64]
         Fourier-space field [N, N, N//2 + 1]
-
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Gradient [N, N, N//2 + 1, 3]
 
     Examples
     --------
@@ -753,7 +706,6 @@ def gradient(
     twopi = np.float32(2 * np.pi)
     ncells_1d = len(x)
     middle = ncells_1d // 2
-    result = np.empty((ncells_1d, ncells_1d, middle + 1, 3), dtype=np.complex64)
     for i in prange(ncells_1d):
         if i >= middle:
             kx = np.float32(i - ncells_1d)
@@ -767,37 +719,34 @@ def gradient(
             for k in range(middle + 1):
                 kz = np.float32(k)
                 x_tmp = ii * twopi * x[i, j, k]
-                result[i, j, k, 0] = x_tmp * kx
-                result[i, j, k, 1] = x_tmp * ky
-                result[i, j, k, 2] = x_tmp * kz
-    return result
+                out[i, j, k, 0] = x_tmp * kx
+                out[i, j, k, 1] = x_tmp * ky
+                out[i, j, k, 2] = x_tmp * kz
 
 
 @utils.time_me
 @njit(
-    ["c8[:,:,::1](c8[:,:,::1], UniTuple(i4,2))"],
+    ["void(c8[:,:,::1], c8[:,:,::1], UniTuple(i4,2))"],
     fastmath=True,
     cache=True,
     parallel=True,
     error_model="numpy",
 )
 def hessian(
+    out: npt.NDArray[np.complex64],
     x: npt.NDArray[np.complex64],
     ij: Tuple[int, int],
-) -> npt.NDArray[np.complex64]:
+) -> None:
     """Compute second-order Potential in Fourier-space
 
     Parameters
     ----------
+    out : npt.NDArray[np.complex64]
+        Second-order Potential [N, N, N//2 + 1]
     x : npt.NDArray[np.complex64]
         Fourier-space field [N, N, N//2 + 1]
     ij : Tuple[int, int]
         Indices for Hessian matrix [i,j]
-
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Second-order Potential [N, N, N//2 + 1]
 
     Examples
     --------
@@ -811,7 +760,6 @@ def hessian(
     middle = ncells_1d // 2
     n = ij[0]
     m = ij[1]
-    result = np.empty((ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
     for i in prange(ncells_1d):
         if i >= middle:
             kx = np.float32(i - ncells_1d)
@@ -827,38 +775,35 @@ def hessian(
                 k_array = np.array([kx, ky, kz])
                 kn = k_array[n]
                 km = k_array[m]
-                result[i, j, k] = -kn * km * fourpi2 * x[i, j, k]
-    return result
+                out[i, j, k] = -kn * km * fourpi2 * x[i, j, k]
 
 
 @utils.time_me
 @njit(
-    ["c8[:,:,::1](c8[:,:,::1], UniTuple(i4,2), UniTuple(i4,2))"],
+    ["void(c8[:,:,::1], c8[:,:,::1], UniTuple(i4,2), UniTuple(i4,2))"],
     fastmath=True,
     cache=True,
     parallel=True,
     error_model="numpy",
 )
 def sum_of_hessian(
+    out: npt.NDArray[np.complex64],
     x: npt.NDArray[np.complex64],
     ij1: Tuple[int, int],
     ij2: Tuple[int, int],
-) -> npt.NDArray[np.complex64]:
+) -> None:
     """Compute second-order Potential in Fourier-space
 
     Parameters
     ----------
+    out : npt.NDArray[np.complex64]
+        Second-order Potential [N, N, N//2 + 1]
     x : npt.NDArray[np.complex64]
         Fourier-space field [N, N, N//2 + 1]
     ij1 : Tuple[int, int]
         Indices for Hessian matrix [i,j]
     ij2 : Tuple[int, int]
         Indices for Hessian matrix [i,j]
-
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Second-order Potential [N, N, N//2 + 1, 3]
 
     Examples
     --------
@@ -874,7 +819,6 @@ def sum_of_hessian(
     m1 = ij1[1]
     n2 = ij2[0]
     m2 = ij2[1]
-    result = np.empty((ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
     for i in prange(ncells_1d):
         if i >= middle:
             kx = np.float32(i - ncells_1d)
@@ -892,38 +836,35 @@ def sum_of_hessian(
                 km1 = k_array[m1]
                 kn2 = k_array[n2]
                 km2 = k_array[m2]
-                result[i, j, k] = -(kn1 * km1 + kn2 * km2) * fourpi2 * x[i, j, k]
-    return result
+                out[i, j, k] = -(kn1 * km1 + kn2 * km2) * fourpi2 * x[i, j, k]
 
 
 @utils.time_me
 @njit(
-    ["c8[:,:,::1](c8[:,:,::1], UniTuple(i4,2), UniTuple(i4,2))"],
+    ["void(c8[:,:,::1], c8[:,:,::1], UniTuple(i4,2), UniTuple(i4,2))"],
     fastmath=True,
     cache=True,
     parallel=True,
     error_model="numpy",
 )
 def diff_of_hessian(
+    out: npt.NDArray[np.complex64],
     x: npt.NDArray[np.complex64],
     ij1: Tuple[int, int],
     ij2: Tuple[int, int],
-) -> npt.NDArray[np.complex64]:
+) -> None:
     """Compute second-order Potential in Fourier-space
 
     Parameters
     ----------
+    out : npt.NDArray[np.complex64]
+        Second-order Potential [N, N, N//2 + 1]
     x : npt.NDArray[np.complex64]
         Fourier-space field [N, N, N//2 + 1]
     ij1 : Tuple[int, int]
         Indices for Hessian matrix [i,j]
     ij2 : Tuple[int, int]
         Indices for Hessian matrix [i,j]
-
-    Returns
-    -------
-    npt.NDArray[np.complex64]
-        Second-order Potential [N, N, N//2 + 1, 3]
 
     Examples
     --------
@@ -939,7 +880,6 @@ def diff_of_hessian(
     m1 = ij1[1]
     n2 = ij2[0]
     m2 = ij2[1]
-    result = np.empty((ncells_1d, ncells_1d, middle + 1), dtype=np.complex64)
     for i in prange(ncells_1d):
         if i >= middle:
             kx = np.float32(i - ncells_1d)
@@ -957,5 +897,4 @@ def diff_of_hessian(
                 km1 = k_array[m1]
                 kn2 = k_array[n2]
                 km2 = k_array[m2]
-                result[i, j, k] = -(kn1 * km1 - kn2 * km2) * fourpi2 * x[i, j, k]
-    return result
+                out[i, j, k] = -(kn1 * km1 - kn2 * km2) * fourpi2 * x[i, j, k]

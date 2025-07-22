@@ -8,19 +8,16 @@ from numba import config, njit, prange
 import mesh
 
 
-@njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
-def operator(x: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+def operator(out: npt.NDArray[np.float32], x: npt.NDArray[np.float32]) -> None:
     """Laplacian operator
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Example
     -------
@@ -32,7 +29,6 @@ def operator(x: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     ncells_1d = x.shape[0]
     invh2 = np.float32(ncells_1d**2)
     six = np.float32(6)
-    result = np.empty_like(x)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -42,7 +38,7 @@ def operator(x: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
             for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
-                result[i, j, k] = (
+                out[i, j, k] = (
                     x[im1, j, k]
                     + x[i, jm1, k]
                     + x[i, j, km1]
@@ -51,32 +47,28 @@ def operator(x: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
                     + x[i, jp1, k]
                     + x[ip1, j, k]
                 ) * invh2
-    return result
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1])"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def residual(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
-) -> npt.NDArray[np.float32]:
+    out: npt.NDArray[np.float32], x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
+) -> None:
     """Residual of Laplacian operator \\
     residual = b - Ax
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Residual of Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Residual of Laplacian(x) [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Example
     -------
@@ -89,7 +81,6 @@ def residual(
     ncells_1d = x.shape[0]
     invh2 = np.float32(ncells_1d**2)
     six = np.float32(6)
-    result = np.empty_like(x)
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -99,7 +90,7 @@ def residual(
             for k in range(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
-                result[i, j, k] = (
+                out[i, j, k] = (
                     -(
                         x[im1, j, k]
                         + x[i, jm1, k]
@@ -113,18 +104,16 @@ def residual(
                     + b[i, j, k]
                 )
 
-    return result
-
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1])"],
+    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def restrict_residual(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
-) -> npt.NDArray[np.float32]:
+    out: npt.NDArray[np.float32], x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
+) -> None:
     """Restriction operator on half of the residual of Laplacian operator \\
     residual = -(Ax - b)  \\
     This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
@@ -132,15 +121,12 @@ def restrict_residual(
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
     x : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     b : npt.NDArray[np.float32]
         Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
 
     Example
     -------
@@ -155,9 +141,6 @@ def restrict_residual(
     ncells_1d_coarse = ncells_1d // 2
     inveight = np.float32(0.125)
     three = np.float32(3.0)
-    result = np.empty(
-        (ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32
-    )
     for i in prange(-1, ncells_1d_coarse - 1):
         ii = 2 * i
         iim1 = ii - 1
@@ -174,7 +157,7 @@ def restrict_residual(
                 kkp1 = kk + 1
                 kkp2 = kkp1 + 1
 
-                result[i, j, k] = inveight * (
+                out[i, j, k] = inveight * (
                     -(
                         +x[iim1, jj, kk]
                         + x[iim1, jj, kkp1]
@@ -223,104 +206,6 @@ def restrict_residual(
                     + b[iip1, jjp1, kkp1]
                 )
 
-    return result
-
-
-@njit(
-    ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1])"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
-def restrict_residual_half(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
-) -> npt.NDArray[np.float32]:
-    """Restriction operator on half of the residual of Laplacian operator \\
-    residual = -(Ax - b)  \\
-    This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
-    in this case we can compute the residual and restriction for only half the points.
-
-    Parameters
-    ----------
-    x : npt.NDArray[np.float32]
-        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-    b : npt.NDArray[np.float32]
-        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Coarse Potential [N_cells_1d/2, N_cells_1d/2, N_cells_1d/2]
-
-    Example
-    -------
-    >>> import numpy as np
-    >>> from pysco.laplacian import restrict_residual_half
-    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> result = restrict_residual_half(x, b)
-    """
-    ncells_1d = x.shape[0]
-    invh2 = np.float32(ncells_1d**2)
-    ncells_1d_coarse = ncells_1d // 2
-    inveight = np.float32(0.125)
-    three = np.float32(3.0)
-    six = np.float32(6.0)
-    result = np.empty(
-        (ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32
-    )
-    for i in prange(-1, ncells_1d_coarse - 1):
-        ii = 2 * i
-        iim1 = ii - 1
-        iip1 = ii + 1
-        iip2 = iip1 + 1
-        for j in range(-1, ncells_1d_coarse - 1):
-            jj = 2 * j
-            jjm1 = jj - 1
-            jjp1 = jj + 1
-            jjp2 = jjp1 + 1
-            for k in range(-1, ncells_1d_coarse - 1):
-                kk = 2 * k
-                kkm1 = kk - 1
-                kkp1 = kk + 1
-                kkp2 = kkp1 + 1
-                result[i, j, k] = inveight * (
-                    -(
-                        x[iim1, jj, kkp1]
-                        + x[iim1, jjp1, kk]
-                        + x[ii, jjm1, kkp1]
-                        + x[ii, jj, kkp2]
-                        + x[ii, jjp1, kkm1]
-                        + x[ii, jjp2, kk]
-                        + x[iip1, jjm1, kk]
-                        + x[iip1, jj, kkm1]
-                        + x[iip1, jjp1, kkp2]
-                        + x[iip1, jjp2, kkp1]
-                        + x[iip2, jjp1, kkp1]
-                        + x[iip2, jj, kk]
-                        + three
-                        * (
-                            x[ii, jj, kk]
-                            + x[ii, jjp1, kkp1]
-                            + x[iip1, jj, kkp1]
-                            + x[iip1, jjp1, kk]
-                        )
-                        - six
-                        * (
-                            x[ii, jj, kkp1]
-                            + x[ii, jjp1, kk]
-                            + x[iip1, jj, kk]
-                            + x[iip1, jjp1, kkp1]
-                        )
-                    )
-                    * invh2
-                    + b[ii, jj, kkp1]
-                    + b[ii, jjp1, kk]
-                    + b[iip1, jj, kk]
-                    + b[iip1, jjp1, kkp1]
-                )
-
-    return result
 
 
 @njit(["f4(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
@@ -381,118 +266,6 @@ def residual_error(
     return np.sqrt(result)
 
 
-@njit(["f4(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
-def residual_error_half(
-    x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
-) -> np.float32:
-    """Error on half of the residual of Laplacian operator  \\
-    residual = b - Ax  \\
-    error = sqrt[sum(residual**2)] \\
-    This works only if it is done after a Gauss-Seidel iteration with no over-relaxation, \\
-    in this case we can compute the residual for only half the points.
-
-    Parameters
-    ----------
-    x : npt.NDArray[np.float32]
-        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-    b : npt.NDArray[np.float32]
-        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Returns
-    -------
-    np.float32
-        Residual error
-
-    Example
-    -------
-    >>> import numpy as np
-    >>> from pysco.laplacian import residual_error_half
-    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> result = residual_error_half(x, b)
-    """
-    ncells_1d = x.shape[0]
-    invh2 = np.float32(ncells_1d**2)
-    ncells_1d_coarse = ncells_1d // 2
-    six = np.float32(6.0)
-    result = np.float32(0)
-    for i in prange(-1, ncells_1d_coarse - 1):
-        ii = 2 * i
-        iim1 = ii - 1
-        iip1 = ii + 1
-        iip2 = iip1 + 1
-        for j in range(-1, ncells_1d_coarse - 1):
-            jj = 2 * j
-            jjm1 = jj - 1
-            jjp1 = jj + 1
-            jjp2 = jjp1 + 1
-            for k in range(-1, ncells_1d_coarse - 1):
-                kk = 2 * k
-                kkm1 = kk - 1
-                kkp1 = kk + 1
-                kkp2 = kkp1 + 1
-
-                x000 = x[ii, jj, kk]
-                x011 = x[ii, jjp1, kkp1]
-                x101 = x[iip1, jj, kkp1]
-                x110 = x[iip1, jjp1, kk]
-                x1 = (
-                    -(
-                        +x000
-                        + x011
-                        + x101
-                        + x[iim1, jj, kkp1]
-                        + x[ii, jjm1, kkp1]
-                        - six * x[ii, jj, kkp1]
-                        + x[ii, jj, kkp2]
-                    )
-                    * invh2
-                    + b[ii, jj, kkp1]
-                )
-                x2 = (
-                    -(
-                        +x000
-                        + x011
-                        + x110
-                        + x[iim1, jjp1, kk]
-                        + x[ii, jjp1, kkm1]
-                        - six * x[ii, jjp1, kk]
-                        + x[ii, jjp2, kk]
-                    )
-                    * invh2
-                    + b[ii, jjp1, kk]
-                )
-                x3 = (
-                    -(
-                        x000
-                        + x101
-                        + x110
-                        + x[iip1, jjm1, kk]
-                        + x[iip1, jj, kkm1]
-                        - six * x[iip1, jj, kk]
-                        + x[iip2, jj, kk]
-                    )
-                    * invh2
-                    + b[iip1, jj, kk]
-                )
-                x4 = (
-                    -(
-                        x011
-                        + x101
-                        + x110
-                        - six * x[iip1, jjp1, kkp1]
-                        + x[iip1, jjp1, kkp2]
-                        + x[iip1, jjp2, kkp1]
-                        + x[iip2, jjp1, kkp1]
-                    )
-                    * invh2
-                    + b[iip1, jjp1, kkp1]
-                )
-                result += x1**2 + x2**2 + x3**2 + x4**2
-
-    return np.sqrt(result)
-
-
 @njit(
     ["f4(f4[:,:,::1])"],
     fastmath=True,
@@ -522,8 +295,16 @@ def truncation_error(x: npt.NDArray[np.float32]) -> np.float32:
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> result = truncation_error(x)
     """
-    RLx = mesh.restriction(operator(x))
-    LRx = operator(mesh.restriction(x))
+    ncells_1d_coarse = x.shape[0] // 2
+    Lu = np.empty_like(x)
+    RLx = np.empty((ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32)
+    Rx = np.empty_like(RLx)
+    LRx = np.empty_like(RLx)
+
+    operator(Lu, x)
+    mesh.restriction(RLx, Lu)
+    mesh.restriction(Rx, x)
+    operator(LRx, Rx)
     RLx_ravel = RLx.ravel()
     LRx_ravel = LRx.ravel()
     result = 0
@@ -555,7 +336,17 @@ def truncation_knebe2(x: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     >>> x = np.random.random((32, 32, 32)).astype(np.float32)
     >>> result = truncation_knebe2(x)
     """
-    return mesh.prolongation(operator(mesh.restriction(x))) - operator(x)
+    ncells_1d_coarse = x.shape[0] // 2
+    Rx = np.empty((ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32)
+    LRx = np.empty_like(Rx)
+    Lx = np.empty_like(x)
+    PLRx = np.empty_like(x)
+
+    operator(Lx, x)
+    mesh.restriction(Rx, x)
+    operator(LRx, Rx)
+    mesh.prolongation(PLRx, LRx)
+    return PLRx - Lx
 
 
 @njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True)
@@ -584,7 +375,13 @@ def truncation_knebe(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     >>> b = np.random.random((32, 32, 32)).astype(np.float32)
     >>> result = truncation_knebe(b)
     """
-    return mesh.prolongation(mesh.restriction(b)) - b
+    ncells_1d_coarse = b.shape[0] // 2
+    b_c = np.empty((ncells_1d_coarse, ncells_1d_coarse, ncells_1d_coarse), dtype=np.float32)
+    Pb_c = np.empty_like(b)
+    
+    mesh.restriction(b_c, b)
+    mesh.prolongation(Pb_c, b_c)
+    return Pb_c - b
 
 
 @njit(["f4(f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
@@ -622,8 +419,8 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
     f1 = np.float32(9.0 / 64)
     f2 = np.float32(3.0 / 64)
     f3 = np.float32(1.0 / 64)
-
-    result = mesh.restriction(b)
+    b_c = np.empty((ncells_1d // 2, ncells_1d // 2, ncells_1d // 2), dtype=np.float32)
+    mesh.restriction(b_c, b)
 
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
@@ -640,33 +437,33 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
                 kp1 = k + 1
                 kk = 2 * k
                 kkp1 = kk + 1
-                tmp000 = result[im1, jm1, km1]
-                tmp001 = result[im1, jm1, k]
-                tmp002 = result[im1, jm1, kp1]
-                tmp010 = result[im1, j, km1]
-                tmp011 = result[im1, j, k]
-                tmp012 = result[im1, j, kp1]
-                tmp020 = result[im1, jp1, km1]
-                tmp021 = result[im1, jp1, k]
-                tmp022 = result[im1, jp1, kp1]
-                tmp100 = result[i, jm1, km1]
-                tmp101 = result[i, jm1, k]
-                tmp102 = result[i, jm1, kp1]
-                tmp110 = result[i, j, km1]
-                tmp111 = result[i, j, k]
-                tmp112 = result[i, j, kp1]
-                tmp120 = result[i, jp1, km1]
-                tmp121 = result[i, jp1, k]
-                tmp122 = result[i, jp1, kp1]
-                tmp200 = result[ip1, jm1, km1]
-                tmp201 = result[ip1, jm1, k]
-                tmp202 = result[ip1, jm1, kp1]
-                tmp210 = result[ip1, j, km1]
-                tmp211 = result[ip1, j, k]
-                tmp212 = result[ip1, j, kp1]
-                tmp220 = result[ip1, jp1, km1]
-                tmp221 = result[ip1, jp1, k]
-                tmp222 = result[ip1, jp1, kp1]
+                tmp000 = b_c[im1, jm1, km1]
+                tmp001 = b_c[im1, jm1, k]
+                tmp002 = b_c[im1, jm1, kp1]
+                tmp010 = b_c[im1, j, km1]
+                tmp011 = b_c[im1, j, k]
+                tmp012 = b_c[im1, j, kp1]
+                tmp020 = b_c[im1, jp1, km1]
+                tmp021 = b_c[im1, jp1, k]
+                tmp022 = b_c[im1, jp1, kp1]
+                tmp100 = b_c[i, jm1, km1]
+                tmp101 = b_c[i, jm1, k]
+                tmp102 = b_c[i, jm1, kp1]
+                tmp110 = b_c[i, j, km1]
+                tmp111 = b_c[i, j, k]
+                tmp112 = b_c[i, j, kp1]
+                tmp120 = b_c[i, jp1, km1]
+                tmp121 = b_c[i, jp1, k]
+                tmp122 = b_c[i, jp1, kp1]
+                tmp200 = b_c[ip1, jm1, km1]
+                tmp201 = b_c[ip1, jm1, k]
+                tmp202 = b_c[ip1, jm1, kp1]
+                tmp210 = b_c[ip1, j, km1]
+                tmp211 = b_c[ip1, j, k]
+                tmp212 = b_c[ip1, j, kp1]
+                tmp220 = b_c[ip1, jp1, km1]
+                tmp221 = b_c[ip1, jp1, k]
+                tmp222 = b_c[ip1, jp1, kp1]
                 tmp0 = f0 * tmp111
 
                 truncation += (
@@ -756,26 +553,24 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
 
 
 @njit(
-    ["f4[:,:,::1](f4[:,:,::1])"],
+    ["void(f4[:,:,::1], f4[:,:,::1])"],
     fastmath=True,
     cache=True,
     parallel=True,
 )
 def initialise_potential(
+    out: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
-) -> npt.NDArray[np.float32]:
+) -> None:
     """Initialse solution of Poisson equation \\
     u_ini = h^2/6 b
 
     Parameters
     ----------
+    out : npt.NDArray[np.float32]
+        Potential initialised
     b : npt.NDArray[np.float32]
         Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Returns
-    -------
-    npt.NDArray[np.float32]
-        Reduced scalaron field initialised
 
     Examples
     --------
@@ -786,12 +581,10 @@ def initialise_potential(
     """
     h = np.float32(1.0 / len(b))
     minus_h2_over_six = np.float32(-h * h / 6.0)
-    potential = np.empty_like(b)
-    potential_ravel = potential.ravel()
+    out_ravel = out.ravel()
     b_ravel = b.ravel()
-    for i in prange(len(potential_ravel)):
-        potential_ravel[i] = minus_h2_over_six * b_ravel[i]
-    return potential
+    for i in prange(len(out_ravel)):
+        out_ravel[i] = minus_h2_over_six * b_ravel[i]
 
 
 @njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)

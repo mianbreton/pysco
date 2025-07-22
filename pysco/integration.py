@@ -23,13 +23,7 @@ def integrate(
     tables: List[interp1d],
     param: pd.Series,
     t_snap_next: np.float32 = np.float32(0),
-) -> Tuple[
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-]:
+) -> None:
     """Computes one integration step
 
     Parameters
@@ -39,7 +33,7 @@ def integrate(
     velocity : npt.NDArray[np.float32]
         Velocities [N_part, 3]
     acceleration : npt.NDArray[np.float32]
-        Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
+        Acceleration [N_part, 3]
     potential : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     additional_field : npt.NDArray[np.float32]
@@ -50,11 +44,6 @@ def integrate(
         Parameter container
     t_snap_next : np.float32
         Time at next snapshot, by default np.float32(0)
-
-    Returns
-    -------
-    Tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]
-        position, velocity, acceleration, potential, additional_field [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Raises
     ------
@@ -87,33 +76,13 @@ def integrate(
     else:
         param["write_snapshot"] = False
 
-    logging.info(
-        f"Conditions: velocity {dt1=}, acceleration {dt2=}, scale factor {dt3=}"
-    )
+    logging.info(f"Conditions: velocity {dt1=}, acceleration {dt2=}, scale factor {dt3=}")
     INTEGRATOR = param["integrator"].casefold()
     match INTEGRATOR:
         case "leapfrog":
-            return leapfrog(
-                position,
-                velocity,
-                acceleration,
-                potential,
-                additional_field,
-                dt,
-                tables,
-                param,
-            )
+            leapfrog(position, velocity, acceleration, potential, additional_field, dt, tables, param)
         case "euler":
-            return euler(
-                position,
-                velocity,
-                acceleration,
-                potential,
-                additional_field,
-                dt,
-                tables,
-                param,
-            )
+            euler(position, velocity, acceleration, potential, additional_field, dt, tables, param)
         case _:
             raise NotImplementedError("ERROR: Integrator must be 'leapfrog' or 'euler'")
 
@@ -127,13 +96,7 @@ def euler(
     dt: np.float32,
     tables: List[interp1d],
     param: pd.Series,
-) -> Tuple[
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-]:
+) -> None:
     """Euler integrator
 
     Parameters
@@ -143,7 +106,7 @@ def euler(
     velocity : npt.NDArray[np.float32]
         Velocities [N_part, 3]
     acceleration : npt.NDArray[np.float32]
-        Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
+        Acceleration [N_part, 3]
     potential : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     additional_field : npt.NDArray[np.float32]
@@ -154,11 +117,6 @@ def euler(
         Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
     param : pd.Series
         Parameter container
-
-    Returns
-    -------
-    Tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]
-        position, velocity, acceleration, potential, additional_field [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Example
     -------
@@ -183,10 +141,7 @@ def euler(
     utils.set_units(param)
     utils.periodic_wrap(position)
     utils.add_vector_scalar_inplace(velocity, acceleration, -dt)
-    acceleration, potential, additional_field = solver.pm(
-        position, param, potential, additional_field, tables
-    )
-    return (position, velocity, acceleration, potential, additional_field)
+    solver.pm(acceleration, potential, additional_field, position, param, tables)
 
 
 def leapfrog(
@@ -198,13 +153,7 @@ def leapfrog(
     dt: np.float32,
     tables: List[interp1d],
     param: pd.Series,
-) -> Tuple[
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-]:
+) -> None:
     """Leapfrog integrator
 
     Parameters
@@ -214,7 +163,7 @@ def leapfrog(
     velocity : npt.NDArray[np.float32]
         Velocities [N_part, 3]
     acceleration : npt.NDArray[np.float32]
-        Acceleration [N_cells_1d, N_cells_1d, N_cells_1d]
+        Acceleration [N_part, 3]
     potential : npt.NDArray[np.float32]
         Potential [N_cells_1d, N_cells_1d, N_cells_1d]
     additional_field : npt.NDArray[np.float32]
@@ -225,11 +174,6 @@ def leapfrog(
         Interpolated functions [lna(t), t(lna), H(lna), Dplus1(lna), f1(lna), Dplus2(lna), f2(lna), Dplus3a(lna), f3a(lna), Dplus3b(lna), f3b(lna), Dplus3c(lna), f3c(lna)]
     param : pd.Series
         Parameter container
-
-    Returns
-    -------
-    Tuple[ npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32], ]
-        position, velocity, acceleration, potential, additional_field [N_cells_1d, N_cells_1d, N_cells_1d]
 
     Example
     -------
@@ -256,12 +200,8 @@ def leapfrog(
     logging.info(f"{param['t']=} {param['aexp']=}")
     utils.set_units(param)
     utils.periodic_wrap(position)
-    acceleration, potential, additional_field = solver.pm(
-        position, param, potential, additional_field, tables
-    )
+    solver.pm(acceleration, potential, additional_field, position, param, tables)
     utils.add_vector_scalar_inplace(velocity, acceleration, -half_dt)
-
-    return position, velocity, acceleration, potential, additional_field
 
 
 def dt_CFL_maxacc(
@@ -353,6 +293,4 @@ def dt_weak_variation(
     >>> dt = dt_weak_variation(func_t_a, param)
     """
     aexp_factor = 1.0 + 0.01 * param["max_aexp_stepping"]
-    return np.float32(
-        func_t_a(np.log(aexp_factor * param["aexp"])) - func_t_a(np.log(param["aexp"]))
-    )
+    return np.float32(func_t_a(np.log(aexp_factor * param["aexp"])) - func_t_a(np.log(param["aexp"])))

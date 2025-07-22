@@ -5,7 +5,7 @@ Main executable module to run cosmological N-body simulations
 Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
-__version__ = "1.0.8"
+__version__ = "1.0.10"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Production"
 
@@ -99,21 +99,31 @@ def run(param) -> None:
         output_directory = f"{param['base']}/output_{i:05d}"
         os.makedirs(output_directory, exist_ok=True)
 
-    logging.warning(
-        f"\n[bold blue]----- Compute background cosmology -----[/bold blue]\n"
-    )
+    logging.warning(f"\n[bold blue]----- Compute background cosmology -----[/bold blue]\n")
     tables = cosmotable.generate(param)
     # aexp and t are overwritten if we read a snapshot
     param["aexp"] = 1.0 / (1 + param["z_start"])
     utils.set_units(param)
     if not "nsteps" in param.index:
         param["nsteps"] = 0
+
     logging.warning(f"\n[bold blue]----- Initial conditions -----[/bold blue]\n")
-    position, velocity = initial_conditions.generate(param, tables)
+
+    ncells_1d = 2**param["ncoarse"]
+    position = np.empty((param["npart"], 3), dtype=np.float32)
+    velocity = np.empty_like(position)
+    acceleration = np.empty_like(position)
+    potential = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    additional_field = np.empty_like(potential)
+    initial_conditions.generate(position, velocity, param, tables)
     param["t"] = tables[1](np.log(param["aexp"]))
     logging.warning(f"{param['aexp']=} {param['t']=}")
+
     logging.warning(f"\n[bold blue]----- Run N-body -----[/bold blue]\n")
-    acceleration, potential, additional_field = solver.pm(position, param)
+
+    param["first_step"] = True
+    solver.pm(acceleration, potential, additional_field, position, param)
+    param["first_step"] = False
     aexp_out = 1.0 / (np.array(z_out) + 1)
     aexp_out.sort()
     t_out = tables[1](np.log(aexp_out))
@@ -126,34 +136,16 @@ def run(param) -> None:
 
     while param["aexp"] < aexp_out[-1]:
         param["nsteps"] += 1
-        (
-            position,
-            velocity,
-            acceleration,
-            potential,
-            additional_field,
-        ) = integration.integrate(
-            position,
-            velocity,
-            acceleration,
-            potential,
-            additional_field,
-            tables,
-            param,
-            t_out[param["i_snap"] - 1],
-        )  # Put None instead of potential if you do not want to use previous step
+
+        integration.integrate(position, velocity, acceleration, potential, additional_field, tables, param, t_out[param["i_snap"] - 1])  
 
         if (param["nsteps"] % param["n_reorder"]) == 0:
             logging.info("Reordering particles")
-            position, velocity, acceleration = utils.reorder_particles(
-                position, velocity, acceleration
-            )
+            utils.reorder_particles(position, velocity, acceleration)
         if param["write_snapshot"]:
             iostream.write_snapshot_particles(position, velocity, param)
             param["i_snap"] += 1
-        logging.warning(
-            f"{param['nsteps']=} {param['aexp']=} z = {1.0 / param['aexp'] - 1}"
-        )
+        logging.warning(f"{param['nsteps']=} {param['aexp']=} z = {1.0 / param['aexp'] - 1}")
 
 
 def main():
