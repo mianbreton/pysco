@@ -1007,6 +1007,7 @@ def compute_2ndorder_rhs(
 
     if param["dealiased_ICS"]:
         fourier.fft_3D_real(hessian, out_tmp, nthreads)
+        utils.zero_initialise_c64(phi_fourier_orig)
         trim(phi_fourier_orig, hessian)
         fourier.ifft_3D_real(out, phi_fourier_orig, nthreads)
         utils.prod_vector_scalar_inplace(out, np.float32(1.5**3))
@@ -1101,6 +1102,7 @@ def compute_3a_rhs(
 
     if param["dealiased_ICS"]:
         fourier.fft_3D_real(hessian, out_tmp, nthreads)
+        utils.zero_initialise_c64(phi_fourier_orig)
         trim(phi_fourier_orig, hessian)
         fourier.ifft_3D_real(out, phi_fourier_orig, nthreads)
         utils.prod_vector_scalar_inplace(out, np.float32(1.5**6))
@@ -1242,6 +1244,7 @@ def compute_3b_rhs(
 
     if param["dealiased_ICS"]:
         fourier.fft_3D_real(hessian, out_tmp, nthreads)
+        utils.zero_initialise_c64(phi_fourier_orig)
         trim(phi_fourier_orig, hessian)
         fourier.ifft_3D_real(out, phi_fourier_orig, nthreads)
         utils.prod_vector_scalar_inplace(out, np.float32(1.5**3))
@@ -1373,6 +1376,7 @@ def compute_3c_Ax_rhs(
 
     if param["dealiased_ICS"]:
         fourier.fft_3D_real(hessian, out_tmp, nthreads)
+        utils.zero_initialise_c64(phi_fourier_orig)
         trim(phi_fourier_orig, hessian)
         fourier.ifft_3D_real(out, phi_fourier_orig, nthreads)
         utils.prod_vector_scalar_inplace(out, np.float32(1.5**3))
@@ -1504,6 +1508,7 @@ def compute_3c_Ay_rhs(
 
     if param["dealiased_ICS"]:
         fourier.fft_3D_real(hessian, out_tmp, nthreads)
+        utils.zero_initialise_c64(phi_fourier_orig)
         trim(phi_fourier_orig, hessian)
         fourier.ifft_3D_real(out, phi_fourier_orig, nthreads)
         utils.prod_vector_scalar_inplace(out, np.float32(1.5**3))
@@ -1635,6 +1640,7 @@ def compute_3c_Az_rhs(
 
     if param["dealiased_ICS"]:
         fourier.fft_3D_real(hessian, out_tmp, nthreads)
+        utils.zero_initialise_c64(phi_fourier_orig)
         trim(phi_fourier_orig, hessian)
         fourier.ifft_3D_real(out, phi_fourier_orig, nthreads)
         utils.prod_vector_scalar_inplace(out, np.float32(1.5**3))
