@@ -91,7 +91,6 @@ def pm(
             raise NotImplementedError(
                 f"{param['mass_scheme']=}, should be 'CIC' or 'TSC'"
             )
-
     if "parametrized" == THEORY:
         evolution_term = param["aexp"] ** (
             -3 * (1 + param["w0"] + param["wa"])

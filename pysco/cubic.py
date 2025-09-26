@@ -12,146 +12,11 @@ import numpy.typing as npt
 from numba import config, njit, prange
 import mesh
 import math
+import loops
 
 
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
-def operator(
-    out: npt.NDArray[np.float32], x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
-) -> None:
-    """Cubic operator
-
-    u^3 + pu + q = 0\\
-    with, in f(R) gravity [Bose et al. 2017]\\
-    q = q*h^2
-    p = h^2*b - 1/6 * (u_{i+1,j,k}**2+u_{i-1,j,k}**2+u_{i,j+1,k}**2+u_{i,j-1,k}**2+u_{i,j,k+1}**2+u_{i,j,k-1}**2)
-    
-    Parameters
-    ----------
-    out : npt.NDArray[np.float32]
-        Cubic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
-    x : npt.NDArray[np.float32]
-        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-    b : npt.NDArray[np.float32]
-        Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-    q : np.float32
-        Cubic parameter
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from pysco.cubic import operator
-    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> q = 0.05
-    >>> result = operator(x, b, q)
-    """
-    ncells_1d = x.shape[0]
-    h2 = np.float32(1.0 / ncells_1d**2)
-    qh2 = q * h2
-    invsix = np.float32(1.0 / 6)
-    for i in prange(-1, ncells_1d - 1):
-        im1 = i - 1
-        ip1 = i + 1
-        for j in range(-1, ncells_1d - 1):
-            jm1 = j - 1
-            jp1 = j + 1
-            for k in range(-1, ncells_1d - 1):
-                km1 = k - 1
-                kp1 = k + 1
-                p = h2 * b[i, j, k] - invsix * (
-                    x[im1, j, k] ** 2
-                    + x[i, jm1, k] ** 2
-                    + x[i, j, km1] ** 2
-                    + x[i, j, kp1] ** 2
-                    + x[i, jp1, k] ** 2
-                    + x[ip1, j, k] ** 2
-                )
-                x_tmp = x[i, j, k]
-                out[i, j, k] = x_tmp**3 + p * x_tmp + qh2
-
-
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4, f4[:,:,::1])"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
-def residual_with_rhs(
-    out: npt.NDArray[np.float32],
-    x: npt.NDArray[np.float32],
-    b: npt.NDArray[np.float32],
-    q: np.float32,
-    rhs: npt.NDArray[np.float32],
-) -> None:
-    """Cubic residual with RHS
-
-    u^3 + pu + q = rhs\\
-    with, in f(R) gravity [Bose et al. 2017]\\
-    q = q*h^2
-    p = h^2*b - 1/6 * (u_{i+1,j,k}**2+u_{i-1,j,k}**2+u_{i,j+1,k}**2+u_{i,j-1,k}**2+u_{i,j,k+1}**2+u_{i,j,k-1}**2)
-    
-    Parameters
-    ----------
-    out : npt.NDArray[np.float32]
-        Cubic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
-    x : npt.NDArray[np.float32]
-        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-    b : npt.NDArray[np.float32]
-        Density term [N_cells_1d, N_cells_1d, N_cells_1d]
-    q : np.float32
-        cubic parameter
-    rhs : npt.NDArray[np.float32]
-        RHS term [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from pysco.cubic import operator
-    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> q = 0.05
-    >>> result = residual_with_rhs(x, b, q, rhs)
-    """
-    ncells_1d = x.shape[0]
-    h2 = np.float32(1.0 / ncells_1d**2)
-    qh2 = q * h2
-    invsix = np.float32(1.0 / 6)
-    for i in prange(-1, ncells_1d - 1):
-        im1 = i - 1
-        ip1 = i + 1
-        for j in range(-1, ncells_1d - 1):
-            jm1 = j - 1
-            jp1 = j + 1
-            for k in range(-1, ncells_1d - 1):
-                km1 = k - 1
-                kp1 = k + 1
-                p = h2 * b[i, j, k] - invsix * (
-                    x[im1, j, k] ** 2
-                    + x[i, jm1, k] ** 2
-                    + x[i, j, km1] ** 2
-                    + x[i, j, kp1] ** 2
-                    + x[i, jp1, k] ** 2
-                    + x[ip1, j, k] ** 2
-                )
-                x_tmp = x[i, j, k]
-                out[i, j, k] = -(x_tmp**3) - p * x_tmp - qh2 + rhs[i, j, k]
-
-
-@njit(
-    ["f4(f4, f4)"],
-    fastmath=True,
-    cache=True,
-)
-def solution_cubic_equation(
-    p: np.float32,
-    d1: np.float32,
-) -> np.float32:
+@njit(["f4(f4, f4)"], fastmath= True, cache=True)
+def solution_cubic_equation(p: np.float32, d1: np.float32) -> np.float32:
     """Solution of the depressed cubic equation \\
     u^3 + pu + q = 0, with q = d1/27
 
@@ -196,13 +61,138 @@ def solution_cubic_equation(
     return -inv3 * d1**inv3
 
 
+@njit(["f4(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=True)
+def compute_p(x, b, i, j, k, h2, invsix):
+    return h2 * b[i, j, k] - invsix * (
+                      x[i, j, k-1] ** 2
+                    + x[i, j, k+1] ** 2                      
+                    + x[i, j-1, k] ** 2
+                    + x[i, j+1, k] ** 2                    
+                    + x[i-1, j, k] ** 2
+                    + x[i+1, j, k] ** 2
+                )
+
+@njit(["f4(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def operator_scalar(x, b, i, j, k, h2, invsix, qh2):
+    p = compute_p(x, b, i, j, k, h2, invsix)
+    x_tmp = x[i, j, k]
+    return x_tmp*x_tmp*x_tmp + p * x_tmp + qh2
+
+@njit(["f4(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def jacobi_scalar(x, b, i, j, k, h2, invsix, d1):
+    p = compute_p(x, b, i, j, k, h2, invsix)
+    return solution_cubic_equation(p, d1)
+
+
+@njit(["void(f4[:], f4[:], i8, f8, f8, f8)"], inline="always", fastmath=True)
+def initialise_potential_kernel(x, b, i, threeh2, inv3, d1):
+    d0 = -threeh2 * b[i]
+    C = (0.5 * (d1 + math.sqrt(d1**2 - 4.0 * d0**3))) ** inv3
+    x[i] = np.float32(-inv3 * (C + d0 / C))
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def operator_kernel(out, x, b, i, j, k, h2, invsix, qh2):
+    out[i, j, k] = operator_scalar(x, b, i, j, k, h2, invsix, qh2)
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def residual_with_rhs_kernel(out, x, b, rhs, i, j, k, h2, invsix, qh2):
+    tmp = operator_scalar(x, b, i, j, k, h2, invsix, qh2)
+    out[i, j, k] = rhs[i, j, k] - tmp
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4, f4)"], inline="always", fastmath=True)
+def gauss_seidel_kernel(x, b, i, j, k, h2, invsix, d1, f_relax):
+    tmp = jacobi_scalar(x, b, i, j, k, h2, invsix, d1)
+    x[i, j, k] += f_relax * (tmp - x[i, j, k])
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4, f4, f4)"], inline="always", fastmath=True)
+def gauss_seidel_with_rhs_kernel(x, b, rhs, i, j, k, h2, invsix, d1, twenty_seven, f_relax):
+    d1 -= twenty_seven * rhs[i, j, k]
+    gauss_seidel_kernel(x, b, i, j, k, h2, invsix, d1, f_relax)
+
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=False)
+def operator(
+    out: npt.NDArray[np.float32], x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
+) -> None:
+    """Cubic operator
+
+    u^3 + pu + q = 0\\
+    with, in f(R) gravity [Bose et al. 2017]\\
+    q = q*h^2
+    p = h^2*b - 1/6 * (u_{i+1,j,k}**2+u_{i-1,j,k}**2+u_{i,j+1,k}**2+u_{i,j-1,k}**2+u_{i,j,k+1}**2+u_{i,j,k-1}**2)
+    
+    Parameters
+    ----------
+    out : npt.NDArray[np.float32]
+        Cubic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Density term [N_cells_1d, N_cells_1d, N_cells_1d]
+    q : np.float32
+        Cubic parameter
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.cubic import operator
+    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> q = 0.05
+    >>> result = operator(x, b, q)
+    """
+    ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
+    qh2 = q * h2
+    invsix = np.float32(1.0 / 6.0)
+    loops.offset_rhs_3f(out, x, b, operator_kernel, h2, invsix, qh2, offset=1)
+
+
+def residual_with_rhs(
+    out: npt.NDArray[np.float32],
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    q: np.float32,
+    rhs: npt.NDArray[np.float32],
+) -> None:
+    """Cubic residual with RHS
+
+    u^3 + pu + q = rhs\\
+    with, in f(R) gravity [Bose et al. 2017]\\
+    q = q*h^2
+    p = h^2*b - 1/6 * (u_{i+1,j,k}**2+u_{i-1,j,k}**2+u_{i,j+1,k}**2+u_{i,j-1,k}**2+u_{i,j,k+1}**2+u_{i,j,k-1}**2)
+    
+    Parameters
+    ----------
+    out : npt.NDArray[np.float32]
+        Cubic operator(x) [N_cells_1d, N_cells_1d, N_cells_1d]
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Density term [N_cells_1d, N_cells_1d, N_cells_1d]
+    q : np.float32
+        cubic parameter
+    rhs : npt.NDArray[np.float32]
+        RHS term [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.cubic import operator
+    >>> x = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> b = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> q = 0.05
+    >>> result = residual_with_rhs(x, b, q, rhs)
+    """
+    ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
+    qh2 = q * h2
+    invsix = np.float32(1.0 / 6)
+    loops.offset_2rhs_3f(out, x, b, rhs, residual_with_rhs_kernel, h2, invsix, qh2, offset=1)
+
+
 # @utils.time_me
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
 def initialise_potential(
     out: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -232,24 +222,13 @@ def initialise_potential(
     >>> potential = initialise_potential(b, q)
     """
     h2 = np.float32(1.0 / b.shape[0] ** 2)
-    threeh2 = 3 * h2
+    threeh2 = 3.0 * h2
     d1 = 27.0 * h2 * q
-    inv3 = 1.0 / 3
-    out_ravel = out.ravel()
-    b_ravel = b.ravel()
-    for i in prange(len(out_ravel)):
-        d0 = -threeh2 * b_ravel[i]
-        C = (0.5 * (d1 + math.sqrt(d1**2 - 4.0 * d0**3))) ** inv3
-        out_ravel[i] = np.float32(-inv3 * (C + d0 / C))
-
+    inv3 = 1.0 / 3.0
+    loops.ravel_rhs_3f(out, b, initialise_potential_kernel, threeh2, inv3, d1)
+    
 
 # @utils.time_me
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
 def gauss_seidel(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -284,149 +263,12 @@ def gauss_seidel(
     """
     invsix = np.float32(1.0 / 6)
     ncells_1d = x.shape[0]
-    ncells_1d_coarse = ncells_1d // 2
     h2 = np.float32(1.0 / ncells_1d**2)
     d1 = np.float32(27 * h2 * q)
-    # Computation Red
-    for i in prange(x.shape[0] >> 1):
-        ii = 2 * i
-        iim2 = ii - 2
-        iim1 = ii - 1
-        iip1 = ii + 1
-        for j in range(ncells_1d_coarse):
-            jj = 2 * j
-            jjm2 = jj - 2
-            jjm1 = jj - 1
-            jjp1 = jj + 1
-            for k in range(ncells_1d_coarse):
-                kk = 2 * k
-                kkm2 = kk - 2
-                kkm1 = kk - 1
-                kkp1 = kk + 1
-
-                x2_001 = x[iim1, jjm1, kk] ** 2
-                x2_010 = x[iim1, jj, kkm1] ** 2
-                x2_100 = x[ii, jjm1, kkm1] ** 2
-                x2_111 = x[ii, jj, kk] ** 2
-                p = h2 * b[iim1, jjm1, kkm1] - invsix * (
-                    +x2_001
-                    + x2_010
-                    + x2_100
-                    + x[iim2, jjm1, kkm1] ** 2
-                    + x[iim1, jjm2, kkm1] ** 2
-                    + x[iim1, jjm1, kkm2] ** 2
-                )
-                x[iim1, jjm1, kkm1] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[iim1, jjm1, kkm1]
-                )
-                p = h2 * b[iim1, jj, kk] - invsix * (
-                    +x2_001
-                    + x2_010
-                    + x2_111
-                    + x[iim2, jj, kk] ** 2
-                    + x[iim1, jj, kkp1] ** 2
-                    + x[iim1, jjp1, kk] ** 2
-                )
-                x[iim1, jj, kk] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[iim1, jj, kk]
-                )
-                p = h2 * b[ii, jjm1, kk] - invsix * (
-                    x2_001
-                    + x2_100
-                    + x2_111
-                    + x[ii, jjm2, kk] ** 2
-                    + x[ii, jjm1, kkp1] ** 2
-                    + x[iip1, jjm1, kk] ** 2
-                )
-                x[ii, jjm1, kk] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[ii, jjm1, kk]
-                )
-                p = h2 * b[ii, jj, kkm1] - invsix * (
-                    x2_010
-                    + x2_100
-                    + x2_111
-                    + x[ii, jj, kkm2] ** 2
-                    + x[ii, jjp1, kkm1] ** 2
-                    + x[iip1, jj, kkm1] ** 2
-                )
-                x[ii, jj, kkm1] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[ii, jj, kkm1]
-                )
-
-    # Computation Black
-    for i in prange(ncells_1d_coarse):
-        ii = 2 * i
-        iim2 = ii - 2
-        iim1 = ii - 1
-        iip1 = ii + 1
-        for j in range(ncells_1d_coarse):
-            jj = 2 * j
-            jjm2 = jj - 2
-            jjm1 = jj - 1
-            jjp1 = jj + 1
-            for k in range(ncells_1d_coarse):
-                kk = 2 * k
-                kkm2 = kk - 2
-                kkm1 = kk - 1
-                kkp1 = kk + 1
-
-                x2_000 = x[iim1, jjm1, kkm1] ** 2
-                x2_011 = x[iim1, jj, kk] ** 2
-                x2_101 = x[ii, jjm1, kk] ** 2
-                x2_110 = x[ii, jj, kkm1] ** 2
-                p = h2 * b[iim1, jjm1, kk] - invsix * (
-                    +x2_000
-                    + x2_011
-                    + x2_101
-                    + x[iim2, jjm1, kk] ** 2
-                    + x[iim1, jjm2, kk] ** 2
-                    + x[iim1, jjm1, kkp1] ** 2
-                )
-                x[iim1, jjm1, kk] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[iim1, jjm1, kk]
-                )
-                p = h2 * b[iim1, jj, kkm1] - invsix * (
-                    +x2_000
-                    + x2_011
-                    + x2_110
-                    + x[iim2, jj, kkm1] ** 2
-                    + x[iim1, jj, kkm2] ** 2
-                    + x[iim1, jjp1, kkm1] ** 2
-                )
-                x[iim1, jj, kkm1] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[iim1, jj, kkm1]
-                )
-                p = h2 * b[ii, jjm1, kkm1] - invsix * (
-                    x2_000
-                    + x2_101
-                    + x2_110
-                    + x[ii, jjm2, kkm1] ** 2
-                    + x[ii, jjm1, kkm2] ** 2
-                    + x[iip1, jjm1, kkm1] ** 2
-                )
-                x[ii, jjm1, kkm1] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[ii, jjm1, kkm1]
-                )
-                p = h2 * b[ii, jj, kk] - invsix * (
-                    x2_011
-                    + x2_101
-                    + x2_110
-                    + x[ii, jj, kkp1] ** 2
-                    + x[ii, jjp1, kk] ** 2
-                    + x[iip1, jj, kk] ** 2
-                )
-                x[ii, jj, kk] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[ii, jj, kk]
-                )
+    loops.gauss_seidel_4f(x, b, gauss_seidel_kernel, h2, invsix, d1, f_relax)
 
 
 # @utils.time_me
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
 def gauss_seidel_with_rhs(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -463,152 +305,12 @@ def gauss_seidel_with_rhs(
     >>> rhs = np.random.rand(32, 32, 32).astype(np.float32)
     >>> gauss_seidel_with_rhs(x, b, q, rhs, 1)
     """
-    invsix = np.float32(1.0 / 6)
+    invsix = np.float32(1.0 / 6.0)
     ncells_1d = x.shape[0]
-    ncells_1d_coarse = ncells_1d // 2
     h2 = np.float32(1.0 / ncells_1d**2)
-    twenty_seven = np.float32(27)
+    twenty_seven = np.float32(27.0)
     d1_q = twenty_seven * h2 * q
-
-    # Computation Red
-    for i in prange(x.shape[0] >> 1):
-        ii = 2 * i
-        iim2 = ii - 2
-        iim1 = ii - 1
-        iip1 = ii + 1
-        for j in range(ncells_1d_coarse):
-            jj = 2 * j
-            jjm2 = jj - 2
-            jjm1 = jj - 1
-            jjp1 = jj + 1
-            for k in range(ncells_1d_coarse):
-                kk = 2 * k
-                kkm2 = kk - 2
-                kkm1 = kk - 1
-                kkp1 = kk + 1
-
-                x2_001 = x[iim1, jjm1, kk] ** 2
-                x2_010 = x[iim1, jj, kkm1] ** 2
-                x2_100 = x[ii, jjm1, kkm1] ** 2
-                x2_111 = x[ii, jj, kk] ** 2
-                p = h2 * b[iim1, jjm1, kkm1] - invsix * (
-                    +x2_010
-                    + x2_001
-                    + x2_100
-                    + x[iim2, jjm1, kkm1] ** 2
-                    + x[iim1, jjm2, kkm1] ** 2
-                    + x[iim1, jjm1, kkm2] ** 2
-                )
-                d1 = d1_q - twenty_seven * rhs[iim1, jjm1, kkm1]
-                x[iim1, jjm1, kkm1] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[iim1, jjm1, kkm1]
-                )
-                p = h2 * b[iim1, jj, kk] - invsix * (
-                    +x2_001
-                    + x2_010
-                    + x2_111
-                    + x[iim2, jj, kk] ** 2
-                    + x[iim1, jjp1, kk] ** 2
-                    + x[iim1, jj, kkp1] ** 2
-                )
-                d1 = d1_q - twenty_seven * rhs[iim1, jj, kk]
-                x[iim1, jj, kk] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[iim1, jj, kk]
-                )
-                p = h2 * b[ii, jjm1, kk] - invsix * (
-                    x2_001
-                    + x2_100
-                    + x2_111
-                    + x[ii, jjm2, kk] ** 2
-                    + x[ii, jjm1, kkp1] ** 2
-                    + x[iip1, jjm1, kk] ** 2
-                )
-                d1 = d1_q - twenty_seven * rhs[ii, jjm1, kk]
-                x[ii, jjm1, kk] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[ii, jjm1, kk]
-                )
-                p = h2 * b[ii, jj, kkm1] - invsix * (
-                    x2_010
-                    + x2_100
-                    + x2_111
-                    + x[ii, jjp1, kkm1] ** 2
-                    + x[ii, jj, kkm2] ** 2
-                    + x[iip1, jj, kkm1] ** 2
-                )
-                d1 = d1_q - twenty_seven * rhs[ii, jj, kkm1]
-                x[ii, jj, kkm1] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[ii, jj, kkm1]
-                )
-
-    # Computation Black
-    for i in prange(ncells_1d_coarse):
-        ii = 2 * i
-        iim2 = ii - 2
-        iim1 = ii - 1
-        iip1 = ii + 1
-        for j in range(ncells_1d_coarse):
-            jj = 2 * j
-            jjm2 = jj - 2
-            jjm1 = jj - 1
-            jjp1 = jj + 1
-            for k in range(ncells_1d_coarse):
-                kk = 2 * k
-                kkm2 = kk - 2
-                kkm1 = kk - 1
-                kkp1 = kk + 1
-
-                x2_000 = x[iim1, jjm1, kkm1] ** 2
-                x2_011 = x[iim1, jj, kk] ** 2
-                x2_101 = x[ii, jjm1, kk] ** 2
-                x2_110 = x[ii, jj, kkm1] ** 2
-                p = h2 * b[iim1, jjm1, kk] - invsix * (
-                    +x2_011
-                    + x2_000
-                    + x2_101
-                    + x[iim2, jjm1, kk] ** 2
-                    + x[iim1, jjm2, kk] ** 2
-                    + x[iim1, jjm1, kkp1] ** 2
-                )
-                d1 = d1_q - twenty_seven * rhs[iim1, jjm1, kk]
-                x[iim1, jjm1, kk] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[iim1, jjm1, kk]
-                )
-                p = h2 * b[iim1, jj, kkm1] - invsix * (
-                    +x2_000
-                    + x2_011
-                    + x2_110
-                    + x[iim2, jj, kkm1] ** 2
-                    + x[iim1, jjp1, kkm1] ** 2
-                    + x[iim1, jj, kkm2] ** 2
-                )
-                d1 = d1_q - twenty_seven * rhs[iim1, jj, kkm1]
-                x[iim1, jj, kkm1] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[iim1, jj, kkm1]
-                )
-                p = h2 * b[ii, jjm1, kkm1] - invsix * (
-                    x2_000
-                    + x2_110
-                    + x2_101
-                    + x[ii, jjm2, kkm1] ** 2
-                    + x[ii, jjm1, kkm2] ** 2
-                    + x[iip1, jjm1, kkm1] ** 2
-                )
-                d1 = d1_q - twenty_seven * rhs[ii, jjm1, kkm1]
-                x[ii, jjm1, kkm1] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[ii, jjm1, kkm1]
-                )
-                p = h2 * b[ii, jj, kk] - invsix * (
-                    x2_011
-                    + x2_101
-                    + x2_110
-                    + x[ii, jjp1, kk] ** 2
-                    + x[ii, jj, kkp1] ** 2
-                    + x[iip1, jj, kk] ** 2
-                )
-                d1 = d1_q - twenty_seven * rhs[ii, jj, kk]
-                x[ii, jj, kk] += f_relax * (
-                    solution_cubic_equation(p, d1) - x[ii, jj, kk]
-                )
+    loops.gauss_seidel_rhs_5f(x, b, rhs, gauss_seidel_with_rhs_kernel, h2, invsix, d1_q, twenty_seven, f_relax)
 
 
 @njit(["f4(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
@@ -650,24 +352,10 @@ def residual_error(
     qh2 = q * h2
     result = np.float32(0)
     for i in prange(-1, ncells_1d - 1):
-        im1 = i - 1
-        ip1 = i + 1
         for j in range(-1, ncells_1d - 1):
-            jm1 = j - 1
-            jp1 = j + 1
             for k in range(-1, ncells_1d - 1):
-                km1 = k - 1
-                kp1 = k + 1
-                p = h2 * b[i, j, k] - invsix * (
-                    +x[im1, j, k] ** 2
-                    + x[i, jm1, k] ** 2
-                    + x[i, j, km1] ** 2
-                    + x[i, j, kp1] ** 2
-                    + x[i, jp1, k] ** 2
-                    + x[ip1, j, k] ** 2
-                )
-                x_tmp = x[i, j, k]
-                result += (x_tmp**3 + p * x_tmp + qh2) ** 2
+                tmp = operator_scalar(x, b, i, j, k, h2, invsix, qh2)
+                result += tmp ** 2
 
     return np.sqrt(result)
 
@@ -675,7 +363,6 @@ def residual_error(
 @njit(
     ["f4(f4[:,:,::1], f4[:,:,::1], f4)"],
     fastmath=True,
-    cache=True,
     parallel=True,
 )
 def truncation_error(

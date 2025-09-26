@@ -399,7 +399,7 @@ def smoothing(
             )
     else:
         if len(rhs) == 0:
-            laplacian_reformulated.smoothing(x, b, n_smoothing)
+            laplacian.smoothing(x, b, n_smoothing)
         else:
             laplacian_reformulated.smoothing_with_rhs(x, b, n_smoothing, rhs)
 

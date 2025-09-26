@@ -18,7 +18,7 @@ except Exception:
 
 
 @utils.time_me
-@njit(["UniTuple(f4[:],3)(c8[:,:,::1], i8)"], fastmath=True, cache=True, parallel=True)
+@njit(["UniTuple(f4[:],3)(c8[:,:,::1], i8)"], fastmath=False, cache=True, parallel=True)
 def fourier_grid_to_Pk(
     density_k: npt.NDArray[np.complex64],
     p: int,
@@ -418,7 +418,7 @@ def ifft_3D_grad(
 
 @utils.time_me
 @njit(
-    ["void(c8[:,:,::1])"], fastmath=True, cache=True, parallel=True, error_model="numpy"
+    ["void(c8[:,:,::1])"], fastmath=False, cache=True, parallel=True, error_model="numpy"
 )
 def inverse_laplacian(x: npt.NDArray[np.complex64]) -> None:
     """Inplace divide complex Fourier-space field by -k^2
@@ -457,7 +457,7 @@ def inverse_laplacian(x: npt.NDArray[np.complex64]) -> None:
 @utils.time_me
 @njit(
     ["void(c8[:,:,::1], i8)"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
     error_model="numpy",
@@ -510,7 +510,7 @@ def inverse_laplacian_compensated(x: npt.NDArray[np.complex64], p: int) -> None:
 @utils.time_me
 @njit(
     ["void(c8[:,:,::1])"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
     error_model="numpy",
@@ -561,7 +561,7 @@ def inverse_laplacian_7pt(
 @utils.time_me
 @njit(
     ["void(c8[:,:,:,::1], c8[:,:,::1])"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
     error_model="numpy",
@@ -615,7 +615,7 @@ def gradient_inverse_laplacian(
 @utils.time_me
 @njit(
     ["void(c8[:,:,:,::1], c8[:,:,::1], i8)"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
     error_model="numpy",
@@ -677,7 +677,7 @@ def gradient_inverse_laplacian_compensated(
 @utils.time_me
 @njit(
     ["void(c8[:,:,:,::1], c8[:,:,::1])"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
     error_model="numpy",
@@ -727,7 +727,7 @@ def gradient(
 @utils.time_me
 @njit(
     ["void(c8[:,:,::1], c8[:,:,::1], UniTuple(i4,2))"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
     error_model="numpy",
@@ -781,7 +781,7 @@ def hessian(
 @utils.time_me
 @njit(
     ["void(c8[:,:,::1], c8[:,:,::1], UniTuple(i4,2), UniTuple(i4,2))"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
     error_model="numpy",
@@ -842,7 +842,7 @@ def sum_of_hessian(
 @utils.time_me
 @njit(
     ["void(c8[:,:,::1], c8[:,:,::1], UniTuple(i4,2), UniTuple(i4,2))"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
     error_model="numpy",

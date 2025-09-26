@@ -1,5 +1,6 @@
 """
-This module implements numerical solutions for a quartic operator in the context of f(R) gravity,
+This module implements numerical solutions for a quartic operator 
+of the form: u^4 + pu + q = 0, in the context of f(R) gravity,
 based on the work by Ruan et al. (2022). The numerical methods include a Gauss-Seidel solver,
 solution of the depressed quartic equation, and additional utility functions.
 """
@@ -9,14 +10,109 @@ import numpy.typing as npt
 from numba import config, njit, prange
 import mesh
 import math
+import loops
 
 
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["f4(f4, f4)"], fastmath= True, cache=True)
+def solution_quartic_equation(
+    p: np.float32,
+    q: np.float32,
+) -> np.float32:
+    """Solution of the depressed quartic equation \\
+    u^4 + pu + q = 0
+    Parameters
+    ----------
+    p : np.float32
+        Quartic equation parameter
+    q : np.float32
+        Constant term in quartic equation
+
+    Returns
+    -------
+    np.float32
+        Solution of the quartic equation
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.quartic import solution_quartic_equation
+    >>> p = np.float32(0.1)
+    >>> q = np.float32(0.01)
+    >>> result = solution_quartic_equation(p, q)
+    """
+    pp = np.float64(p)
+    qq = np.float64(q)
+    if pp == 0.0:
+        return (-qq) ** np.float64(1.0 / 4.0)
+    inv3 = np.float64(1.0 / 3.0)
+    d0 = np.float64(12.0 * qq)
+    d1 = np.float64(27.0 * pp**2)
+    sqrt_term = 1.0 - 4.0 * d0 * (d0 / d1) ** 2
+    if sqrt_term < 0.0:  # No real solution
+        return (-qq) ** np.float64(1.0 / 4.0)
+    Q = (0.5 * d1 * (1.0 + math.sqrt(sqrt_term))) ** inv3
+    Q_d0oQ = Q + d0 / Q
+    if Q_d0oQ > 0.0:
+        S = 0.5 * math.sqrt(Q_d0oQ * inv3)
+        if pp > 0.0:
+            return -S + 0.5 * math.sqrt(-4.0 * S**2 + p / S)
+        return S + 0.5 * math.sqrt(-4.0 * S**2 - p / S)
+    return (-qq) ** np.float64(1.0 / 4.0)
+
+
+@njit(["f4(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=True)
+def compute_p(x, b, i, j, k, h2, invsix):
+    return h2 * b[i, j, k] - invsix * (
+                      x[i, j, k-1] ** 3
+                    + x[i, j, k+1] ** 3                      
+                    + x[i, j-1, k] ** 3
+                    + x[i, j+1, k] ** 3                    
+                    + x[i-1, j, k] ** 3
+                    + x[i+1, j, k] ** 3
+                )
+
+@njit(["f4(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def operator_scalar(x, b, i, j, k, h2, invsix, qh2):
+    p = compute_p(x, b, i, j, k, h2, invsix)
+    x_tmp = x[i, j, k]
+    return x_tmp**4 + p * x_tmp + qh2
+
+@njit(["f4(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def jacobi_scalar(x, b, i, j, k, h2, invsix, qh2):
+    p = compute_p(x, b, i, j, k, h2, invsix)
+    return solution_quartic_equation(p, qh2)
+
+
+@njit(["void(f4[:], f4[:], i8, f8, f8, f8)"], inline="always", fastmath=True)
+def initialise_potential_kernel(x, b, i, h2, inv3, d0):
+    p = h2 * np.float64(b[i])
+    d1 = 27.0 * p**2
+    Q = (0.5 * (d1 + math.sqrt(d1**2 - 4.0 * d0**3))) ** inv3
+    S = 0.5 * math.sqrt((Q + d0 / Q) * inv3)
+    x[i] = -S + 0.5 * math.sqrt(-4.0 * S**2 + p / S)
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def operator_kernel(out, x, b, i, j, k, h2, invsix, qh2):
+    out[i, j, k] = operator_scalar(x, b, i, j, k, h2, invsix, qh2)
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def residual_with_rhs_kernel(out, x, b, rhs, i, j, k, h2, invsix, qh2):
+    tmp = operator_scalar(x, b, i, j, k, h2, invsix, qh2)
+    out[i, j, k] = rhs[i, j, k] - tmp
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4, f4)"], inline="always", fastmath=True)
+def gauss_seidel_kernel(x, b, i, j, k, h2, invsix, qh2, f_relax):
+    tmp = jacobi_scalar(x, b, i, j, k, h2, invsix, qh2)
+    x[i, j, k] += f_relax * (tmp - x[i, j, k])
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4, f4)"], inline="always", fastmath=True)
+def gauss_seidel_with_rhs_kernel(x, b, rhs, i, j, k, h2, invsix, qh2, f_relax):
+    qh2 -= rhs[i, j, k]
+    gauss_seidel_kernel(x, b, i, j, k, h2, invsix, qh2, f_relax)
+
+
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=False)
 def operator(
     out: npt.NDArray[np.float32], x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
 ) -> None:
@@ -51,33 +147,10 @@ def operator(
     h2 = np.float32(1.0 / ncells_1d**2)
     qh2 = q * h2
     invsix = np.float32(1.0 / 6)
-    for i in prange(-1, ncells_1d - 1):
-        im1 = i - 1
-        ip1 = i + 1
-        for j in range(-1, ncells_1d - 1):
-            jm1 = j - 1
-            jp1 = j + 1
-            for k in range(-1, ncells_1d - 1):
-                km1 = k - 1
-                kp1 = k + 1
-                p = h2 * b[i, j, k] - invsix * (
-                    x[im1, j, k] ** 3
-                    + x[i, jm1, k] ** 3
-                    + x[i, j, km1] ** 3
-                    + x[i, j, kp1] ** 3
-                    + x[i, jp1, k] ** 3
-                    + x[ip1, j, k] ** 3
-                )
-                x_tmp = x[i, j, k]
-                out[i, j, k] = x_tmp**4 + p * x_tmp + qh2
+    loops.offset_rhs_3f(out, x, b, operator_kernel, h2, invsix, qh2, offset=1)
 
 
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4, f4[:,:,::1])"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+
 def residual_with_rhs(
     out: npt.NDArray[np.float32],
     x: npt.NDArray[np.float32],
@@ -119,89 +192,10 @@ def residual_with_rhs(
     h2 = np.float32(1.0 / ncells_1d**2)
     qh2 = q * h2
     invsix = np.float32(1.0 / 6)
-    for i in prange(-1, ncells_1d - 1):
-        im1 = i - 1
-        ip1 = i + 1
-        for j in range(-1, ncells_1d - 1):
-            jm1 = j - 1
-            jp1 = j + 1
-            for k in range(-1, ncells_1d - 1):
-                km1 = k - 1
-                kp1 = k + 1
-                p = h2 * b[i, j, k] - invsix * (
-                    x[im1, j, k] ** 3
-                    + x[i, jm1, k] ** 3
-                    + x[i, j, km1] ** 3
-                    + x[i, j, kp1] ** 3
-                    + x[i, jp1, k] ** 3
-                    + x[ip1, j, k] ** 3
-                )
-                x_tmp = x[i, j, k]
-                out[i, j, k] = -(x_tmp**4) - p * x_tmp - qh2 + rhs[i, j, k]
-
-
-@njit(
-    ["f4(f4, f4)"],
-    fastmath=True,
-    cache=True,
-)
-def solution_quartic_equation(
-    p: np.float32,
-    q: np.float32,
-) -> np.float32:
-    """Solution of the depressed quartic equation \\
-    u^4 + pu + q = 0
-    Parameters
-    ----------
-    p : np.float32
-        Quartic equation parameter
-    q : np.float32
-        Constant term in quartic equation
-
-    Returns
-    -------
-    np.float32
-        Solution of the quartic equation
-
-    Example
-    -------
-    >>> import numpy as np
-    >>> from pysco.quartic import solution_quartic_equation
-    >>> p = np.float32(0.1)
-    >>> q = np.float32(0.01)
-    >>> result = solution_quartic_equation(p, q)
-    """
-    zero = np.float64(0.)
-    pp = np.float64(p)
-    qq = np.float64(q)
-    if pp == zero:
-        return (-qq) ** np.float64(1.0 / 4.0)
-    one = np.float64(1.0)
-    half = np.float64(0.5)
-    inv3 = np.float64(1.0 / 3.0)
-    four = np.float64(4.0)
-    d0 = np.float64(12.0 * qq)
-    d1 = np.float64(27.0 * pp**2)
-    sqrt_term = one - four * d0 * (d0 / d1) ** 2
-    if sqrt_term < zero:  # No real solution
-        return (-qq) ** np.float64(1.0 / 4.0)
-    Q = (half * d1 * (one + math.sqrt(sqrt_term))) ** inv3
-    Q_d0oQ = Q + d0 / Q
-    if Q_d0oQ > zero:
-        S = half * math.sqrt(Q_d0oQ * inv3)
-        if pp > zero:
-            return -S + half * math.sqrt(-four * S**2 + p / S)
-        return S + half * math.sqrt(-four * S**2 - p / S)
-    return (-qq) ** np.float64(1.0 / 4.0)
+    loops.offset_2rhs_3f(out, x, b, rhs, residual_with_rhs_kernel, h2, invsix, qh2, offset=1)
 
 
 # @utils.time_me
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
 def initialise_potential(
     out: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -231,28 +225,13 @@ def initialise_potential(
     >>> result = initialise_potential(b, q)
     """
     h2 = np.float64(1.0 / b.shape[0] ** 2)
-    four = np.float64(4)
-    half = np.float64(0.5)
     inv3 = np.float64(1.0 / 3)
-    twentyseven = np.float64(27)
     d0 = np.float64(12 * h2 * q)
-    out_ravel = out.ravel()
-    b_ravel = b.ravel()
-    for i in prange(len(out_ravel)):
-        p = h2 * np.float64(b_ravel[i])
-        d1 = twentyseven * p**2
-        Q = (half * (d1 + math.sqrt(d1**2 - four * d0**3))) ** inv3
-        S = half * math.sqrt((Q + d0 / Q) * inv3)
-        out_ravel[i] = -S + half * math.sqrt(-four * S**2 + p / S)
+    loops.ravel_rhs_3f(out, b, initialise_potential_kernel, h2, inv3, d0)
+
 
 
 # @utils.time_me
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
 def gauss_seidel(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -287,150 +266,13 @@ def gauss_seidel(
     """
     invsix = np.float32(1.0 / 6)
     ncells_1d = x.shape[0]
-    ncells_1d_coarse = ncells_1d // 2
     h2 = np.float32(1.0 / ncells_1d**2)
     qh2 = q * h2
-    # Computation Red
-    for i in prange(x.shape[0] >> 1):
-        ii = 2 * i
-        iim2 = ii - 2
-        iim1 = ii - 1
-        iip1 = ii + 1
-        for j in range(ncells_1d_coarse):
-            jj = 2 * j
-            jjm2 = jj - 2
-            jjm1 = jj - 1
-            jjp1 = jj + 1
-            for k in range(ncells_1d_coarse):
-                kk = 2 * k
-                kkm2 = kk - 2
-                kkm1 = kk - 1
-                kkp1 = kk + 1
-                #
-                x3_001 = x[iim1, jjm1, kk] ** 3
-                x3_010 = x[iim1, jj, kkm1] ** 3
-                x3_100 = x[ii, jjm1, kkm1] ** 3
-                x3_111 = x[ii, jj, kk] ** 3
+    loops.gauss_seidel_4f(x, b, gauss_seidel_kernel, h2, invsix, qh2, f_relax)
 
-                p = h2 * b[iim1, jjm1, kkm1] - invsix * (
-                    +x3_001
-                    + x3_010
-                    + x3_100
-                    + x[iim2, jjm1, kkm1] ** 3
-                    + x[iim1, jjm2, kkm1] ** 3
-                    + x[iim1, jjm1, kkm2] ** 3
-                )
-                x[iim1, jjm1, kkm1] += f_relax * (
-                    solution_quartic_equation(p, qh2) - x[iim1, jjm1, kkm1]
-                )
-                p = h2 * b[iim1, jj, kk] - invsix * (
-                    +x3_001
-                    + x3_010
-                    + x3_111
-                    + x[iim2, jj, kk] ** 3
-                    + x[iim1, jj, kkp1] ** 3
-                    + x[iim1, jjp1, kk] ** 3
-                )
-                x[iim1, jj, kk] += f_relax * (
-                    solution_quartic_equation(p, qh2) - x[iim1, jj, kk]
-                )
-                p = h2 * b[ii, jjm1, kk] - invsix * (
-                    x3_001
-                    + x3_100
-                    + x3_111
-                    + x[ii, jjm2, kk] ** 3
-                    + x[ii, jjm1, kkp1] ** 3
-                    + x[iip1, jjm1, kk] ** 3
-                )
-                x[ii, jjm1, kk] += f_relax * (
-                    solution_quartic_equation(p, qh2) - x[ii, jjm1, kk]
-                )
-                p = h2 * b[ii, jj, kkm1] - invsix * (
-                    x3_010
-                    + x3_100
-                    + x3_111
-                    + x[ii, jj, kkm2] ** 3
-                    + x[ii, jjp1, kkm1] ** 3
-                    + x[iip1, jj, kkm1] ** 3
-                )
-                x[ii, jj, kkm1] += f_relax * (
-                    solution_quartic_equation(p, qh2) - x[ii, jj, kkm1]
-                )
-
-    # Computation Black
-    for i in prange(ncells_1d_coarse):
-        ii = 2 * i
-        iim2 = ii - 2
-        iim1 = ii - 1
-        iip1 = ii + 1
-        for j in range(ncells_1d_coarse):
-            jj = 2 * j
-            jjm2 = jj - 2
-            jjm1 = jj - 1
-            jjp1 = jj + 1
-            for k in range(ncells_1d_coarse):
-                kk = 2 * k
-                kkm2 = kk - 2
-                kkm1 = kk - 1
-                kkp1 = kk + 1
-
-                x3_000 = x[iim1, jjm1, kkm1] ** 3
-                x3_011 = x[iim1, jj, kk] ** 3
-                x3_101 = x[ii, jjm1, kk] ** 3
-                x3_110 = x[ii, jj, kkm1] ** 3
-                p = h2 * b[iim1, jjm1, kk] - invsix * (
-                    +x3_000
-                    + x3_011
-                    + x3_101
-                    + x[iim2, jjm1, kk] ** 3
-                    + x[iim1, jjm2, kk] ** 3
-                    + x[iim1, jjm1, kkp1] ** 3
-                )
-                x[iim1, jjm1, kk] += f_relax * (
-                    solution_quartic_equation(p, qh2) - x[iim1, jjm1, kk]
-                )
-                p = h2 * b[iim1, jj, kkm1] - invsix * (
-                    +x3_000
-                    + x3_011
-                    + x3_110
-                    + x[iim2, jj, kkm1] ** 3
-                    + x[iim1, jj, kkm2] ** 3
-                    + x[iim1, jjp1, kkm1] ** 3
-                )
-                x[iim1, jj, kkm1] += f_relax * (
-                    solution_quartic_equation(p, qh2) - x[iim1, jj, kkm1]
-                )
-                p = h2 * b[ii, jjm1, kkm1] - invsix * (
-                    x3_000
-                    + x3_101
-                    + x3_110
-                    + x[ii, jjm2, kkm1] ** 3
-                    + x[ii, jjm1, kkm2] ** 3
-                    + x[iip1, jjm1, kkm1] ** 3
-                )
-                x[ii, jjm1, kkm1] += f_relax * (
-                    solution_quartic_equation(p, qh2) - x[ii, jjm1, kkm1]
-                )
-                p = h2 * b[ii, jj, kk] - invsix * (
-                    x3_011
-                    + x3_101
-                    + x3_110
-                    + x[ii, jj, kkp1] ** 3
-                    + x[ii, jjp1, kk] ** 3
-                    + x[iip1, jj, kk] ** 3
-                )
-                x[ii, jj, kk] += f_relax * (
-                    solution_quartic_equation(p, qh2) - x[ii, jj, kk]
-                )
 
 
 # @utils.time_me
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4, f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
 def gauss_seidel_with_rhs(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -469,152 +311,14 @@ def gauss_seidel_with_rhs(
     """
     invsix = np.float32(1.0 / 6)
     ncells_1d = x.shape[0]
-    ncells_1d_coarse = ncells_1d // 2
     h2 = np.float32(1.0 / ncells_1d**2)
     qh2 = q * h2
-    # Computation Red
-    for i in prange(x.shape[0] >> 1):
-        ii = 2 * i
-        iim2 = ii - 2
-        iim1 = ii - 1
-        iip1 = ii + 1
-        for j in range(ncells_1d_coarse):
-            jj = 2 * j
-            jjm2 = jj - 2
-            jjm1 = jj - 1
-            jjp1 = jj + 1
-            for k in range(ncells_1d_coarse):
-                kk = 2 * k
-                kkm2 = kk - 2
-                kkm1 = kk - 1
-                kkp1 = kk + 1
-
-                x3_001 = x[iim1, jjm1, kk] ** 3
-                x3_010 = x[iim1, jj, kkm1] ** 3
-                x3_100 = x[ii, jjm1, kkm1] ** 3
-                x3_111 = x[ii, jj, kk] ** 3
-                p = h2 * b[iim1, jjm1, kkm1] - invsix * (
-                    +x3_010
-                    + x3_001
-                    + x3_100
-                    + x[iim2, jjm1, kkm1] ** 3
-                    + x[iim1, jjm2, kkm1] ** 3
-                    + x[iim1, jjm1, kkm2] ** 3
-                )
-                qq = qh2 - rhs[iim1, jjm1, kkm1]
-                x[iim1, jjm1, kkm1] += f_relax * (
-                    solution_quartic_equation(p, qq) - x[iim1, jjm1, kkm1]
-                )
-                p = h2 * b[iim1, jj, kk] - invsix * (
-                    +x3_001
-                    + x3_010
-                    + x3_111
-                    + x[iim2, jj, kk] ** 3
-                    + x[iim1, jjp1, kk] ** 3
-                    + x[iim1, jj, kkp1] ** 3
-                )
-                qq = qh2 - rhs[iim1, jj, kk]
-                x[iim1, jj, kk] += f_relax * (
-                    solution_quartic_equation(p, qq) - x[iim1, jj, kk]
-                )
-                p = h2 * b[ii, jjm1, kk] - invsix * (
-                    x3_001
-                    + x3_111
-                    + x3_100
-                    + x[ii, jjm2, kk] ** 3
-                    + x[ii, jjm1, kkp1] ** 3
-                    + x[iip1, jjm1, kk] ** 3
-                )
-                qq = qh2 - rhs[ii, jjm1, kk]
-                x[ii, jjm1, kk] += f_relax * (
-                    solution_quartic_equation(p, qq) - x[ii, jjm1, kk]
-                )
-                p = h2 * b[ii, jj, kkm1] - invsix * (
-                    x3_010
-                    + x3_100
-                    + x3_111
-                    + x[ii, jjp1, kkm1] ** 3
-                    + x[ii, jj, kkm2] ** 3
-                    + x[iip1, jj, kkm1] ** 3
-                )
-                qq = qh2 - rhs[ii, jj, kkm1]
-                x[ii, jj, kkm1] += f_relax * (
-                    solution_quartic_equation(p, qq) - x[ii, jj, kkm1]
-                )
-
-    # Computation Black
-    for i in prange(ncells_1d_coarse):
-        ii = 2 * i
-        iim2 = ii - 2
-        iim1 = ii - 1
-        iip1 = ii + 1
-        for j in range(ncells_1d_coarse):
-            jj = 2 * j
-            jjm2 = jj - 2
-            jjm1 = jj - 1
-            jjp1 = jj + 1
-            for k in range(ncells_1d_coarse):
-                kk = 2 * k
-                kkm2 = kk - 2
-                kkm1 = kk - 1
-                kkp1 = kk + 1
-
-                x3_000 = x[iim1, jjm1, kkm1] ** 3
-                x3_011 = x[iim1, jj, kk] ** 3
-                x3_101 = x[ii, jjm1, kk] ** 3
-                x3_110 = x[ii, jj, kkm1] ** 3
-                p = h2 * b[iim1, jjm1, kk] - invsix * (
-                    +x3_011
-                    + x3_000
-                    + x3_101
-                    + x[iim2, jjm1, kk] ** 3
-                    + x[iim1, jjm2, kk] ** 3
-                    + x[iim1, jjm1, kkp1] ** 3
-                )
-                qq = qh2 - rhs[iim1, jjm1, kk]
-                x[iim1, jjm1, kk] += f_relax * (
-                    solution_quartic_equation(p, qq) - x[iim1, jjm1, kk]
-                )
-                p = h2 * b[iim1, jj, kkm1] - invsix * (
-                    +x3_000
-                    + x3_011
-                    + x3_110
-                    + x[iim2, jj, kkm1] ** 3
-                    + x[iim1, jjp1, kkm1] ** 3
-                    + x[iim1, jj, kkm2] ** 3
-                )
-                qq = qh2 - rhs[iim1, jj, kkm1]
-                x[iim1, jj, kkm1] += f_relax * (
-                    solution_quartic_equation(p, qq) - x[iim1, jj, kkm1]
-                )
-                p = h2 * b[ii, jjm1, kkm1] - invsix * (
-                    x3_000
-                    + x3_101
-                    + x3_110
-                    + x[ii, jjm2, kkm1] ** 3
-                    + x[ii, jjm1, kkm2] ** 3
-                    + x[iip1, jjm1, kkm1] ** 3
-                )
-                qq = qh2 - rhs[ii, jjm1, kkm1]
-                x[ii, jjm1, kkm1] += f_relax * (
-                    solution_quartic_equation(p, qq) - x[ii, jjm1, kkm1]
-                )
-                p = h2 * b[ii, jj, kk] - invsix * (
-                    x3_011
-                    + x3_101
-                    + x3_110
-                    + x[ii, jjp1, kk] ** 3
-                    + x[ii, jj, kkp1] ** 3
-                    + x[iip1, jj, kk] ** 3
-                )
-                qq = qh2 - rhs[ii, jj, kk]
-                x[ii, jj, kk] += f_relax * (
-                    solution_quartic_equation(p, qq) - x[ii, jj, kk]
-                )
+    loops.gauss_seidel_rhs_4f(x, b, rhs, gauss_seidel_with_rhs_kernel, h2, invsix, qh2, f_relax)
 
 
 
-@njit(["f4(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
+
+@njit(["f4(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=False, cache=True, parallel=True)
 def residual_error(
     x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], q: np.float32
 ) -> np.float32:
@@ -653,32 +357,17 @@ def residual_error(
     qh2 = q * h2
     result = np.float32(0)
     for i in prange(-1, ncells_1d - 1):
-        im1 = i - 1
-        ip1 = i + 1
         for j in range(-1, ncells_1d - 1):
-            jm1 = j - 1
-            jp1 = j + 1
             for k in range(-1, ncells_1d - 1):
-                km1 = k - 1
-                kp1 = k + 1
-                p = h2 * b[i, j, k] - invsix * (
-                    +x[im1, j, k] ** 3
-                    + x[i, jm1, k] ** 3
-                    + x[i, j, km1] ** 3
-                    + x[i, j, kp1] ** 3
-                    + x[i, jp1, k] ** 3
-                    + x[ip1, j, k] ** 3
-                )
-                x_tmp = x[i, j, k]
-                result += (x_tmp**4 + p * x_tmp + qh2) ** 2
+                tmp = operator_scalar(x, b, i, j, k, h2, invsix, qh2)
+                result += tmp ** 2
 
     return np.sqrt(result)
 
 
 @njit(
     ["f4(f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
+    fastmath=False,
     parallel=True,
 )
 def truncation_error(

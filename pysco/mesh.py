@@ -8,9 +8,354 @@ import numpy.typing as npt
 from numba import config, njit, prange
 from numpy_atomic import atomic_add
 import utils
+import loops 
 
 
-@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+@njit(["void(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4)"], inline="always", fastmath=True)
+def kernel_restriction(out, x, i, j, k, inveight):
+    ii = 2*i
+    jj = 2*j
+    kk = 2*k
+    out[i, j, k] = inveight * (
+                      x[ii, jj, kk]
+                    + x[ii, jj, kk+1]
+                    + x[ii, jj+1, kk]
+                    + x[ii, jj+1, kk+1]
+                    + x[ii+1, jj, kk]
+                    + x[ii+1, jj, kk+1]
+                    + x[ii+1, jj+1, kk]
+                    + x[ii+1, jj+1, kk+1]
+                )
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], i8, i8, i8, f4)"], inline="always", fastmath=True)
+def kernel_derivative2(out, x, i, j, k, invh):
+    minus_aijk = -x[i, j, k]
+    out[i, j, k, 0] = invh * (minus_aijk + x[i+1, j, k])
+    out[i, j, k, 1] = invh * (minus_aijk + x[i, j+1, k])
+    out[i, j, k, 2] = invh * (minus_aijk + x[i, j, k+1])
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], i8, i8, i8, f4)"], inline="always", fastmath=True)
+def kernel_derivative3(out, x, i, j, k, inv2h):
+    out[i, j, k, 0] = inv2h * (-x[i-1, j, k] + x[i+1, j, k])
+    out[i, j, k, 1] = inv2h * (-x[i, j-1, k] + x[i, j+1, k])
+    out[i, j, k, 2] = inv2h * (-x[i, j, k-1] + x[i, j, k+1])
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=True)
+def kernel_derivative5(out, x, i, j, k, inv12h, eight):
+    out[i, j, k, 0] = inv12h * (
+            eight * (-x[i-1, j, k] + x[i+1, j, k]) 
+                    + x[i-2, j, k] - x[i+2, j, k]
+                    )
+    out[i, j, k, 1] = inv12h * (
+            eight * (-x[i, j-1, k] + x[i, j+1, k]) 
+                    + x[i, j-2, k] - x[i, j+2, k]
+    )
+    out[i, j, k, 2] = inv12h * (
+            eight * (-x[i, j, k-1] + x[i, j, k+1]) 
+                    + x[i, j, k-2] - x[i, j, k+2]
+    )
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def kernel_derivative7(out, x, i, j, k, inv60h, nine, fortyfive):
+    out[i, j, k, 0] = inv60h * (
+        fortyfive * (-x[i-1, j, k] + x[i+1, j, k])
+            + nine * (x[i-2, j, k] - x[i+2, j, k])
+                    - x[i-3, j, k] + x[i+3, j, k]
+    )
+    out[i, j, k, 1] = inv60h * (
+        fortyfive * (-x[i, j-1, k] + x[i, j+1, k])
+            + nine * (x[i, j-2, k] - x[i, j+2, k])
+                    - x[i, j-3, k] + x[i, j+3, k]
+    )
+    out[i, j, k, 2] = inv60h * (
+        fortyfive * (-x[i, j, k-1] + x[i, j, k+1])
+            + nine * (x[i, j, k-2] - x[i, j, k+2])
+                    - x[i, j, k-3] + x[i, j, k+3]
+    )
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=True)
+def kernel_derivative2_fR_n1(out, a, b, i, j, k, invh, f):
+    minus_aijk = -a[i, j, k]
+    minus_bijk_2 = -b[i, j, k] ** 2
+    out[i, j, k, 0] = invh * (minus_aijk + a[i+1, j, k] + f * (minus_bijk_2 + b[i+1, j, k] ** 2))
+    out[i, j, k, 1] = invh * (minus_aijk + a[i, j+1, k] + f * (minus_bijk_2 + b[i, j+1, k] ** 2))
+    out[i, j, k, 2] = invh * (minus_aijk + a[i, j, k+1] + f * (minus_bijk_2 + b[i, j, k+1] ** 2))
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=True)
+def kernel_derivative3_fR_n1(out, a, b, i, j, k, inv2h, f):
+    out[i, j, k, 0] = inv2h * (
+                    -a[i-1, j, k]      + a[i+1, j, k]
+             + f * (-b[i-1, j, k] ** 2 + b[i+1, j, k] ** 2)
+    )
+    out[i, j, k, 1] = inv2h * (
+                    -a[i, j-1, k]      + a[i, j+1, k]
+             + f * (-b[i, j-1, k] ** 2 + b[i, j+1, k] ** 2)
+    )
+    out[i, j, k, 2] = inv2h * (
+                    -a[i, j, k-1]      + a[i, j, k+1]
+             + f * (-b[i, j, k-1] ** 2 + b[i, j, k+1] ** 2)
+    )
+    
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def kernel_derivative5_fR_n1(out, a, b, i, j, k, inv12h, eight, f):
+    out[i, j, k, 0] = inv12h * (
+        eight
+        * (
+                    -a[i-1, j, k]      + a[i+1, j, k]
+             + f * (-b[i-1, j, k] ** 2 + b[i+1, j, k] ** 2)
+        )
+                    +a[i-2, j, k]      - a[i+2, j, k]
+             + f * (+b[i-2, j, k] ** 2 - b[i+2, j, k] ** 2)
+)
+    out[i, j, k, 1] = inv12h * (
+        eight
+        * (
+                    -a[i, j-1, k]      + a[i, j+1, k]
+             + f * (-b[i, j-1, k] ** 2 + b[i, j+1, k] ** 2)
+        )
+                    +a[i, j-2, k]      - a[i, j+2, k]
+             + f * (+b[i, j-2, k] ** 2 - b[i, j+2, k] ** 2)
+    )
+    out[i, j, k, 2] = inv12h * (
+        eight
+        * (
+                    -a[i, j, k-1]      + a[i, j, k+1]
+             + f * (-b[i, j, k-1] ** 2 + b[i, j, k+1] ** 2)
+    )
+                    +a[i, j, k-2]      - a[i, j, k+2]
+             + f * (+b[i, j, k-2] ** 2 - b[i, j, k+2] ** 2)
+            )
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4, f4)"], inline="always", fastmath=True)
+def kernel_derivative7_fR_n1(out, a, b, i, j, k, inv60h, nine, fortyfive, f):
+    out[i, j, k, 0] = inv60h * (
+        fortyfive * (
+                    -a[i-1, j, k]      + a[i+1, j, k]
+             + f * (-b[i-1, j, k] ** 2 + b[i+1, j, k] ** 2)
+        )
+        + nine * (
+                    +a[i-2, j, k]      - a[i+2, j, k]
+             + f * (+b[i-2, j, k] ** 2 - b[i+2, j, k] ** 2)
+        )
+                    -a[i-3, j, k]      + a[i+3, j, k]
+             + f * (-b[i-3, j, k] ** 2 + b[i+3, j, k] ** 2)
+    )
+    out[i, j, k, 1] = inv60h * (
+        fortyfive * (
+                    -a[i, j-1, k]      + a[i, j+1, k]
+             + f * (-b[i, j-1, k] ** 2 + b[i, j+1, k] ** 2)
+        )
+        + nine * (
+                    +a[i, j-2, k]      - a[i, j+2, k]
+             + f * (+b[i, j-2, k] ** 2 - b[i, j+2, k] ** 2)
+        )
+                    -a[i, j-3, k]      + a[i, j+3, k]
+             + f * (-b[i, j-3, k] ** 2 + b[i, j+3, k] ** 2)
+    )
+    out[i, j, k, 2] = inv60h * (
+        fortyfive * (
+                    -a[i, j, k-1]      + a[i, j, k+1]
+             + f * (-b[i, j, k-1] ** 2 + b[i, j, k+1] ** 2)
+        )
+        + nine * (
+                    +a[i, j, k-2]      - a[i, j, k+2]
+             + f * (+b[i, j, k-2] ** 2 - b[i, j, k+2] ** 2)
+        )
+                    -a[i, j, k-3]      + a[i, j, k+3]
+             + f * (-b[i, j, k-3] ** 2 + b[i, j, k+3] ** 2)
+    )
+
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], i8, i8, i8, f4)"], inline="always", fastmath=True)
+def kernel_add_derivative2_fR_n1(out, b, i, j, k, invh_f):
+    minus_bijk_2 = -b[i, j, k] ** 2
+    out[i, j, k, 0] += invh_f * (minus_bijk_2 + b[i+1, j, k] ** 2)
+    out[i, j, k, 1] += invh_f * (minus_bijk_2 + b[i, j+1, k] ** 2)
+    out[i, j, k, 2] += invh_f * (minus_bijk_2 + b[i, j, k+1] ** 2)
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], i8, i8, i8, f4)"], inline="always", fastmath=True)
+def kernel_add_derivative3_fR_n1(out, b, i, j, k, inv2h_f):
+    out[i, j, k, 0] += inv2h_f * (-b[i-1, j, k] ** 2 + b[i+1, j, k] ** 2)
+    out[i, j, k, 1] += inv2h_f * (-b[i, j-1, k] ** 2 + b[i, j+1, k] ** 2)
+    out[i, j, k, 2] += inv2h_f * (-b[i, j, k-1] ** 2 + b[i, j, k+1] ** 2)
+    
+    
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=True)
+def kernel_add_derivative5_fR_n1(out, b, i, j, k, inv12h_f, eight):
+    out[i, j, k, 0] += inv12h_f * (
+        eight * (-b[i-1, j, k] ** 2 + b[i+1, j, k] ** 2)
+                 +b[i-2, j, k] ** 2 - b[i+2, j, k] ** 2
+    )
+    out[i, j, k, 1] += inv12h_f * (
+        eight * (-b[i, j-1, k] ** 2 + b[i, j+1, k] ** 2)
+                 +b[i, j-2, k] ** 2 - b[i, j+2, k] ** 2
+    )
+    out[i, j, k, 2] += inv12h_f * (
+        eight * (-b[i, j, k-1] ** 2 + b[i, j, k+1] ** 2)
+                 +b[i, j, k-2] ** 2 - b[i, j, k+2] ** 2
+    )
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def kernel_add_derivative7_fR_n1(out, b, i, j, k, inv60h_f, nine, fortyfive):
+    out[i, j, k, 0] += inv60h_f * (
+        fortyfive * (-b[i-1, j, k] ** 2 + b[i+1, j, k] ** 2)
+           + nine * (+b[i-2, j, k] ** 2 - b[i+2, j, k] ** 2)
+                  + (-b[i-3, j, k] ** 2 + b[i+3, j, k] ** 2)
+    )
+    out[i, j, k, 1] += inv60h_f * (
+        fortyfive * (-b[i, j-1, k] ** 2 + b[i, j+1, k] ** 2)
+           + nine * (+b[i, j-2, k] ** 2 - b[i, j+2, k] ** 2)
+                 +  (-b[i, j-3, k] ** 2 + b[i, j+3, k] ** 2)
+    )
+    out[i, j, k, 2] += inv60h_f * (
+        fortyfive * (-b[i, j, k-1] ** 2 + b[i, j, k+1] ** 2)
+           + nine * (+b[i, j, k-2] ** 2 - b[i, j, k+2] ** 2)
+                 +  (-b[i, j, k-3] ** 2 + b[i, j, k+3] ** 2)
+    )
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=True)
+def kernel_derivative2_fR_n2(out, a, b, i, j, k, invh, f):
+    minus_aijk = -a[i, j, k]
+    minus_bijk_2 = -b[i, j, k] ** 3
+    out[i, j, k, 0] = invh * (minus_aijk + a[i+1, j, k] + f * (minus_bijk_2 + b[i+1, j, k] ** 3))
+    out[i, j, k, 1] = invh * (minus_aijk + a[i, j+1, k] + f * (minus_bijk_2 + b[i, j+1, k] ** 3))
+    out[i, j, k, 2] = invh * (minus_aijk + a[i, j, k+1] + f * (minus_bijk_2 + b[i, j, k+1] ** 3))
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=True)
+def kernel_derivative3_fR_n2(out, a, b, i, j, k, inv2h, f):
+    out[i, j, k, 0] = inv2h * (
+                    -a[i-1, j, k]      + a[i+1, j, k]
+             + f * (-b[i-1, j, k] ** 3 + b[i+1, j, k] ** 3)
+    )
+    out[i, j, k, 1] = inv2h * (
+                    -a[i, j-1, k]      + a[i, j+1, k]
+             + f * (-b[i, j-1, k] ** 3 + b[i, j+1, k] ** 3)
+    )
+    out[i, j, k, 2] = inv2h * (
+                    -a[i, j, k-1]      + a[i, j, k+1]
+             + f * (-b[i, j, k-1] ** 3 + b[i, j, k+1] ** 3)
+    )
+    
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def kernel_derivative5_fR_n2(out, a, b, i, j, k, inv12h, eight, f):
+    out[i, j, k, 0] = inv12h * (
+        eight
+        * (
+                    -a[i-1, j, k]      + a[i+1, j, k]
+             + f * (-b[i-1, j, k] ** 3 + b[i+1, j, k] ** 3)
+        )
+                    +a[i-2, j, k]      - a[i+2, j, k]
+             + f * (+b[i-2, j, k] ** 3 - b[i+2, j, k] ** 3)
+)
+    out[i, j, k, 1] = inv12h * (
+        eight
+        * (
+                    -a[i, j-1, k]      + a[i, j+1, k]
+             + f * (-b[i, j-1, k] ** 3 + b[i, j+1, k] ** 3)
+        )
+                    +a[i, j-2, k]      - a[i, j+2, k]
+             + f * (+b[i, j-2, k] ** 3 - b[i, j+2, k] ** 3)
+    )
+    out[i, j, k, 2] = inv12h * (
+        eight
+        * (
+                    -a[i, j, k-1]      + a[i, j, k+1]
+             + f * (-b[i, j, k-1] ** 3 + b[i, j, k+1] ** 3)
+    )
+                    +a[i, j, k-2]      - a[i, j, k+2]
+             + f * (+b[i, j, k-2] ** 3 - b[i, j, k+2] ** 3)
+            )
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4, f4)"], inline="always", fastmath=True)
+def kernel_derivative7_fR_n2(out, a, b, i, j, k, inv60h, nine, fortyfive, f):
+    out[i, j, k, 0] = inv60h * (
+        fortyfive * (
+                    -a[i-1, j, k]      + a[i+1, j, k]
+             + f * (-b[i-1, j, k] ** 3 + b[i+1, j, k] ** 3)
+        )
+        + nine * (
+                    +a[i-2, j, k]      - a[i+2, j, k]
+             + f * (+b[i-2, j, k] ** 3 - b[i+2, j, k] ** 3)
+        )
+                    -a[i-3, j, k]      + a[i+3, j, k]
+             + f * (-b[i-3, j, k] ** 3 + b[i+3, j, k] ** 3)
+    )
+    out[i, j, k, 1] = inv60h * (
+        fortyfive * (
+                    -a[i, j-1, k]      + a[i, j+1, k]
+             + f * (-b[i, j-1, k] ** 3 + b[i, j+1, k] ** 3)
+        )
+        + nine * (
+                    +a[i, j-2, k]      - a[i, j+2, k]
+             + f * (+b[i, j-2, k] ** 3 - b[i, j+2, k] ** 3)
+        )
+                    -a[i, j-3, k]      + a[i, j+3, k]
+             + f * (-b[i, j-3, k] ** 3 + b[i, j+3, k] ** 3)
+    )
+    out[i, j, k, 2] = inv60h * (
+        fortyfive * (
+                    -a[i, j, k-1]      + a[i, j, k+1]
+             + f * (-b[i, j, k-1] ** 3 + b[i, j, k+1] ** 3)
+        )
+        + nine * (
+                    +a[i, j, k-2]      - a[i, j, k+2]
+             + f * (+b[i, j, k-2] ** 3 - b[i, j, k+2] ** 3)
+        )
+                    -a[i, j, k-3]      + a[i, j, k+3]
+             + f * (-b[i, j, k-3] ** 3 + b[i, j, k+3] ** 3)
+    )
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], i8, i8, i8, f4)"], inline="always", fastmath=True)
+def kernel_add_derivative2_fR_n2(out, b, i, j, k, invh_f):
+    minus_bijk_2 = -b[i, j, k] ** 3
+    out[i, j, k, 0] += invh_f * (minus_bijk_2 + b[i+1, j, k] ** 3)
+    out[i, j, k, 1] += invh_f * (minus_bijk_2 + b[i, j+1, k] ** 3)
+    out[i, j, k, 2] += invh_f * (minus_bijk_2 + b[i, j, k+1] ** 3)
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], i8, i8, i8, f4)"], inline="always", fastmath=True)
+def kernel_add_derivative3_fR_n2(out, b, i, j, k, inv2h_f):
+    out[i, j, k, 0] += inv2h_f * (-b[i-1, j, k] ** 3 + b[i+1, j, k] ** 3)
+    out[i, j, k, 1] += inv2h_f * (-b[i, j-1, k] ** 3 + b[i, j+1, k] ** 3)
+    out[i, j, k, 2] += inv2h_f * (-b[i, j, k-1] ** 3 + b[i, j, k+1] ** 3)
+    
+    
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=True)
+def kernel_add_derivative5_fR_n2(out, b, i, j, k, inv12h_f, eight):
+    out[i, j, k, 0] += inv12h_f * (
+        eight * (-b[i-1, j, k] ** 3 + b[i+1, j, k] ** 3)
+                 +b[i-2, j, k] ** 3 - b[i+2, j, k] ** 3
+    )
+    out[i, j, k, 1] += inv12h_f * (
+        eight * (-b[i, j-1, k] ** 3 + b[i, j+1, k] ** 3)
+                 +b[i, j-2, k] ** 3 - b[i, j+2, k] ** 3
+    )
+    out[i, j, k, 2] += inv12h_f * (
+        eight * (-b[i, j, k-1] ** 3 + b[i, j, k+1] ** 3)
+                 +b[i, j, k-2] ** 3 - b[i, j, k+2] ** 3
+    )
+
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=True)
+def kernel_add_derivative7_fR_n2(out, b, i, j, k, inv60h_f, nine, fortyfive):
+    out[i, j, k, 0] += inv60h_f * (
+        fortyfive * (-b[i-1, j, k] ** 3 + b[i+1, j, k] ** 3)
+           + nine * (+b[i-2, j, k] ** 3 - b[i+2, j, k] ** 3)
+                  + (-b[i-3, j, k] ** 3 + b[i+3, j, k] ** 3)
+    )
+    out[i, j, k, 1] += inv60h_f * (
+        fortyfive * (-b[i, j-1, k] ** 3 + b[i, j+1, k] ** 3)
+           + nine * (+b[i, j-2, k] ** 3 - b[i, j+2, k] ** 3)
+                 +  (-b[i, j-3, k] ** 3 + b[i, j+3, k] ** 3)
+    )
+    out[i, j, k, 2] += inv60h_f * (
+        fortyfive * (-b[i, j, k-1] ** 3 + b[i, j, k+1] ** 3)
+           + nine * (+b[i, j, k-2] ** 3 - b[i, j, k+2] ** 3)
+                 +  (-b[i, j, k-3] ** 3 + b[i, j, k+3] ** 3)
+    )
+
+    
+      
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True)
 def restriction(
     out: npt.NDArray[np.float32],
     x: npt.NDArray[np.float32],
@@ -33,29 +378,9 @@ def restriction(
     >>> result = restriction(x)
     """
     inveight = np.float32(0.125)
-    ncells_1d = out.shape[0]
-    for i in prange(ncells_1d):
-        ii = 2 * i
-        iip1 = ii + 1
-        for j in range(ncells_1d):
-            jj = 2 * j
-            jjp1 = jj + 1
-            for k in range(ncells_1d):
-                kk = 2 * k
-                kkp1 = kk + 1
-                out[i, j, k] = inveight * (
-                    x[ii, jj, kk]
-                    + x[ii, jj, kkp1]
-                    + x[ii, jjp1, kk]
-                    + x[ii, jjp1, kkp1]
-                    + x[iip1, jj, kk]
-                    + x[iip1, jj, kkp1]
-                    + x[iip1, jjp1, kk]
-                    + x[iip1, jjp1, kkp1]
-                )
+    loops.offset_1f(out, x, kernel_restriction, inveight, offset=0)
 
-
-@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True)
 def minus_restriction(
     out: npt.NDArray[np.float32],
     x: npt.NDArray[np.float32],
@@ -78,26 +403,7 @@ def minus_restriction(
     >>> result = minus_restriction(x)
     """
     minus_inveight = np.float32(-0.125)
-    ncells_1d = out.shape[0]
-    for i in prange(ncells_1d):
-        ii = 2 * i
-        iip1 = ii + 1
-        for j in range(ncells_1d):
-            jj = 2 * j
-            jjp1 = jj + 1
-            for k in range(ncells_1d):
-                kk = 2 * k
-                kkp1 = kk + 1
-                out[i, j, k] = minus_inveight * (
-                    x[ii, jj, kk]
-                    + x[ii, jj, kkp1]
-                    + x[ii, jjp1, kk]
-                    + x[ii, jjp1, kkp1]
-                    + x[iip1, jj, kk]
-                    + x[iip1, jj, kkp1]
-                    + x[iip1, jjp1, kk]
-                    + x[iip1, jjp1, kkp1]
-                )
+    loops.offset_1f(out, x, kernel_restriction, minus_inveight, offset=0)
 
 
 
@@ -390,131 +696,10 @@ def add_prolongation(
 
 
 @utils.time_me
-@njit(["void(f4[:,:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
-def divergence2(
-    a: npt.NDArray[np.float32],
-    out: npt.NDArray[np.float32],
-) -> None:
-    """Divergence of a vector field on a grid
-
-    Two-point stencil divergence with finite differences
-
-    Parameters
-    ----------
-    a : npt.NDArray[np.float32]
-        Vector Field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
-    out : npt.NDArray[np.float32]
-        Scalar field (with minus sign) [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from pysco.mesh import divergence2
-    >>> vector_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
-    >>> field_divergence = np.empty((32, 32, 32), dtype=np.float32)
-    >>> divergence2(vector_field, field_divergence)
-    """
-    ncells_1d = a.shape[0]
-    invh = np.float32(ncells_1d)
-    for i in prange(ncells_1d):
-        im1 = i - 1
-        for j in range(ncells_1d):
-            jm1 = j - 1
-            for k in range(ncells_1d):
-                km1 = k - 1
-                out[i, j, k] = invh * (
-                    (-a[im1, j, k, 0] + a[i, j, k, 0])
-                    + (-a[i, jm1, k, 1] + a[i, j, k, 1])
-                    + (-a[i, j, km1, 2] + a[i, j, k, 2])
-                )
-
-
-@utils.time_me
-@njit(["void(f4[:,:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
-def divergence3(
-    a: npt.NDArray[np.float32],
-    out: npt.NDArray[np.float32],
-) -> None:
-    """Divergence of a vector field on a grid
-
-    Three-point stencil divergence with finite differences
-
-    Parameters
-    ----------
-    a : npt.NDArray[np.float32]
-        Vector Field [N_cells_1d, N_cells_1d, N_cells_1d, 3]
-    out : npt.NDArray[np.float32]
-        Scalar field [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from pysco.mesh import divergence3
-    >>> vector_field = np.random.rand(32, 32, 32, 3).astype(np.float32)
-    >>> field_divergence = np.empty((32, 32, 32), dtype=np.float32)
-    >>> divergence3(vector_field, field_divergence)
-    """
-    ncells_1d = a.shape[0]
-    inv2h = np.float32(0.5 * ncells_1d)
-    for i in prange(-1, ncells_1d - 1):
-        ip1 = i + 1
-        im1 = i - 1
-        for j in range(-1, ncells_1d - 1):
-            jp1 = j + 1
-            jm1 = j - 1
-            for k in range(-1, ncells_1d - 1):
-                kp1 = k + 1
-                km1 = k - 1
-                out[i, j, k] = inv2h * (
-                    (-a[im1, j, k, 0] + a[ip1, j, k, 0])
-                    + (-a[i, jm1, k, 1] + a[i, jp1, k, 1])
-                    + (-a[i, j, km1, 2] + a[i, j, kp1, 2])
-                )
-
-
-@utils.time_me
-@njit(["void(f4[:,:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1])"], fastmath=True)
 def derivative2(
     out: npt.NDArray[np.float32],
-    a: npt.NDArray[np.float32],
-) -> None:
-    """Spatial derivatives of a scalar field on a grid
-
-    Two-point forward stencil derivative with finite differences
-
-    Parameters
-    ----------
-    out : npt.NDArray[np.float32]
-        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
-    a : npt.NDArray[np.float32]
-        Field [N_cells_1d, N_cells_1d, N_cells_1d]
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from pysco.mesh import derivative2
-    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
-    >>> deriv = derivative2(scalar_field)
-    """
-    ncells_1d = a.shape[0]
-    invh = np.float32(ncells_1d)
-    for i in prange(-1, ncells_1d - 1):
-        ip1 = i + 1
-        for j in range(-1, ncells_1d - 1):
-            jp1 = j + 1
-            for k in range(-1, ncells_1d - 1):
-                kp1 = k + 1
-                minus_aijk = -a[i, j, k]
-                out[i, j, k, 0] = invh * (minus_aijk + a[ip1, j, k])
-                out[i, j, k, 1] = invh * (minus_aijk + a[i, jp1, k])
-                out[i, j, k, 2] = invh * (minus_aijk + a[i, j, kp1])
-
-
-@utils.time_me
-@njit(["void(f4[:,:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
-def derivative3(
-    out: npt.NDArray[np.float32],
-    a: npt.NDArray[np.float32],
+    x: npt.NDArray[np.float32],
 ) -> None:
     """Spatial derivatives of a scalar field on a grid
 
@@ -534,27 +719,44 @@ def derivative3(
     >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
     >>> deriv = derivative3(scalar_field)
     """
-    ncells_1d = a.shape[0]
+    ncells_1d = out.shape[0]
+    invh = np.float32(ncells_1d)
+    loops.offset_1f(out, x, kernel_derivative2, invh, offset=1)
+
+@utils.time_me
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1])"], fastmath=True)
+def derivative3(
+    out: npt.NDArray[np.float32],
+    x: npt.NDArray[np.float32],
+) -> None:
+    """Spatial derivatives of a scalar field on a grid
+
+    Three-point stencil derivative with finite differences
+
+    Parameters
+    ----------
+    out : npt.NDArray[np.float32]
+        Field derivative [N_cells_1d, N_cells_1d, N_cells_1d, 3]
+    a : npt.NDArray[np.float32]
+        Field [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.mesh import derivative3
+    >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
+    >>> deriv = derivative3(scalar_field)
+    """
+    ncells_1d = out.shape[0]
     inv2h = np.float32(0.5 * ncells_1d)    
-    for i in prange(-1, ncells_1d - 1):
-        ip1 = i + 1
-        im1 = i - 1
-        for j in range(-1, ncells_1d - 1):
-            jp1 = j + 1
-            jm1 = j - 1
-            for k in range(-1, ncells_1d - 1):
-                kp1 = k + 1
-                km1 = k - 1
-                out[i, j, k, 0] = inv2h * (-a[im1, j, k] + a[ip1, j, k])
-                out[i, j, k, 1] = inv2h * (-a[i, jm1, k] + a[i, jp1, k])
-                out[i, j, k, 2] = inv2h * (-a[i, j, km1] + a[i, j, kp1])
+    loops.offset_1f(out, x, kernel_derivative3, inv2h, offset=1)
 
 
 @utils.time_me
-@njit(["void(f4[:,:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1])"], fastmath=True)
 def derivative5(
     out: npt.NDArray[np.float32],
-    a: npt.NDArray[np.float32],
+    x: npt.NDArray[np.float32],
 ) -> None:
     """Spatial derivatives of a scalar field on a grid
 
@@ -574,40 +776,17 @@ def derivative5(
     >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
     >>> deriv = derivative5(scalar_field)
     """
-    eight = np.float32(8)
-    ncells_1d = a.shape[0]
+    ncells_1d = out.shape[0]
+    eight = np.float32(8.0)
     inv12h = np.float32(ncells_1d / 12.0)
-    for i in prange(-2, ncells_1d - 2):
-        ip1 = i + 1
-        im1 = i - 1
-        ip2 = i + 2
-        im2 = i - 2
-        for j in range(-2, ncells_1d - 2):
-            jp1 = j + 1
-            jm1 = j - 1
-            jp2 = j + 2
-            jm2 = j - 2
-            for k in range(-2, ncells_1d - 2):
-                kp1 = k + 1
-                km1 = k - 1
-                kp2 = k + 2
-                km2 = k - 2
-                out[i, j, k, 0] = inv12h * (
-                    eight * (-a[im1, j, k] + a[ip1, j, k]) + a[im2, j, k] - a[ip2, j, k]
-                )
-                out[i, j, k, 1] = inv12h * (
-                    eight * (-a[i, jm1, k] + a[i, jp1, k]) + a[i, jm2, k] - a[i, jp2, k]
-                )
-                out[i, j, k, 2] = inv12h * (
-                    eight * (-a[i, j, km1] + a[i, j, kp1]) + a[i, j, km2] - a[i, j, kp2]
-                )
+    loops.offset_2f(out, x, kernel_derivative5, inv12h, eight, offset=2)
 
 
 @utils.time_me
-@njit(["void(f4[:,:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1])"], fastmath=True)
 def derivative7(
     out: npt.NDArray[np.float32],
-    a: npt.NDArray[np.float32],
+    x: npt.NDArray[np.float32],
 ) -> None:
     """Spatial derivatives of a scalar field on a grid
 
@@ -627,58 +806,15 @@ def derivative7(
     >>> scalar_field = np.random.rand(32, 32, 32).astype(np.float32)
     >>> deriv = derivative7(scalar_field)
     """
-    nine = np.float32(9)
+    ncells_1d = out.shape[0]
+    nine = np.float32(9.0)
     fortyfive = np.float32(45.0)
-    ncells_1d = a.shape[0]
     inv60h = np.float32(ncells_1d / 60.0)
-    for i in prange(-3, ncells_1d - 3):
-        ip1 = i + 1
-        im1 = i - 1
-        ip2 = i + 2
-        im2 = i - 2
-        ip3 = i + 3
-        im3 = i - 3
-        for j in range(-3, ncells_1d - 3):
-            jp1 = j + 1
-            jm1 = j - 1
-            jp2 = j + 2
-            jm2 = j - 2
-            jp3 = j + 3
-            jm3 = j - 3
-            for k in range(-3, ncells_1d - 3):
-                kp1 = k + 1
-                km1 = k - 1
-                kp2 = k + 2
-                km2 = k - 2
-                kp3 = k + 3
-                km3 = k - 3
-                out[i, j, k, 0] = inv60h * (
-                    fortyfive * (-a[im1, j, k] + a[ip1, j, k])
-                    + nine * (a[im2, j, k] - a[ip2, j, k])
-                    - a[im3, j, k]
-                    + a[ip3, j, k]
-                )
-                out[i, j, k, 1] = inv60h * (
-                    fortyfive * (-a[i, jm1, k] + a[i, jp1, k])
-                    + nine * (a[i, jm2, k] - a[i, jp2, k])
-                    - a[i, jm3, k]
-                    + a[i, jp3, k]
-                )
-                out[i, j, k, 2] = inv60h * (
-                    fortyfive * (-a[i, j, km1] + a[i, j, kp1])
-                    + nine * (a[i, j, km2] - a[i, j, kp2])
-                    - a[i, j, km3]
-                    + a[i, j, kp3]
-                )
+    loops.offset_3f(out, x, kernel_derivative7, inv60h, nine, fortyfive, offset=3)
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def derivative2_fR_n1(
     out: npt.NDArray[np.float32],
     a: npt.NDArray[np.float32],
@@ -713,32 +849,12 @@ def derivative2_fR_n1(
     """
     ncells_1d = a.shape[0]
     invh = np.float32(ncells_1d)
-    for i in prange(-1, ncells_1d - 1):
-        ip1 = i + 1
-        for j in range(-1, ncells_1d - 1):
-            jp1 = j + 1
-            for k in range(-1, ncells_1d - 1):
-                kp1 = k + 1
-                minus_aijk = -a[i, j, k]
-                minus_bijk_2 = -b[i, j, k] ** 2
-                out[i, j, k, 0] = invh * (
-                    (minus_aijk + a[ip1, j, k] + f * (minus_bijk_2 + b[ip1, j, k] ** 2))
-                )
-                out[i, j, k, 1] = invh * (
-                    (minus_aijk + a[i, jp1, k] + f * (minus_bijk_2 + b[i, jp1, k] ** 2))
-                )
-                out[i, j, k, 2] = invh * (
-                    (minus_aijk + a[i, j, kp1] + f * (minus_bijk_2 + b[i, j, kp1] ** 2))
-                )
+    loops.offset_rhs_2f(out, a, b, kernel_derivative2_fR_n1, invh, f, offset=1)
+
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def derivative3_fR_n1(
     out: npt.NDArray[np.float32],
     a: npt.NDArray[np.float32],
@@ -773,45 +889,11 @@ def derivative3_fR_n1(
     """
     ncells_1d = a.shape[0]
     inv2h = np.float32(0.5 * ncells_1d)
-    for i in prange(-1, ncells_1d - 1):
-        ip1 = i + 1
-        im1 = i - 1
-        for j in range(-1, ncells_1d - 1):
-            jp1 = j + 1
-            jm1 = j - 1
-            for k in range(-1, ncells_1d - 1):
-                kp1 = k + 1
-                km1 = k - 1
-                out[i, j, k, 0] = inv2h * (
-                    (
-                        -a[im1, j, k]
-                        + a[ip1, j, k]
-                        + f * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
-                    )
-                )
-                out[i, j, k, 1] = inv2h * (
-                    (
-                        -a[i, jm1, k]
-                        + a[i, jp1, k]
-                        + f * (-b[i, jm1, k] ** 2 + b[i, jp1, k] ** 2)
-                    )
-                )
-                out[i, j, k, 2] = inv2h * (
-                    (
-                        -a[i, j, km1]
-                        + a[i, j, kp1]
-                        + f * (-b[i, j, km1] ** 2 + b[i, j, kp1] ** 2)
-                    )
-                )
+    loops.offset_rhs_2f(out, a, b, kernel_derivative3_fR_n1, inv2h, f, offset=1)
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],    fastmath=True)
 def derivative5_fR_n1(
     out: npt.NDArray[np.float32],
     a: npt.NDArray[np.float32],
@@ -847,63 +929,12 @@ def derivative5_fR_n1(
     eight = np.float32(8)
     ncells_1d = a.shape[0]
     inv12h = np.float32(ncells_1d / 12.0)
-    for i in prange(-2, ncells_1d - 2):
-        ip1 = i + 1
-        im1 = i - 1
-        ip2 = i + 2
-        im2 = i - 2
-        for j in range(-2, ncells_1d - 2):
-            jp1 = j + 1
-            jm1 = j - 1
-            jp2 = j + 2
-            jm2 = j - 2
-            for k in range(-2, ncells_1d - 2):
-                kp1 = k + 1
-                km1 = k - 1
-                kp2 = k + 2
-                km2 = k - 2
-                out[i, j, k, 0] = inv12h * (
-                    eight
-                    * (
-                        -a[im1, j, k]
-                        + a[ip1, j, k]
-                        + f * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
-                    )
-                    + a[im2, j, k]
-                    - a[ip2, j, k]
-                    + f * (b[im2, j, k] ** 2 - b[ip2, j, k] ** 2)
-                )
-                out[i, j, k, 1] = inv12h * (
-                    eight
-                    * (
-                        -a[i, jm1, k]
-                        + a[i, jp1, k]
-                        + f * (-b[i, jm1, k] ** 2 + b[i, jp1, k] ** 2)
-                    )
-                    + a[i, jm2, k]
-                    - a[i, jp2, k]
-                    + f * (b[i, jm2, k] ** 2 - b[i, jp2, k] ** 2)
-                )
-                out[i, j, k, 2] = inv12h * (
-                    eight
-                    * (
-                        -a[i, j, km1]
-                        + a[i, j, kp1]
-                        + f * (-b[i, j, km1] ** 2 + b[i, j, kp1] ** 2)
-                    )
-                    + a[i, j, km2]
-                    - a[i, j, kp2]
-                    + f * (b[i, j, km2] ** 2 - b[i, j, kp2] ** 2)
-                )
+    loops.offset_rhs_3f(out, a, b, kernel_derivative5_fR_n1, inv12h, eight, f, offset=2)
+    
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def derivative7_fR_n1(
     out: npt.NDArray[np.float32],
     a: npt.NDArray[np.float32],
@@ -936,92 +967,15 @@ def derivative7_fR_n1(
     >>> f = np.float32(2)
     >>> deriv = derivative7_fR_n1(a, b, f)
     """
+    ncells_1d = a.shape[0]
     nine = np.float32(9)
     fortyfive = np.float32(45)
-    ncells_1d = a.shape[0]
     inv60h = np.float32(ncells_1d / 60.0)
-    for i in prange(-3, ncells_1d - 3):
-        ip1 = i + 1
-        im1 = i - 1
-        ip2 = i + 2
-        im2 = i - 2
-        ip3 = i + 3
-        im3 = i - 3
-        for j in range(-3, ncells_1d - 3):
-            jp1 = j + 1
-            jm1 = j - 1
-            jp2 = j + 2
-            jm2 = j - 2
-            jp3 = j + 3
-            jm3 = j - 3
-            for k in range(-3, ncells_1d - 3):
-                kp1 = k + 1
-                km1 = k - 1
-                kp2 = k + 2
-                km2 = k - 2
-                kp3 = k + 3
-                km3 = k - 3
-                out[i, j, k, 0] = inv60h * (
-                    fortyfive
-                    * (
-                        -a[im1, j, k]
-                        + a[ip1, j, k]
-                        + f * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
-                    )
-                    + nine
-                    * (
-                        +a[im2, j, k]
-                        - a[ip2, j, k]
-                        + f * (b[im2, j, k] ** 2 - b[ip2, j, k] ** 2)
-                    )
-                    - a[im3, j, k]
-                    + a[ip3, j, k]
-                    + f * (-b[im3, j, k] ** 2 + b[ip3, j, k] ** 2)
-                )
-
-                out[i, j, k, 1] = inv60h * (
-                    fortyfive
-                    * (
-                        -a[i, jm1, k]
-                        + a[i, jp1, k]
-                        + f * (-b[i, jm1, k] ** 2 + b[i, jp1, k] ** 2)
-                    )
-                    + nine
-                    * (
-                        +a[i, jm2, k]
-                        - a[i, jp2, k]
-                        + f * (b[i, jm2, k] ** 2 - b[i, jp2, k] ** 2)
-                    )
-                    - a[i, jm3, k]
-                    + a[i, jp3, k]
-                    + f * (-b[i, jm3, k] ** 2 + b[i, jp3, k] ** 2)
-                )
-                out[i, j, k, 2] = inv60h * (
-                    fortyfive
-                    * (
-                        -a[i, j, km1]
-                        + a[i, j, kp1]
-                        + f * (-b[i, j, km1] ** 2 + b[i, j, kp1] ** 2)
-                    )
-                    + nine
-                    * (
-                        +a[i, j, km2]
-                        - a[i, j, kp2]
-                        + f * (b[i, j, km2] ** 2 - b[i, j, kp2] ** 2)
-                    )
-                    - a[i, j, km3]
-                    + a[i, j, kp3]
-                    + f * (-b[i, j, km3] ** 2 + b[i, j, kp3] ** 2)
-                )
+    loops.offset_rhs_4f(out, a, b, kernel_derivative7_fR_n1, inv60h, nine, fortyfive, f, offset=3)
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def add_derivative2_fR_n1(
     force: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -1053,25 +1007,11 @@ def add_derivative2_fR_n1(
     """
     ncells_1d = b.shape[0]
     invh_f = np.float32(ncells_1d * f)
-    for i in prange(-1, ncells_1d - 1):
-        ip1 = i + 1
-        for j in range(-1, ncells_1d - 1):
-            jp1 = j + 1
-            for k in range(-1, ncells_1d - 1):
-                kp1 = k + 1
-                minus_bijk_2 = -b[i, j, k] ** 2
-                force[i, j, k, 0] += invh_f * (minus_bijk_2 + b[ip1, j, k] ** 2)
-                force[i, j, k, 1] += invh_f * (minus_bijk_2 + b[i, jp1, k] ** 2)
-                force[i, j, k, 2] += invh_f * (minus_bijk_2 + b[i, j, kp1] ** 2)
+    loops.offset_1f(force, b, kernel_add_derivative2_fR_n1, invh_f, offset=1)
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def add_derivative3_fR_n1(
     force: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -1103,27 +1043,12 @@ def add_derivative3_fR_n1(
     """
     ncells_1d = b.shape[0]
     inv2h_f = np.float32(0.5 * ncells_1d * f)
-    for i in prange(-2, ncells_1d - 2):
-        ip1 = i + 1
-        im1 = i - 1
-        for j in range(-2, ncells_1d - 2):
-            jp1 = j + 1
-            jm1 = j - 1
-            for k in range(-2, ncells_1d - 2):
-                kp1 = k + 1
-                km1 = k - 1
-                force[i, j, k, 0] += inv2h_f * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
-                force[i, j, k, 1] += inv2h_f * (-b[i, jm1, k] ** 2 + b[i, jp1, k] ** 2)
-                force[i, j, k, 2] += inv2h_f * (-b[i, j, km1] ** 2 + b[i, j, kp1] ** 2)
+    loops.offset_1f(force, b, kernel_add_derivative3_fR_n1, inv2h_f, offset=1)
+
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def add_derivative5_fR_n1(
     force: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -1156,45 +1081,12 @@ def add_derivative5_fR_n1(
     eight = np.float32(8)
     ncells_1d = b.shape[0]
     inv12h_f = np.float32(f * ncells_1d / 12.0)
-    for i in prange(-2, ncells_1d - 2):
-        ip1 = i + 1
-        im1 = i - 1
-        ip2 = i + 2
-        im2 = i - 2
-        for j in range(-2, ncells_1d - 2):
-            jp1 = j + 1
-            jm1 = j - 1
-            jp2 = j + 2
-            jm2 = j - 2
-            for k in range(-2, ncells_1d - 2):
-                kp1 = k + 1
-                km1 = k - 1
-                kp2 = k + 2
-                km2 = k - 2
-                force[i, j, k, 0] += inv12h_f * (
-                    eight * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
-                    + b[im2, j, k] ** 2
-                    - b[ip2, j, k] ** 2
-                )
-                force[i, j, k, 1] += inv12h_f * (
-                    eight * (-b[i, jm1, k] ** 2 + b[i, jp1, k] ** 2)
-                    + b[i, jm2, k] ** 2
-                    - b[i, jp2, k] ** 2
-                )
-                force[i, j, k, 2] += inv12h_f * (
-                    eight * (-b[i, j, km1] ** 2 + b[i, j, kp1] ** 2)
-                    + b[i, j, km2] ** 2
-                    - b[i, j, kp2] ** 2
-                )
+    loops.offset_2f(force, b, kernel_add_derivative5_fR_n1, inv12h_f, eight, offset=2)
+
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def add_derivative7_fR_n1(
     force: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -1228,54 +1120,12 @@ def add_derivative7_fR_n1(
     fortyfive = np.float32(45.0)
     ncells_1d = b.shape[0]
     inv60h_f = np.float32(f * ncells_1d / 60.0)
-    for i in prange(-2, ncells_1d - 2):
-        ip1 = i + 1
-        im1 = i - 1
-        ip2 = i + 2
-        im2 = i - 2
-        ip3 = i + 3
-        im3 = i - 3
-        for j in range(-2, ncells_1d - 2):
-            jp1 = j + 1
-            jm1 = j - 1
-            jp2 = j + 2
-            jm2 = j - 2
-            jp3 = j + 3
-            jm3 = j - 3
-            for k in range(-2, ncells_1d - 2):
-                kp1 = k + 1
-                km1 = k - 1
-                kp2 = k + 2
-                km2 = k - 2
-                kp3 = k + 3
-                km3 = k - 3
-                force[i, j, k, 0] += inv60h_f * (
-                    fortyfive * (-b[im1, j, k] ** 2 + b[ip1, j, k] ** 2)
-                    + nine * (+b[im2, j, k] ** 2 - b[ip2, j, k] ** 2)
-                    - b[im3, j, k] ** 2
-                    + b[ip3, j, k] ** 2
-                )
-                force[i, j, k, 1] += inv60h_f * (
-                    fortyfive * (-b[i, jm1, k] ** 2 + b[i, jp1, k] ** 2)
-                    + nine * (+b[i, jm2, k] ** 2 - b[i, jp2, k] ** 2)
-                    - b[i, jm3, k] ** 2
-                    + b[i, jp3, k] ** 2
-                )
-                force[i, j, k, 2] += inv60h_f * (
-                    fortyfive * (-b[i, j, km1] ** 2 + b[i, j, kp1] ** 2)
-                    + nine * (+b[i, j, km2] ** 2 - b[i, j, kp2] ** 2)
-                    - b[i, j, km3] ** 2
-                    + b[i, j, kp3] ** 2
-                )
+    loops.offset_3f(force, b, kernel_add_derivative7_fR_n1, inv60h_f, nine, fortyfive, offset=3)
+
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def derivative2_fR_n2(
     out: npt.NDArray[np.float32],
     a: npt.NDArray[np.float32],
@@ -1310,32 +1160,11 @@ def derivative2_fR_n2(
     """
     ncells_1d = a.shape[0]
     invh = np.float32(ncells_1d)
-    for i in prange(-1, ncells_1d - 1):
-        ip1 = i + 1
-        for j in range(-1, ncells_1d - 1):
-            jp1 = j + 1
-            for k in range(-1, ncells_1d - 1):
-                kp1 = k + 1
-                minus_aijk = -a[i, j, k]
-                minus_bijk_3 = -b[i, j, k] ** 3
-                out[i, j, k, 0] = invh * (
-                    minus_aijk + a[ip1, j, k] + f * (minus_bijk_3 + b[ip1, j, k] ** 3)
-                )
-                out[i, j, k, 1] = invh * (
-                    minus_aijk + a[i, jp1, k] + f * (minus_bijk_3 + b[i, jp1, k] ** 3)
-                )
-                out[i, j, k, 2] = invh * (
-                    minus_aijk + a[i, j, kp1] + f * (minus_bijk_3 + b[i, j, kp1] ** 3)
-                )
+    loops.offset_rhs_2f(out, a, b, kernel_derivative2_fR_n2, invh, f, offset=1)
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def derivative3_fR_n2(
     out: npt.NDArray[np.float32],
     a: npt.NDArray[np.float32],
@@ -1370,39 +1199,12 @@ def derivative3_fR_n2(
     """
     ncells_1d = a.shape[0]
     inv2h = np.float32(0.5 * ncells_1d)
-    for i in prange(-1, ncells_1d - 1):
-        ip1 = i + 1
-        im1 = i - 1
-        for j in range(-1, ncells_1d - 1):
-            jp1 = j + 1
-            jm1 = j - 1
-            for k in range(-1, ncells_1d - 1):
-                kp1 = k + 1
-                km1 = k - 1
-                out[i, j, k, 0] = inv2h * (
-                    -a[im1, j, k]
-                    + a[ip1, j, k]
-                    + f * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
-                )
-                out[i, j, k, 1] = inv2h * (
-                    -a[i, jm1, k]
-                    + a[i, jp1, k]
-                    + f * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
-                )
-                out[i, j, k, 2] = inv2h * (
-                    -a[i, j, km1]
-                    + a[i, j, kp1]
-                    + f * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
-                )
+    loops.offset_rhs_2f(out, a, b, kernel_derivative3_fR_n2, inv2h, f, offset=1)
+
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def derivative5_fR_n2(
     out: npt.NDArray[np.float32],
     a: npt.NDArray[np.float32],
@@ -1439,63 +1241,12 @@ def derivative5_fR_n2(
     eight = np.float32(8)
     ncells_1d = a.shape[0]
     inv12h = np.float32(ncells_1d / 12.0)
-    for i in prange(-2, ncells_1d - 2):
-        ip1 = i + 1
-        im1 = i - 1
-        ip2 = i + 2
-        im2 = i - 2
-        for j in range(-2, ncells_1d - 2):
-            jp1 = j + 1
-            jm1 = j - 1
-            jp2 = j + 2
-            jm2 = j - 2
-            for k in range(-2, ncells_1d - 2):
-                kp1 = k + 1
-                km1 = k - 1
-                kp2 = k + 2
-                km2 = k - 2
-                out[i, j, k, 0] = inv12h * (
-                    eight
-                    * (
-                        -a[im1, j, k]
-                        + a[ip1, j, k]
-                        + f * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
-                    )
-                    + a[im2, j, k]
-                    - a[ip2, j, k]
-                    + f * (b[im2, j, k] ** 3 - b[ip2, j, k] ** 3)
-                )
-                out[i, j, k, 1] = inv12h * (
-                    eight
-                    * (
-                        -a[i, jm1, k]
-                        + a[i, jp1, k]
-                        + f * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
-                    )
-                    + a[i, jm2, k]
-                    - a[i, jp2, k]
-                    + f * (b[i, jm2, k] ** 3 - b[i, jp2, k] ** 3)
-                )
-                out[i, j, k, 2] = inv12h * (
-                    eight
-                    * (
-                        -a[i, j, km1]
-                        + a[i, j, kp1]
-                        + f * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
-                    )
-                    + a[i, j, km2]
-                    - a[i, j, kp2]
-                    + f * (b[i, j, km2] ** 3 - b[i, j, kp2] ** 3)
-                )
+    loops.offset_rhs_3f(out, a, b, kernel_derivative5_fR_n2, inv12h, eight, f, offset=2)
+
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def derivative7_fR_n2(
     out: npt.NDArray[np.float32],
     a: npt.NDArray[np.float32],
@@ -1532,88 +1283,12 @@ def derivative7_fR_n2(
     fortyfive = np.float32(45)
     ncells_1d = a.shape[0]
     inv60h = np.float32(ncells_1d / 60.0)
-    for i in prange(-3, ncells_1d - 3):
-        ip1 = i + 1
-        im1 = i - 1
-        ip2 = i + 2
-        im2 = i - 2
-        ip3 = i + 3
-        im3 = i - 3
-        for j in range(-3, ncells_1d - 3):
-            jp1 = j + 1
-            jm1 = j - 1
-            jp2 = j + 2
-            jm2 = j - 2
-            jp3 = j + 3
-            jm3 = j - 3
-            for k in range(-3, ncells_1d - 3):
-                kp1 = k + 1
-                km1 = k - 1
-                kp2 = k + 2
-                km2 = k - 2
-                kp3 = k + 3
-                km3 = k - 3
-                out[i, j, k, 0] = inv60h * (
-                    fortyfive
-                    * (
-                        -a[im1, j, k]
-                        + a[ip1, j, k]
-                        + f * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
-                    )
-                    + nine
-                    * (
-                        +a[im2, j, k]
-                        - a[ip2, j, k]
-                        + f * (b[im2, j, k] ** 3 - b[ip2, j, k] ** 3)
-                    )
-                    - a[im3, j, k]
-                    + a[ip3, j, k]
-                    + f * (-b[im3, j, k] ** 3 + b[ip3, j, k] ** 3)
-                )
+    loops.offset_rhs_4f(out, a, b, kernel_derivative7_fR_n2, inv60h, nine, fortyfive, f, offset=3)
 
-                out[i, j, k, 1] = inv60h * (
-                    fortyfive
-                    * (
-                        -a[i, jm1, k]
-                        + a[i, jp1, k]
-                        + f * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
-                    )
-                    + nine
-                    * (
-                        +a[i, jm2, k]
-                        - a[i, jp2, k]
-                        + f * (b[i, jm2, k] ** 3 - b[i, jp2, k] ** 3)
-                    )
-                    - a[i, jm3, k]
-                    + a[i, jp3, k]
-                    + f * (-b[i, jm3, k] ** 3 + b[i, jp3, k] ** 3)
-                )
-                out[i, j, k, 2] = inv60h * (
-                    fortyfive
-                    * (
-                        -a[i, j, km1]
-                        + a[i, j, kp1]
-                        + f * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
-                    )
-                    + nine
-                    * (
-                        +a[i, j, km2]
-                        - a[i, j, kp2]
-                        + f * (b[i, j, km2] ** 3 - b[i, j, kp2] ** 3)
-                    )
-                    - a[i, j, km3]
-                    + a[i, j, kp3]
-                    + f * (-b[i, j, km3] ** 3 + b[i, j, kp3] ** 3)
-                )
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def add_derivative2_fR_n2(
     force: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -1645,25 +1320,11 @@ def add_derivative2_fR_n2(
     """
     ncells_1d = b.shape[0]
     invh_f = np.float32(ncells_1d * f)
-    for i in prange(-1, ncells_1d - 1):
-        ip1 = i + 1
-        for j in range(-1, ncells_1d - 1):
-            jp1 = j + 1
-            for k in range(-1, ncells_1d - 1):
-                kp1 = k + 1
-                minus_bijk_3 = -b[i, j, k] ** 3
-                force[i, j, k, 0] += invh_f * (minus_bijk_3 + b[ip1, j, k] ** 3)
-                force[i, j, k, 1] += invh_f * (minus_bijk_3 + b[i, jp1, k] ** 3)
-                force[i, j, k, 2] += invh_f * (minus_bijk_3 + b[i, j, kp1] ** 3)
+    loops.offset_1f(force, b, kernel_add_derivative2_fR_n2, invh_f, offset=1)
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def add_derivative3_fR_n2(
     force: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -1695,27 +1356,11 @@ def add_derivative3_fR_n2(
     """
     ncells_1d = b.shape[0]
     inv2h_f = np.float32(0.5 * ncells_1d * f)
-    for i in prange(-1, ncells_1d - 1):
-        ip1 = i + 1
-        im1 = i - 1
-        for j in range(-1, ncells_1d - 1):
-            jp1 = j + 1
-            jm1 = j - 1
-            for k in range(-1, ncells_1d - 1):
-                kp1 = k + 1
-                km1 = k - 1
-                force[i, j, k, 0] += inv2h_f * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
-                force[i, j, k, 1] += inv2h_f * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
-                force[i, j, k, 2] += inv2h_f * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
+    loops.offset_1f(force, b, kernel_add_derivative3_fR_n2, inv2h_f, offset=1)
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def add_derivative5_fR_n2(
     force: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -1748,42 +1393,12 @@ def add_derivative5_fR_n2(
     eight = np.float32(8)
     ncells_1d = b.shape[0]
     inv12h_f = np.float32(f * ncells_1d / 12.0)
-    for i in prange(-2, ncells_1d - 2):
-        ip1 = i + 1
-        im1 = i - 1
-        ip2 = i + 2
-        im2 = i - 2
-        for j in range(-2, ncells_1d - 2):
-            jp1 = j + 1
-            jm1 = j - 1
-            jp2 = j + 2
-            jm2 = j - 2
-            for k in range(-2, ncells_1d - 2):
-                kp1 = k + 1
-                km1 = k - 1
-                kp2 = k + 2
-                km2 = k - 2
-                force[i, j, k, 0] += inv12h_f * (
-                    eight * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
-                    + (+b[im2, j, k] ** 3 - b[ip2, j, k] ** 3)
-                )
-                force[i, j, k, 1] += inv12h_f * (
-                    eight * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
-                    + (+b[i, jm2, k] ** 3 - b[i, jp2, k] ** 3)
-                )
-                force[i, j, k, 2] += inv12h_f * (
-                    eight * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
-                    + (+b[i, j, km2] ** 3 - b[i, j, kp2] ** 3)
-                )
+    loops.offset_2f(force, b, kernel_add_derivative5_fR_n2, inv12h_f, eight, offset=2)
+
 
 
 @utils.time_me
-@njit(
-    ["void(f4[:,:,:,::1], f4[:,:,::1], f4)"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,:,::1], f4[:,:,::1], f4)"], fastmath=True)
 def add_derivative7_fR_n2(
     force: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -1817,45 +1432,8 @@ def add_derivative7_fR_n2(
     fortyfive = np.float32(45.0)
     ncells_1d = b.shape[0]
     inv60h_f = np.float32(f * ncells_1d / 60.0)
-    for i in prange(-3, ncells_1d - 3):
-        ip1 = i + 1
-        im1 = i - 1
-        ip2 = i + 2
-        im2 = i - 2
-        ip3 = i + 3
-        im3 = i - 3
-        for j in range(-3, ncells_1d - 3):
-            jp1 = j + 1
-            jm1 = j - 1
-            jp2 = j + 2
-            jm2 = j - 2
-            jp3 = j + 3
-            jm3 = j - 3
-            for k in range(-3, ncells_1d - 3):
-                kp1 = k + 1
-                km1 = k - 1
-                kp2 = k + 2
-                km2 = k - 2
-                kp3 = k + 3
-                km3 = k - 3
-                force[i, j, k, 0] += inv60h_f * (
-                    fortyfive * (-b[im1, j, k] ** 3 + b[ip1, j, k] ** 3)
-                    + nine * (+b[im2, j, k] ** 3 - b[ip2, j, k] ** 3)
-                    - b[im3, j, k] ** 3
-                    + b[ip3, j, k] ** 3
-                )
-                force[i, j, k, 1] += inv60h_f * (
-                    fortyfive * (-b[i, jm1, k] ** 3 + b[i, jp1, k] ** 3)
-                    + nine * (+b[i, jm2, k] ** 3 - b[i, jp2, k] ** 3)
-                    - b[i, jm3, k] ** 3
-                    + b[i, jp3, k] ** 3
-                )
-                force[i, j, k, 2] += inv60h_f * (
-                    fortyfive * (-b[i, j, km1] ** 3 + b[i, j, kp1] ** 3)
-                    + nine * (+b[i, j, km2] ** 3 - b[i, j, kp2] ** 3)
-                    - b[i, j, km3] ** 3
-                    + b[i, j, kp3] ** 3
-                )
+    loops.offset_3f(force, b, kernel_add_derivative7_fR_n2, inv60h_f, nine, fortyfive, offset=3)
+
 
 
 def derivative(

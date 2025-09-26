@@ -190,7 +190,7 @@ def set_units(param: pd.Series) -> None:
     param["mpart"] = param["unit_d"] * param["unit_l"] ** 3 / param["npart"]  # In kg
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def min_abs(x: npt.NDArray[np.float32]) -> np.float32:
     """Minimum absolute value of array
 
@@ -214,7 +214,7 @@ def min_abs(x: npt.NDArray[np.float32]) -> np.float32:
     return np.min(np.abs(x))
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def max_abs(x: npt.NDArray[np.float32]) -> np.float32:
     """Maximum absolute value of array
 
@@ -237,7 +237,7 @@ def max_abs(x: npt.NDArray[np.float32]) -> np.float32:
     """
     return np.max(np.abs(x))
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def zero_initialise_f32(
     x: npt.NDArray[np.float32]
 ) -> None:
@@ -259,7 +259,7 @@ def zero_initialise_f32(
     for i in prange(len(x_ravel)):
         x_ravel[i] = zero
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def zero_initialise_c64(
     x: npt.NDArray[np.complex64]
 ) -> None:
@@ -281,7 +281,7 @@ def zero_initialise_c64(
     for i in prange(len(x_ravel)):
         x_ravel[i] = zero
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def add_vector_scalar_inplace(
     y: npt.NDArray[np.float32], x: npt.NDArray[np.float32], a: np.float32
 ) -> None:
@@ -318,7 +318,7 @@ def add_vector_scalar_inplace(
             y_ravel[i] += a * x_ravel[i]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def prod_vector_vector_scalar_inplace(
     y: npt.NDArray[np.float32], x: npt.NDArray[np.float32], a: np.float32
 ) -> None:
@@ -348,7 +348,7 @@ def prod_vector_vector_scalar_inplace(
         y_ravel[i] *= a * x_ravel[i]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def add_vector_vector_inplace(
     y: npt.NDArray[np.float32],
     f: np.float32,
@@ -385,7 +385,7 @@ def add_vector_vector_inplace(
         y_ravel[i] += f * a_ravel[i] * b_ravel[i]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def add_vector_vector_vector_inplace(
     y: npt.NDArray[np.float32],
     f: np.float32,
@@ -427,7 +427,7 @@ def add_vector_vector_vector_inplace(
         y_ravel[i] += f * a_ravel[i] * b_ravel[i] * c_ravel[i]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def prod_vector_scalar_inplace(y: npt.NDArray[np.float32], a: np.float32) -> None:
     """Multiply vector by scalar inplace \\
     y *= a
@@ -451,7 +451,7 @@ def prod_vector_scalar_inplace(y: npt.NDArray[np.float32], a: np.float32) -> Non
         y_ravel[i] *= a
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def prod_vector_scalar(
     out: npt.NDArray[np.float32], x: npt.NDArray[np.float32], a: np.float32
 ) -> None:
@@ -482,7 +482,7 @@ def prod_vector_scalar(
         out_ravel[i] = a * x_ravel[i]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def prod_add_vector_scalar_scalar(
     out: npt.NDArray[np.float32],
     x: npt.NDArray[np.float32],
@@ -516,7 +516,7 @@ def prod_add_vector_scalar_scalar(
         out_ravel[i] = a * x_ravel[i] + b
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def prod_vector_vector_inplace(
     x: npt.NDArray[np.float32],
     y: npt.NDArray[np.float32],
@@ -545,7 +545,7 @@ def prod_vector_vector_inplace(
         x_ravel[i] *= y_ravel[i]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def prod_gradient_vector_inplace(
     x: npt.NDArray[np.float32],
     y: npt.NDArray[np.float32],
@@ -581,7 +581,7 @@ def prod_gradient_vector_inplace(
             x_ravel[ii + j] *= y_tmp
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def prod_add_vector_scalar_vector(
     out: npt.NDArray[np.float32],
     x: npt.NDArray[np.float32],
@@ -618,7 +618,7 @@ def prod_add_vector_scalar_vector(
         out_ravel[i] = a * x_ravel[i] + b_ravel[i]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def prod_minus_vector_inplace(
     x: npt.NDArray[np.complex64],
     y: npt.NDArray[np.complex64],
@@ -649,7 +649,7 @@ def prod_minus_vector_inplace(
         x_ravel[i] *= -y_ravel[i]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def linear_operator(
     out: npt.NDArray[np.float32], x: npt.NDArray[np.float32], f1: np.float32, f2: np.float32
 ) -> None:
@@ -689,7 +689,7 @@ def linear_operator(
         out_ravel[i] = f1 * x_ravel[i] + f2
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def linear_operator_inplace(
     x: npt.NDArray[np.float32], f1: np.float32, f2: np.float32
 ) -> None:
@@ -726,7 +726,7 @@ def linear_operator_inplace(
         x_ravel[i] = f1 * x_ravel[i] + f2
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def linear_operator_vectors_inplace(
     x: npt.NDArray[np.float32],
     f1: np.float32,
@@ -764,7 +764,7 @@ def linear_operator_vectors_inplace(
         x_ravel[i] = f1 * x_ravel[i] + f2 * y_ravel[i]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def operator_fR_inplace(
     density: npt.NDArray[np.float32],
     u_scalaron: npt.NDArray[np.float32],
@@ -812,7 +812,7 @@ def operator_fR_inplace(
         density_ravel[i] = f1 * density_ravel[i] + f2 / u_scalaron_ravel[i] + f3
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def injection(out: npt.NDArray, x: npt.NDArray) -> None:
     """Straight injection
 
@@ -839,7 +839,7 @@ def injection(out: npt.NDArray, x: npt.NDArray) -> None:
         out_ravel[i] = x_ravel[i]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def injection_to_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
     """Straight injection to gradient array
 
@@ -869,7 +869,7 @@ def injection_to_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
                 a[i, j, k, dim] = b[i, j, k]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def injection_from_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
     """Straight injection from gradient array
 
@@ -899,7 +899,7 @@ def injection_from_gradient(a: npt.NDArray, b: npt.NDArray, dim: int) -> None:
                 a[i, j, k] = b[i, j, k, dim]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def injection_with_indices(
     idx: npt.NDArray[np.int32], a: npt.NDArray[np.float32]
 ) -> None:
@@ -930,7 +930,7 @@ def injection_with_indices(
         a[i] = tmp[i]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def injection_with_indices2(
     idx: npt.NDArray[np.int32], a: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
 ) -> None:
@@ -969,7 +969,7 @@ def injection_with_indices2(
         b[i] = tmp_2[i]
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def injection_with_indices3(
     idx: npt.NDArray[np.int32],
     a: npt.NDArray[np.float32],
@@ -1054,7 +1054,7 @@ def reorder_particles(
     >>> position, velocity, acceleration = reorder_particles(position, velocity, acceleration)
     """
     nthreads = numba.get_num_threads()
-    index = np.empty(position.shape[0])
+    index = np.empty(position.shape[0], dtype=np.int64)
     arg = np.empty_like(index)
 
     morton.positions_to_keys(index, position)
@@ -1078,7 +1078,7 @@ def reorder_particles(
 
 
 @time_me
-@njit(["void(i8[:], i8[:], i8)"], fastmath=True, cache=True, parallel=True)
+@njit(["void(i8[:], i8[:], i8)"], fastmath=False, cache=True, parallel=True)
 def argsort_par(out: npt.NDArray[np.int64], indices: npt.NDArray[np.int64], nthreads: int) -> None:
     """Parallel partial argsort algorithm
 
@@ -1113,7 +1113,7 @@ def argsort_par(out: npt.NDArray[np.int64], indices: npt.NDArray[np.int64], nthr
         out[imin:imax] = np.argsort(indices[imin:imax]) + imin
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def periodic_wrap(position: npt.NDArray[np.float32]) -> None:
     """Wrap Particle positions in the [0,1[ range
 

@@ -106,7 +106,7 @@ def generate(
                     f"{param['snapshot_format']=}, should be 'parquet' or 'hdf5'"
                 )
     elif "LPT".casefold() in INITIAL_CONDITIONS.casefold():
-        ncells_1d = int(math.cbrt(param["npart"]))
+        ncells_1d = int(np.cbrt(param["npart"]))
         a_start = 1.0 / (1 + param["z_start"])
         lna_start = np.log(a_start)
         logging.warning(f"{param['z_start']=}")
@@ -535,7 +535,7 @@ def get_transfer_grid(out: npt.NDArray[np.float32], param: pd.Series) -> None:
 
     ncells_1d = out.shape[0]
     if param["npart"] != ncells_1d**3:
-        raise ValueError(f"{math.cbrt(param['npart'])=}, should be integer")
+        raise ValueError(f"{np.cbrt(param['npart'])=}, should be integer")
     
     kf = 2 * np.pi / param["boxlen"]
     k_dimensionless = k / kf
@@ -555,7 +555,7 @@ def get_transfer_grid(out: npt.NDArray[np.float32], param: pd.Series) -> None:
 
 @utils.time_me
 @njit(
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
 )
@@ -629,7 +629,7 @@ def white_noise_fourier(
 
 @utils.time_me
 @njit(
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
 )
@@ -692,7 +692,7 @@ def white_noise_fourier_fixed(
 
 @utils.time_me
 @njit(
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
     error_model="numpy",
@@ -823,7 +823,7 @@ def white_noise_fourier_force(
 
 @utils.time_me
 @njit(
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
     error_model="numpy",
@@ -1753,7 +1753,7 @@ def initialise_1LPT(
 @utils.time_me
 @njit(
     ["void(f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4, f4)"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
 )
@@ -1811,7 +1811,7 @@ def initialise_1LPT_edge(
 @utils.time_me
 @njit(
     ["void(f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4, f4)"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
 )
@@ -1870,7 +1870,7 @@ def initialise_1LPT_center(
 @utils.time_me
 @njit(
     ["void(f4[:,:,:,::1], f4[:,:,:,::1], f4[:,:,:,::1], f4, f4)"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
 )

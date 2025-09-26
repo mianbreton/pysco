@@ -6,9 +6,60 @@ import numpy as np
 import numpy.typing as npt
 from numba import config, njit, prange
 import mesh
+import loops
+import utils
 
+# Laplacian written as:  u_ijk - p = 0
+# Or:                    m = rho
 
-@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+@njit(["f4(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=False)
+def compute_p(x, b, i, j, k, h2, invsix):
+    return  invsix * (
+                      x[ i ,  j ,  k-1]
+                    + x[ i ,  j ,  k+1]
+                    + x[ i ,  j-1, k ]
+                    + x[ i ,  j+1, k ]
+                    + x[ i-1, j ,  k ]
+                    + x[ i+1, j ,  k ]
+                    - h2 * b[i,j,k]
+            )
+
+@njit(["f4(f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=False)
+def compute_m(x, i, j, k, invh2, six):
+    return  invh2 * (
+                    x[ i ,  j ,  k-1]
+                  + x[ i ,  j ,  k+1]
+                  + x[ i ,  j-1, k ]
+                  + x[ i ,  j+1, k ]
+                  + x[ i-1, j ,  k ]
+                  + x[ i+1, j ,  k ]
+                  - six * x[i,j,k]
+            )
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=False)
+def operator_kernel(out, x, i, j, k, invh2, six):
+    out[i,j,k] = compute_m(x, i, j, k, invh2, six)
+
+@njit(["f4(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=False)
+def residual_scalar(x, b, i, j, k, invh2, six):
+    m = compute_m(x, i, j, k, invh2, six)
+    return b[i,j,k] - m
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=False)
+def residual_kernel(out, x, b, i, j, k, invh2, six):
+    out[i,j,k] = residual_scalar(x, b, i, j, k, invh2, six)
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4)"], inline="always", fastmath=False)
+def jacobi_kernel(out, x, b, i, j, k, h2, invsix):
+    out[i,j,k] = compute_p(x, b, i, j, k, h2, invsix)
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], i8, i8, i8, f4, f4, f4)"], inline="always", fastmath=False)
+def gauss_seidel_kernel(x, b, i, j, k, h2, invsix, f_relax):
+    p = compute_p(x, b, i, j, k, h2, invsix)
+    x[i,j,k] += f_relax *(p - x[i,j,k])
+
+   
+@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=False)
 def operator(out: npt.NDArray[np.float32], x: npt.NDArray[np.float32]) -> None:
     """Laplacian operator
 
@@ -29,32 +80,10 @@ def operator(out: npt.NDArray[np.float32], x: npt.NDArray[np.float32]) -> None:
     ncells_1d = x.shape[0]
     invh2 = np.float32(ncells_1d**2)
     six = np.float32(6)
-    for i in prange(-1, ncells_1d - 1):
-        im1 = i - 1
-        ip1 = i + 1
-        for j in range(-1, ncells_1d - 1):
-            jm1 = j - 1
-            jp1 = j + 1
-            for k in range(-1, ncells_1d - 1):
-                km1 = k - 1
-                kp1 = k + 1
-                out[i, j, k] = (
-                    x[im1, j, k]
-                    + x[i, jm1, k]
-                    + x[i, j, km1]
-                    - six * x[i, j, k]
-                    + x[i, j, kp1]
-                    + x[i, jp1, k]
-                    + x[ip1, j, k]
-                ) * invh2
+    loops.offset_2f(out, x, operator_kernel, invh2, six, offset=1)
 
 
-@njit(
-    ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1])"],
-    fastmath=True,
-    cache=True,
-    parallel=True,
-)
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1])"], fastmath=False)
 def residual(
     out: npt.NDArray[np.float32], x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
 ) -> None:
@@ -81,33 +110,13 @@ def residual(
     ncells_1d = x.shape[0]
     invh2 = np.float32(ncells_1d**2)
     six = np.float32(6)
-    for i in prange(-1, ncells_1d - 1):
-        im1 = i - 1
-        ip1 = i + 1
-        for j in range(-1, ncells_1d - 1):
-            jm1 = j - 1
-            jp1 = j + 1
-            for k in range(-1, ncells_1d - 1):
-                km1 = k - 1
-                kp1 = k + 1
-                out[i, j, k] = (
-                    -(
-                        x[im1, j, k]
-                        + x[i, jm1, k]
-                        + x[i, j, km1]
-                        - six * x[i, j, k]
-                        + x[i, j, kp1]
-                        + x[i, jp1, k]
-                        + x[ip1, j, k]
-                    )
-                    * invh2
-                    + b[i, j, k]
-                )
-
+    loops.offset_rhs_2f(out, x, b, residual_kernel, invh2, six, offset=1)
+    
+    
 
 @njit(
     ["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1])"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
 )
@@ -208,7 +217,7 @@ def restrict_residual(
 
 
 
-@njit(["f4(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+@njit(["f4(f4[:,:,::1], f4[:,:,::1])"], fastmath=False, cache=True, parallel=True)
 def residual_error(
     x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]
 ) -> np.float32:
@@ -241,35 +250,16 @@ def residual_error(
     six = np.float32(6.0)
     result = np.float32(0)
     for i in prange(-1, ncells_1d - 1):
-        im1 = i - 1
-        ip1 = i + 1
         for j in range(-1, ncells_1d - 1):
-            jm1 = j - 1
-            jp1 = j + 1
             for k in range(-1, ncells_1d - 1):
-                km1 = k - 1
-                kp1 = k + 1
-                result += (
-                    -(
-                        +x[im1, j, k]
-                        + x[i, j, km1]
-                        + x[i, j, kp1]
-                        + x[i, jm1, k]
-                        - six * x[i, j, k]
-                        + x[i, jp1, k]
-                        + x[ip1, j, k]
-                    )
-                    * invh2
-                    + b[i, j, k]
-                ) ** 2
+                tmp = residual_scalar(x, b, i, j, k, invh2, six)
+                result += tmp ** 2
 
     return np.sqrt(result)
 
-
 @njit(
     ["f4(f4[:,:,::1])"],
-    fastmath=True,
-    cache=True,
+    fastmath=False,
     parallel=True,
 )
 def truncation_error(x: npt.NDArray[np.float32]) -> np.float32:
@@ -313,7 +303,7 @@ def truncation_error(x: npt.NDArray[np.float32]) -> np.float32:
     return np.sqrt(result)
 
 
-@njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True)
+@njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=False)
 def truncation_knebe2(x: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     """Truncation error estimator \\
     As in Knebe et al. (2001), we estimate the truncation error as \\
@@ -349,7 +339,7 @@ def truncation_knebe2(x: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     return PLRx - Lx
 
 
-@njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=True, cache=True)
+@njit(["f4[:,:,::1](f4[:,:,::1])"], fastmath=False)
 def truncation_knebe(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     """Truncation error estimator \\
     In Knebe et al. (2001), the authors estimate the truncation error as \\
@@ -384,7 +374,7 @@ def truncation_knebe(b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     return Pb_c - b
 
 
-@njit(["f4(f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+@njit(["f4(f4[:,:,::1])"], fastmath=False, parallel=True)
 def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
     """Truncation error estimator \\
     In Knebe et al. (2001), the authors estimate the truncation error as \\
@@ -554,7 +544,7 @@ def truncation_error_knebe(b: npt.NDArray[np.float32]) -> np.float32:
 
 @njit(
     ["void(f4[:,:,::1], f4[:,:,::1])"],
-    fastmath=True,
+    fastmath=False,
     cache=True,
     parallel=True,
 )
@@ -579,15 +569,15 @@ def initialise_potential(
     >>> b = np.random.rand(32, 32, 32).astype(np.float32)
     >>> potential = initialise_potential(b)
     """
-    h = np.float32(1.0 / len(b))
+    h = np.float32(1.0 / out.shape[0])
     minus_h2_over_six = np.float32(-h * h / 6.0)
     out_ravel = out.ravel()
     b_ravel = b.ravel()
     for i in prange(len(out_ravel)):
         out_ravel[i] = minus_h2_over_six * b_ravel[i]
 
-
-@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+    
+@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=False)
 def jacobi(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]) -> None:
     """Jacobi iteration \\
     Smooths x in Laplacian(x) = b
@@ -610,28 +600,12 @@ def jacobi(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]) -> None:
     ncells_1d = x.shape[0]
     h2 = np.float32(1.0 / ncells_1d**2)
     invsix = np.float32(1.0 / 6)
-    x_old = x.copy()
-    for i in prange(-1, ncells_1d - 1):
-        im1 = i - 1
-        ip1 = i + 1
-        for j in range(-1, ncells_1d - 1):
-            jm1 = j - 1
-            jp1 = j + 1
-            for k in range(-1, ncells_1d - 1):
-                km1 = k - 1
-                kp1 = k + 1
-                x[i, j, k] = (
-                    x_old[im1, j, k]
-                    + x_old[i, jm1, k]
-                    + x_old[i, j, km1]
-                    - h2 * b[i, j, k]
-                    + x_old[i, j, kp1]
-                    + x_old[i, jp1, k]
-                    + x_old[ip1, j, k]
-                ) * invsix
+    x_old = np.empty_like(x)
+    utils.injection(x_old, x)
+    loops.offset_rhs_2f(x, x_old, b, jacobi_kernel, h2, invsix, offset=1)
 
 
-@njit(["void(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=False)
 def gauss_seidel(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32],
@@ -658,159 +632,10 @@ def gauss_seidel(
     >>> f_relax = np.float32(1.3)
     >>> gauss_seidel(x, b, f_relax)
     """
-    # WARNING: If I replace the arguments in prange by some constant values (for example, doing imax = int(0.5*x.shape[0]), then prange(imax)...),
-    #          then LLVM tries to fuse the red and black loops! And we really don't want that...
     ncells_1d = x.shape[0]
     h2 = np.float32(1.0 / ncells_1d**2)
-    ncells_1d_coarse = ncells_1d // 2
     invsix = np.float32(1.0 / 6)
-    # Computation Red
-    for i in prange(x.shape[0] >> 1):
-        ii = 2 * i
-        iim2 = ii - 2
-        iim1 = ii - 1
-        iip1 = ii + 1
-        for j in range(ncells_1d_coarse):
-            jj = 2 * j
-            jjm2 = jj - 2
-            jjm1 = jj - 1
-            jjp1 = jj + 1
-            for k in range(ncells_1d_coarse):
-                kk = 2 * k
-                kkm2 = kk - 2
-                kkm1 = kk - 1
-                kkp1 = kk + 1
-
-                x001 = x[iim1, jjm1, kk]
-                x010 = x[iim1, jj, kkm1]
-                x100 = x[ii, jjm1, kkm1]
-                x111 = x[ii, jj, kk]
-                x[iim1, jjm1, kkm1] += f_relax * (
-                    (
-                        +x001
-                        + x010
-                        + x100
-                        + x[iim2, jjm1, kkm1]
-                        + x[iim1, jjm2, kkm1]
-                        + x[iim1, jjm1, kkm2]
-                        - h2 * b[iim1, jjm1, kkm1]
-                    )
-                    * invsix
-                    - x[iim1, jjm1, kkm1]
-                )
-                x[iim1, jj, kk] += f_relax * (
-                    (
-                        +x001
-                        + x010
-                        + x111
-                        + x[iim2, jj, kk]
-                        - h2 * b[iim1, jj, kk]
-                        + x[iim1, jj, kkp1]
-                        + x[iim1, jjp1, kk]
-                    )
-                    * invsix
-                    - x[iim1, jj, kk]
-                )
-                x[ii, jjm1, kk] += f_relax * (
-                    (
-                        x001
-                        + x111
-                        + x100
-                        + x[iip1, jjm1, kk]
-                        + x[ii, jjm2, kk]
-                        + x[ii, jjm1, kkp1]
-                        - h2 * b[ii, jjm1, kk]
-                    )
-                    * invsix
-                    - x[ii, jjm1, kk]
-                )
-                x[ii, jj, kkm1] += f_relax * (
-                    (
-                        x010
-                        + x100
-                        + x111
-                        + x[ii, jj, kkm2]
-                        - h2 * b[ii, jj, kkm1]
-                        + x[ii, jjp1, kkm1]
-                        + x[iip1, jj, kkm1]
-                    )
-                    * invsix
-                    - x[ii, jj, kkm1]
-                )
-
-    # Computation Black
-    for i in prange(ncells_1d_coarse):
-        ii = 2 * i
-        iim2 = ii - 2
-        iim1 = ii - 1
-        iip1 = ii + 1
-        for j in range(ncells_1d_coarse):
-            jj = 2 * j
-            jjm2 = jj - 2
-            jjm1 = jj - 1
-            jjp1 = jj + 1
-            for k in range(ncells_1d_coarse):
-                kk = 2 * k
-                kkm2 = kk - 2
-                kkm1 = kk - 1
-                kkp1 = kk + 1
-
-                x000 = x[iim1, jjm1, kkm1]
-                x011 = x[iim1, jj, kk]
-                x101 = x[ii, jjm1, kk]
-                x110 = x[ii, jj, kkm1]
-                x[iim1, jjm1, kk] += f_relax * (
-                    (
-                        +x000
-                        + x011
-                        + x101
-                        + x[iim2, jjm1, kk]
-                        + x[iim1, jjm2, kk]
-                        - h2 * b[iim1, jjm1, kk]
-                        + x[iim1, jjm1, kkp1]
-                    )
-                    * invsix
-                    - x[iim1, jjm1, kk]
-                )
-                x[iim1, jj, kkm1] += f_relax * (
-                    (
-                        +x000
-                        + x011
-                        + x110
-                        + x[iim2, jj, kkm1]
-                        + x[iim1, jj, kkm2]
-                        - h2 * b[iim1, jj, kkm1]
-                        + x[iim1, jjp1, kkm1]
-                    )
-                    * invsix
-                    - x[iim1, jj, kkm1]
-                )
-                x[ii, jjm1, kkm1] += f_relax * (
-                    (
-                        x000
-                        + x101
-                        + x110
-                        + x[ii, jjm2, kkm1]
-                        + x[ii, jjm1, kkm2]
-                        - h2 * b[ii, jjm1, kkm1]
-                        + x[iip1, jjm1, kkm1]
-                    )
-                    * invsix
-                    - x[ii, jjm1, kkm1]
-                )
-                x[ii, jj, kk] += f_relax * (
-                    (
-                        x011
-                        + x101
-                        + x110
-                        - h2 * b[ii, jj, kk]
-                        + x[ii, jj, kkp1]
-                        + x[ii, jjp1, kk]
-                        + x[iip1, jj, kk]
-                    )
-                    * invsix
-                    - x[ii, jj, kk]
-                )
+    loops.gauss_seidel_3f(x, b, gauss_seidel_kernel, h2, invsix, f_relax)
 
 
 # @utils.time_me
@@ -840,7 +665,6 @@ def smoothing(
     >>> n_smoothing = 5
     >>> smoothing(x, b, n_smoothing)
     """
-
     f_relax = np.float32(1.25)  # As in Kravtsov et al. 1997
     for _ in range(n_smoothing):
         gauss_seidel(x, b, f_relax)

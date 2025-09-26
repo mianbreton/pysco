@@ -38,10 +38,10 @@ def nu_simple(y: np.float32) -> np.float32:
     return half + math.sqrt(invfour + one / y)
 
 
-# Currently, the option [fastmath = True] generates the following message:
+# FIXME: Currently, the option [fastmath = True] generates the following message:
 # LLVM ERROR: Symbol not found: __powisf2
 # Indicating a bug in the LLVM compiler. Hope this get fixed in the future.
-@njit(["f4(f4, i4)"], fastmath=False, cache=True)
+@njit(["f4(f4, i4)"], cache=True)
 def nu_n(y: np.float32, n: int) -> np.float32:
     """
     QUMOND n-family interpolating function.

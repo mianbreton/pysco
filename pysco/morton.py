@@ -38,7 +38,7 @@ _YZ_MASK = _Y_MASK | _Z_MASK
 #  TODO: MOVE TO LOOKUP TABLE METHOD AT SOME POINT
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def interleaving_64bits(
     x: np.int64,
 ) -> np.int64:
@@ -78,7 +78,7 @@ def interleaving_64bits(
     return x
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def key(x: np.float32, y: np.float32, z: np.float32) -> np.int64:
     """Compute Morton index from position
 
@@ -109,7 +109,7 @@ def key(x: np.float32, y: np.float32, z: np.float32) -> np.int64:
     return xx << 2 | yy << 1 | zz  # 64 bits integer
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def positions_to_keys(keys: npt.NDArray[np.int64], positions: npt.NDArray[np.float32]) -> None:
     """Compute Morton index array from position array
 
@@ -132,7 +132,7 @@ def positions_to_keys(keys: npt.NDArray[np.int64], positions: npt.NDArray[np.flo
         keys[i] = key(positions[i, 0], positions[i, 1], positions[i, 2])
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def compactify_64bits(key: np.int64) -> np.int64:
     """Compactify 64-bits integer to 21-bits integer coordinate
 
@@ -168,7 +168,7 @@ def compactify_64bits(key: np.int64) -> np.int64:
     return key
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def key_to_position(key: np.int64) -> np.float32:
     """Converts 21-bit integer to float position
 
@@ -193,7 +193,7 @@ def key_to_position(key: np.int64) -> np.float32:
     return np.float32(0.5**21 * compactify_64bits(key))
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def key_to_position3d(key: np.int64) -> Tuple[np.float32, np.float32, np.float32]:
     """Converts interleaved 64-bit integer to float 3D-position
 
@@ -219,7 +219,7 @@ def key_to_position3d(key: np.int64) -> Tuple[np.float32, np.float32, np.float32
     return (key_to_position(key >> 2), key_to_position(key >> 1), key_to_position(key))
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+@njit(fastmath=False, cache=True, parallel=True)
 def keys_to_positions(positions: npt.NDArray[np.float32], keys: npt.NDArray[np.int64]) -> None:
     """Compute position array from Morton indices
 
@@ -246,7 +246,7 @@ def keys_to_positions(positions: npt.NDArray[np.float32], keys: npt.NDArray[np.i
         positions[i, 2] = key_to_position(key)
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def cell_ijk_to_21bits(i: np.int64, nlevel: np.int64) -> np.int64:
     """Convert cell index along one direction to 21-bit integer
 
@@ -272,7 +272,7 @@ def cell_ijk_to_21bits(i: np.int64, nlevel: np.int64) -> np.int64:
     return i << (21 - nlevel)
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def key_to_ijk(key: np.int64, nlevel: np.int64) -> np.int64:
     """Convert 21-bit integer to cell index along one direction
 
@@ -300,7 +300,7 @@ def key_to_ijk(key: np.int64, nlevel: np.int64) -> np.int64:
     return compactify_64bits(key) >> (21 - nlevel)
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def add(key1: np.int64, key2: np.int64) -> np.int64:  # Wraps in the [0, 1] range
     """Add two Morton indices
 
@@ -333,7 +333,7 @@ def add(key1: np.int64, key2: np.int64) -> np.int64:  # Wraps in the [0, 1] rang
     return (x_sum & _X_MASK) | (y_sum & _Y_MASK) | (z_sum & _Z_MASK)
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def subtract(key1: np.int64, key2: np.int64) -> np.int64:  # Wraps in the [0, 1] range
     """Subtract two Morton indices
 
@@ -366,7 +366,7 @@ def subtract(key1: np.int64, key2: np.int64) -> np.int64:  # Wraps in the [0, 1]
     return (x_diff & _X_MASK) | (y_diff & _Y_MASK) | (z_diff & _Z_MASK)
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def incX(key: np.int64, level: np.int64) -> np.int64:
     """Increment Morton index by one along x axis
 
@@ -398,7 +398,7 @@ def incX(key: np.int64, level: np.int64) -> np.int64:
     return (x_sum & _X_MASK) | (key & _YZ_MASK)
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def incY(key: np.int64, level: np.int64) -> np.int64:
     """Increase Morton index by one along y axis
 
@@ -429,7 +429,7 @@ def incY(key: np.int64, level: np.int64) -> np.int64:
     return (y_sum & _Y_MASK) | (key & _XZ_MASK)
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def incZ(key: np.int64, level: np.int64) -> np.int64:
     """Increase Morton index by one along z axis
 
@@ -460,7 +460,7 @@ def incZ(key: np.int64, level: np.int64) -> np.int64:
     return (z_sum & _Z_MASK) | (key & _XY_MASK)
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def decX(key: np.int64, level: np.int64) -> np.int64:
     """Decrease Morton index by one along x axis
 
@@ -491,7 +491,7 @@ def decX(key: np.int64, level: np.int64) -> np.int64:
     return (x_diff & _X_MASK) | (key & _YZ_MASK)
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def decY(key: np.int64, level: np.int64) -> np.int64:
     """Decrease Morton index by one along y axis
 
@@ -522,7 +522,7 @@ def decY(key: np.int64, level: np.int64) -> np.int64:
     return (y_diff & _Y_MASK) | (key & _XZ_MASK)
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def decZ(key: np.int64, level: np.int64) -> np.int64:
     """Decrease Morton index by one along z axis
 
