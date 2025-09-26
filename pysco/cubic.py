@@ -12,7 +12,7 @@ import numpy.typing as npt
 from numba import config, njit, prange
 import mesh
 import math
-
+import utils
 
 @njit(
     ["f4[:,:,::1](f4[:,:,::1], f4[:,:,::1], f4)"],
@@ -669,7 +669,8 @@ def residual_half(
     ncells_1d_coarse = ncells_1d // 2
     h2 = np.float32(1.0 / ncells_1d**2)
     qh2 = q * h2
-    result = np.zeros_like(x)
+    result = np.empty_like(x)
+    utils.initialise_zero(x)
     for i in prange(-1, ncells_1d_coarse - 1):
         ii = 2 * i
         iim1 = ii - 1

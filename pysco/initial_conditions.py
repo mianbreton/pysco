@@ -1879,10 +1879,11 @@ def pad(input: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     ncells_1d = len(input)
     ncells_1d_extended = 3 * ncells_1d // 2
     middle = ncells_1d // 2
-    output = np.zeros(
+    output = np.empty(
         (ncells_1d_extended, ncells_1d_extended, ncells_1d_extended // 2 + 1),
         dtype=input.dtype,
     )
+    utils.initialise_zero(output)
     output[:middle, :middle, :middle] = input[:middle, :middle, :middle]
     output[-middle + 1 :, :middle, :middle] = input[-middle + 1 :, :middle, :middle]
     output[:middle, -middle + 1 :, :middle] = input[:middle, -middle + 1 :, :middle]
@@ -1916,7 +1917,8 @@ def trim(input: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
     ncells_1d_extended = len(input)
     ncells_1d = 2 * ncells_1d_extended // 3
     middle = ncells_1d // 2
-    output = np.zeros((ncells_1d, ncells_1d, middle + 1), dtype=input.dtype)
+    output = np.empty((ncells_1d, ncells_1d, middle + 1), dtype=input.dtype)
+    utils.initialise_zero(output)
     output[:middle, :middle, :middle] = input[:middle, :middle, :middle]
     output[-middle + 1 :, :middle, :middle] = input[-middle + 1 :, :middle, :middle]
     output[:middle, -middle + 1 :, :middle] = input[:middle, -middle + 1 :, :middle]

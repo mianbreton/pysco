@@ -2266,7 +2266,8 @@ def NGP(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     ncells_1d_f = np.float32(ncells_1d)
     ncells2 = ncells_1d**2
     one = np.float32(1)
-    result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    utils.initialise_zero(result)
     result_ravel = result.ravel()
     for n in prange(position.shape[0]):
         i = np.int16(position[n, 0] * ncells_1d_f)
@@ -2309,7 +2310,8 @@ def CIC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     ncells_1d_f = np.float32(ncells_1d)
     one = np.float32(1)
     half = np.float32(0.5)
-    result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    utils.initialise_zero(result)
     for n in prange(position.shape[0]):
         x_part = position[n, 0] * ncells_1d_f
         y_part = position[n, 1] * ncells_1d_f
@@ -2389,7 +2391,8 @@ def TSC_seq(
     ncells_1d_f = np.float32(ncells_1d)
     half = np.float32(0.5)
     threequarters = np.float32(0.75)
-    result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    utils.initialise_zero(result)
     for n in range(position.shape[0]):
         x_part = position[n, 0] * ncells_1d_f
         y_part = position[n, 1] * ncells_1d_f
@@ -2493,7 +2496,8 @@ def TSC(position: npt.NDArray[np.float32], ncells_1d: int) -> npt.NDArray[np.flo
     ncells_1d_f = np.float32(ncells_1d)
     half = np.float32(0.5)
     threequarters = np.float32(0.75)
-    result = np.zeros((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    result = np.empty((ncells_1d, ncells_1d, ncells_1d), dtype=np.float32)
+    utils.initialise_zero(result)
     for n in prange(position.shape[0]):
         x_part = position[n, 0] * ncells_1d_f
         y_part = position[n, 1] * ncells_1d_f
