@@ -239,6 +239,26 @@ def max_abs(x: npt.NDArray[np.float32]) -> np.float32:
     """
     return np.max(np.abs(x))
 
+@njit(fastmath=True, cache=True, parallel=True)
+def initialise_zero(x: npt.NDArray[np.float32]) -> None:
+    """Zero initialise in parallel
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Mutable array
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from pysco.utils import initialise_zero
+    >>> x = np.empty(100, dtype=np.float32)
+    >>> initialise_zero(x)
+    """
+    x_ravel = x.ravel()
+    zero = np.float32(0)
+    for i in prange(len(x_ravel)):
+        x_ravel[i] = zero
 
 @njit(fastmath=True, cache=True, parallel=True)
 def add_vector_scalar_inplace(
