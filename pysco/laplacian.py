@@ -796,8 +796,50 @@ def initialise_potential(
     return potential
 
 
-@njit(["void(f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
-def jacobi(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]) -> None:
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1])"], fastmath=True, cache=True, parallel=True)
+def jacobi(x: npt.NDArray[np.float32], x_old: npt.NDArray[np.float32], b: npt.NDArray[np.float32]) -> None:
+    """Jacobi iteration \\
+    Smooths x in Laplacian(x) = b   
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import jacobi
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> jacobi(x, b)
+    """
+    ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
+    invsix = np.float32(1.0 / 6)
+    for i in prange(-1, ncells_1d - 1):
+        im1 = i - 1
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jm1 = j - 1
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                km1 = k - 1
+                kp1 = k + 1
+                x[i, j, k] = (
+                    x_old[im1, j, k]
+                    + x_old[i, jm1, k]
+                    + x_old[i, j, km1]
+                    - h2 * b[i, j, k]
+                    + x_old[i, j, kp1]
+                    + x_old[i, jp1, k]
+                    + x_old[ip1, j, k]
+                ) * invsix
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
+def jacobi_w(x: npt.NDArray[np.float32], x_old: npt.NDArray[np.float32], b: npt.NDArray[np.float32], w) -> None:
     """Jacobi iteration \\
     Smooths x in Laplacian(x) = b
 
@@ -818,8 +860,10 @@ def jacobi(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]) -> None:
     """
     ncells_1d = x.shape[0]
     h2 = np.float32(1.0 / ncells_1d**2)
+    invh2 = np.float32(ncells_1d**2)
+    six = np.float32(6)
     invsix = np.float32(1.0 / 6)
-    x_old = x.copy()
+    w_h2_invsix = w*h2*invsix
     for i in prange(-1, ncells_1d - 1):
         im1 = i - 1
         ip1 = i + 1
@@ -829,15 +873,122 @@ def jacobi(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32]) -> None:
             for k in prange(-1, ncells_1d - 1):
                 km1 = k - 1
                 kp1 = k + 1
-                x[i, j, k] = (
-                    x_old[im1, j, k]
-                    + x_old[i, jm1, k]
-                    + x_old[i, j, km1]
-                    - h2 * b[i, j, k]
-                    + x_old[i, j, kp1]
-                    + x_old[i, jp1, k]
-                    + x_old[ip1, j, k]
-                ) * invsix
+                r = (
+                    -(
+                        x_old[im1, j, k]
+                        + x_old[i, jm1, k]
+                        + x_old[i, j, km1]
+                        - six * x_old[i, j, k]
+                        + x_old[i, j, kp1]
+                        + x_old[i, jp1, k]
+                        + x_old[ip1, j, k]
+                    )
+                    * invh2
+                    + b[i, j, k]
+                )
+                x[i, j, k] = x_old[i,j,k] - w_h2_invsix*r
+                
+@njit(["void(f4[:,:,::1], f4[:,:,::1], i4)"], fastmath=True, cache=True, parallel=True)
+def jacobi_block(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], blocksize: int) -> None:
+    """Jacobi iteration \\
+    Smooths x in Laplacian(x) = b
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    blocksize : int 
+        Number of cells per block along one direction
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import jacobi
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> jacobi(x, b, 4)
+    """
+    ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
+    invsix = np.float32(1.0 / 6)
+    x_old = x.copy()
+    NBLOCKS = ncells_1d // blocksize
+    blocksize_extended = blocksize + 2
+    for i in prange(-1, NBLOCKS - 1):
+        iblock = i*blocksize
+        xblock = np.empty((blocksize_extended,blocksize_extended,blocksize_extended), dtype=np.float32)
+        for j in range(-1, NBLOCKS - 1):
+            jblock = j*blocksize
+            for k in range(-1, NBLOCKS - 1):
+                kblock = k*blocksize
+                # Load block
+                for ii in range(blocksize_extended):
+                    for jj in range(blocksize_extended):
+                        for kk in range(blocksize_extended):
+                            xblock[ii,jj,kk] = x_old[iblock + ii - 1, jblock + jj - 1, kblock + kk - 1]
+                # Stencil computation
+                for ii in range(blocksize):
+                    for jj in range(blocksize):
+                        for kk in range(blocksize):
+                            x[iblock+ii, jblock+jj, kblock+kk] = (
+                                    xblock[ii-1, jj, kk]
+                                    + xblock[ii, jj-1, kk]
+                                    + xblock[ii, jj, kk-1]
+                                    - h2 * b[iblock+ii, jblock+jj, kblock+kk]
+                                    + xblock[ii, jj, kk+1]
+                                    + xblock[ii, jj+1, kk]
+                                    + xblock[ii+1, jj, kk]
+                                ) * invsix
+                            
+@njit(["void(f4[:,:,::1], f4[:,:,::1], i4)"], fastmath=True, cache=True, parallel=True)
+def jacobi_block_nocp(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], blocksize: int) -> None:
+    """Jacobi iteration \\
+    Smooths x in Laplacian(x) = b
+
+    Parameters
+    ----------
+    x : npt.NDArray[np.float32]
+        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
+    b : npt.NDArray[np.float32]
+        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
+    blocksize : int 
+        Number of cells per block along one direction
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from pysco.laplacian import jacobi
+    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
+    >>> jacobi(x, b, 4)
+    """
+    ncells_1d = x.shape[0]
+    h2 = np.float32(1.0 / ncells_1d**2)
+    invsix = np.float32(1.0 / 6)
+    x_old = x.copy()
+    NBLOCKS = ncells_1d // blocksize
+    for bi in prange(-1,NBLOCKS-1):
+        i0 = bi * blocksize
+        for bj in range(-1,NBLOCKS-1):
+            j0 = bj * blocksize
+            for bk in range(-1,NBLOCKS-1):
+                k0 = bk * blocksize
+
+                for ii in range(blocksize):
+                    i = i0 + ii
+                    for jj in range(blocksize):
+                        j = j0 + jj
+                        for kk in range(blocksize):
+                            k = k0 + kk
+
+                            x[i,j,k] = (
+                                x_old[i-1,j,k] + x_old[i+1,j,k] +
+                                x_old[i,j-1,k] + x_old[i,j+1,k] +
+                                x_old[i,j,k-1] + x_old[i,j,k+1]
+                                - h2*b[i,j,k]
+                            ) * invsix
 
 
 @njit(["void(f4[:,:,::1], f4[:,:,::1], f4)"], fastmath=True, cache=True, parallel=True)
@@ -1021,6 +1172,103 @@ def gauss_seidel(
                     - x[ii, jj, kk]
                 )
 
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4, f4)"],fastmath=True,cache=True,parallel=True,)
+def chebyshev_form1(
+    x: npt.NDArray[np.float32],
+    z: npt.NDArray[np.float32],
+    z_old: npt.NDArray[np.float32],
+    r: npt.NDArray[np.float32],
+    alpha: np.float32,
+    beta: np.float32
+) -> None:
+    ncells_1d = x.shape[0]
+    invh2 = np.float32(ncells_1d**2)
+    h2 = np.float32(1./ncells_1d**2)
+    invsix = np.float32(1.0 / 6.0)
+    six = np.float32(6.0)
+    Dm1 = -h2*invsix
+    alphaDm1 = np.float32(alpha * Dm1)
+    # --- stencil + update ---
+    for i in prange(-1, ncells_1d - 1):
+        im1 = i - 1
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jm1 = j - 1
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                km1 = k - 1
+                kp1 = k + 1
+                x[i,j,k] += z_old[i,j,k]
+                r[i,j,k] -= invh2*(
+                        z_old[im1, j, k]
+                        + z_old[i, jm1, k]
+                        + z_old[i, j, km1]
+                        - six * z_old[i, j, k]
+                        + z_old[i, j, kp1]
+                        + z_old[i, jp1, k]
+                        + z_old[ip1, j, k]
+                )
+                z[i,j,k] = beta*z_old[i,j,k] + alphaDm1 * r[i,j,k]
+
+@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4, f4, f4)"],fastmath=True,cache=True,parallel=True,)
+def chebyshev_form1_opt(
+    x: npt.NDArray[np.float32],
+    z: npt.NDArray[np.float32],
+    z_old: npt.NDArray[np.float32],
+    r: npt.NDArray[np.float32],
+    alpha: np.float32,
+    beta: np.float32,
+    gamma: np.float32
+) -> None:
+    ncells_1d = x.shape[0]
+    invh2 = np.float32(ncells_1d**2)
+    h2 = np.float32(1./ncells_1d**2)
+    invsix = np.float32(1.0 / 6.0)
+    six = np.float32(6.0)
+    Dm1 = -h2*invsix
+    alphaDm1 = np.float32(alpha * Dm1)
+    # --- stencil + update ---
+    for i in prange(-1, ncells_1d - 1):
+        im1 = i - 1
+        ip1 = i + 1
+        for j in prange(-1, ncells_1d - 1):
+            jm1 = j - 1
+            jp1 = j + 1
+            for k in prange(-1, ncells_1d - 1):
+                km1 = k - 1
+                kp1 = k + 1
+                x[i,j,k] += gamma*z_old[i,j,k]
+                r[i,j,k] -= invh2*(
+                        z_old[im1, j, k]
+                        + z_old[i, jm1, k]
+                        + z_old[i, j, km1]
+                        - six * z_old[i, j, k]
+                        + z_old[i, j, kp1]
+                        + z_old[i, jp1, k]
+                        + z_old[ip1, j, k]
+                )
+                z[i,j,k] = beta*z_old[i,j,k] + alphaDm1 * r[i,j,k]
+
+def chebyshev_coeffs(n_smooth: int, theta: np.float32, delta: np.float32):
+    alpha = np.empty(n_smooth+1, dtype=np.float32)
+    beta  = np.empty(n_smooth+1, dtype=np.float32)
+    # k = 0 (order-1)
+    alpha[0] = np.float32(1.0 / theta)
+    beta[0]  = np.float32(0.0)
+    # k >= 1 (higher order)
+    for k in range(1, n_smooth + 1):
+        beta[k]  = np.float32((delta * alpha[k-1] * 0.5) ** 2)
+        alpha[k] = np.float32(1.0 / (theta - beta[k]))
+    return alpha, beta 
+
+
+def chebyshev_coeffs_lottes(n_smooth: int, nu: float):
+    alpha = np.empty(n_smooth+1, dtype=np.float32)
+    beta  = np.empty(n_smooth+1, dtype=np.float32)
+    for k in range(n_smooth+1):
+        beta[k]  = np.float32((2*k-1)/(2*k+3))
+        alpha[k] = np.float32((2*k+1)/(2*k+3) * nu)
+    return alpha, beta 
 
 # @utils.time_me
 def smoothing(
@@ -1050,6 +1298,210 @@ def smoothing(
     >>> smoothing(x, b, n_smoothing)
     """
 
-    f_relax = np.float32(1.25)  # As in Kravtsov et al. 1997
+    smoother = 2 # 0:Jacobi, 1:Jacobi weighted, 2:GS, 3: Chebyshev 1st, 4: Chebyshev 4th 
+
+    tmp = np.empty_like(x)
+    if smoother == 0:
+        for _ in range(n_smoothing):
+            jacobi(tmp, x, b)
+            tmp, x = x, tmp
+    if smoother == 1:
+        w = np.float32(1.1)
+        for _ in range(n_smoothing):
+            jacobi_w(tmp, x, b, w)
+            tmp, x = x, tmp
+    if smoother == 2:
+        f_relax = np.float32(1.25)  # As in Kravtsov et al. 1997
+        for _ in range(n_smoothing):
+            gauss_seidel(x, b, f_relax)
+    if smoother==3:
+        lambda_max = 2
+        lambda_min = 0.08*lambda_max
+        theta = 0.5*(lambda_max + lambda_min)
+        delta = 0.5*(lambda_max - lambda_min)
+        alpha, beta = chebyshev_coeffs(n_smoothing, theta, delta)
+        h = np.float32(1./x.shape[0])
+        Dm1 = np.float32(-h*h/6.)
+        r = residual(x,b)
+        z = np.float32(alpha[0]*Dm1)*r
+        for k in range(n_smoothing):
+            chebyshev_form1(x, tmp, z, r, alpha[k+1], beta[k+1])
+            tmp, z = z, tmp
+    if smoother==4:
+        h = np.float32(1./x.shape[0])
+        Dm1 = np.float32(-h*h/6.)
+        r = residual(x,b)
+        # --- eigenvalue estimates (3D Poisson) ---
+        lambda_max = np.float32(1.8)
+        nu = np.float32(4/lambda_max)
+        #----- Run
+        alpha, beta = chebyshev_coeffs_lottes(n_smoothing, nu)
+        z = np.float32(alpha[0]*Dm1) * r
+        for k in range(n_smoothing):
+            chebyshev_form1(x, tmp, z, r, alpha[k+1], beta[k+1])
+            tmp, z = z, tmp
+
+# @utils.time_me
+def smoothing_jacobi(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    n_smoothing: int,
+) -> None:
+    tmp = np.empty_like(x)
+    for _ in range(n_smoothing):
+        jacobi(tmp, x, b)
+        x, tmp = tmp, x
+    if n_smoothing % 2 == 1:
+        tmp[:] = x[:]
+
+def smoothing_jacobi_w(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    n_smoothing: int,
+    w: float
+) -> None:
+    tmp = np.empty_like(x)
+    for _ in range(n_smoothing):
+        jacobi_w(tmp, x, b, w)
+        x, tmp = tmp, x
+    if n_smoothing % 2 == 1:
+        tmp[:] = x[:]
+
+# @utils.time_me
+def smoothing_gs(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    n_smoothing: int,
+    f_relax: float
+) -> None:
     for _ in range(n_smoothing):
         gauss_seidel(x, b, f_relax)
+
+# @utils.time_me
+def smoothing_chebyshev1(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    n_smoothing: int,
+    lambda_min: float,
+    lambda_max: float
+) -> None:
+    tmp = np.empty_like(x)
+    theta = 0.5*(lambda_max + lambda_min)
+    delta = 0.5*(lambda_max - lambda_min)
+    alpha, beta = chebyshev_coeffs(n_smoothing, theta, delta)
+    h = np.float32(1./x.shape[0])
+    Dm1 = np.float32(-h*h/6.)
+    r = residual(x,b)
+    z = np.float32(alpha[0]*Dm1)*r
+    for k in range(n_smoothing):
+        chebyshev_form1(x, tmp, z, r, alpha[k+1], beta[k+1])
+        z, tmp = tmp, z
+    if n_smoothing % 2 == 1:
+        tmp[:] = z[:]
+
+# @utils.time_me
+def smoothing_chebyshev4(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    n_smoothing: int,
+    lambda_max: float
+) -> None:
+    tmp = np.empty_like(x)
+    h = np.float32(1./x.shape[0])
+    Dm1 = np.float32(-h*h/6.)
+    r = residual(x,b)
+    # --- eigenvalue estimates (3D Poisson) ---
+    nu = np.float32(4/lambda_max)
+    #----- Run
+    alpha, beta = chebyshev_coeffs_lottes(n_smoothing, nu)
+    z = np.float32(alpha[0]*Dm1) * r
+    for k in range(n_smoothing):
+        chebyshev_form1(x, tmp, z, r, alpha[k+1], beta[k+1])
+        z, tmp = tmp, z
+    if n_smoothing % 2 == 1:
+        tmp[:] = z[:]
+            
+def smoothing_chebyshev4_opt(
+    x: npt.NDArray[np.float32],
+    b: npt.NDArray[np.float32],
+    n_smoothing: int,
+    lambda_max: float
+) -> None:
+    tmp = np.empty_like(x)
+    h = np.float32(1./x.shape[0])
+    Dm1 = np.float32(-h*h/6.)
+    r = residual(x,b)
+    # --- eigenvalue estimates (3D Poisson) ---
+    nu = np.float32(4/lambda_max)
+    #----- Run
+    alpha, beta = chebyshev_coeffs_lottes(n_smoothing, nu)
+    gamma = gamma_tabular(n_smoothing)
+    z = np.float32(alpha[0]*Dm1) * r
+    for k in range(n_smoothing):
+        chebyshev_form1_opt(x, tmp, z, r, alpha[k+1], beta[k+1], gamma[k])
+        z, tmp = tmp, z
+    if n_smoothing % 2 == 1:
+        tmp[:] = z[:]
+
+
+def gamma_tabular(n_smoothing):
+    if n_smoothing == 1:
+        return np.array([1.12500000000000]).astype(np.float32)
+    elif n_smoothing == 2:
+        return np.array([1.02387287570313, 1.26408905371085]).astype(np.float32)
+    elif n_smoothing == 3:
+        return np.array([1.00842544782028, 1.08867839208730, 1.33753125909618]).astype(np.float32)
+    elif n_smoothing == 4:
+        return np.array([1.00391310427285, 1.04035811188593,1.14863498546254,1.38268869241000]).astype(np.float32)
+    elif n_smoothing == 5:
+        return np.array([1.00212930146164,
+1.02173711549260,
+1.07872433192603,
+1.19810065292663,
+1.41322542791682]).astype(np.float32)
+    elif n_smoothing == 6:
+        return np.array([1.00128517255940,
+1.01304293035233,
+1.04678215124113,
+1.11616489419675,
+1.23829020218444,
+1.43524297106744]).astype(np.float32)
+    elif n_smoothing == 7:
+        return np.array([1.00083464397912,
+1.00843949430122,
+1.03008707768713,
+1.07408384092003,
+1.15036186707366,
+1.27116474046139,
+1.45186658649364]).astype(np.float32)
+    elif n_smoothing == 8:
+        return np.array([1.00057246631197,
+1.00577427662415,
+1.02050187922941,
+1.05019803444565,
+1.10115572984941,
+1.18086042806856,
+1.29838585382576,
+1.46486073151099]).astype(np.float32)
+    elif n_smoothing == 9:
+        return np.array([1.00040960072832,
+1.00412439506106,
+1.01460212148266,
+1.03561113626671,
+1.07139972529194,
+1.12688273710962,
+1.20785219140729,
+1.32121930716746,
+1.47529642820699]).astype(np.float32)
+    elif n_smoothing == 10:
+        return np.array([1.00030312229652,1.00304840660796,
+1.01077022715387,
+1.02619011597640,
+1.05231724933755,
+1.09255743207549,
+1.15083376663972,
+1.23172250870894,
+1.34060802024460,
+1.48386124407011]).astype(np.float32)
+    
+            

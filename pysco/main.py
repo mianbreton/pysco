@@ -5,7 +5,7 @@ Main executable module to run cosmological N-body simulations
 Usage: python main.py -c param.ini
 """
 __author__ = "Michel-Andrès Breton"
-__version__ = "1.0.9"
+__version__ = "1.0.10"
 __email__ = "michel-andres.breton@obspm.fr"
 __status__ = "Production"
 
