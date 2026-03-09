@@ -42,6 +42,8 @@ def clean_key(key):
         return r"w"
     elif key == "f":
         return r"f"
+    elif key == "blocksize":
+        return r"\mathrm{Blocksize}"
     else:
         print(f"{key=}")
         raise ValueError(f"Missing clean key")
@@ -49,6 +51,8 @@ def clean_key(key):
 def clean_title(file):
     if "jacobi-jacobi" in file:
         return "Jacobi - Jacobi"
+    elif "block_jacobi" in file:
+        return "Block Jacobi"
     elif "gs-gs" in file:
         return "Gauss-Seidel - Gauss-Seidel"
     elif "jacobi-gs" in file:
@@ -131,6 +135,7 @@ dat_ref = data[:,idx]
 # In[ ]:
 
 dirs = [
+"block_jacobi",
 #"chebyshev1", 
 #"chebyshev4-gs",
 #"chebyshev4_opt",
@@ -138,8 +143,8 @@ dirs = [
 #"gauss_seidel",
 #"jacobi-gs",
 #"jacobi_weight",
-"chebyshev1-gs",
-"chebyshev1-jacobi",
+##"chebyshev1-gs",
+##"chebyshev1-jacobi", #25k!!!
 #"chebyshev4",
 #"chebyshev4-jacobi",
 #"chebyshev4_opt-gs",
