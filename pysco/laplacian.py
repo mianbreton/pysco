@@ -888,77 +888,35 @@ def jacobi_w(x: npt.NDArray[np.float32], x_old: npt.NDArray[np.float32], b: npt.
                 )
                 x[i, j, k] = x_old[i,j,k] - w_h2_invsix*r
                 
-@njit(["void(f4[:,:,::1], f4[:,:,::1], i4)"], fastmath=True, cache=True, parallel=True)
-def jacobi_block(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], blocksize: int) -> None:
-    """Jacobi iteration \\
-    Smooths x in Laplacian(x) = b
 
-    Parameters
-    ----------
-    x : npt.NDArray[np.float32]
-        Potential [N_cells_1d, N_cells_1d, N_cells_1d]
-    x_old : npt.NDArray[np.float32]
-        Old potential [N_cells_1d, N_cells_1d, N_cells_1d]
-    b : npt.NDArray[np.float32]
-        Right-hand side of Poisson equation [N_cells_1d, N_cells_1d, N_cells_1d]
-    blocksize : int 
-        Number of cells per block along one direction
+@njit(["void(f4[:], f4[:,::1], f4[:])"], fastmath=True, cache=True, parallel=False)
+def matvec_multiply(x: npt.NDArray[np.float32], Ainv: npt.NDArray[np.float32], b: npt.NDArray[np.float32]):
+    size = len(x)
+    for i in range(size):
+        tmp = np.float32(0)
+        for j in range(size):
+            tmp += Ainv[i,j] * b[j]
+        x[i] = tmp
 
-    Example
-    -------
-    >>> import numpy as np
-    >>> from pysco.laplacian import jacobi
-    >>> x = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> b = np.random.random((32, 32, 32)).astype(np.float32)
-    >>> jacobi(x, b, 4)
-    """
-    ncells_1d = x.shape[0]
-    h2 = np.float32(1.0 / ncells_1d**2)
-    invsix = np.float32(1.0 / 6)
-    x_old = x.copy()
-    NBLOCKS = ncells_1d // blocksize
-    blocksize_extended = blocksize + 2
-    for i in prange(-1, NBLOCKS - 1):
-        iblock = i*blocksize
-        xblock = np.empty((blocksize_extended,blocksize_extended,blocksize_extended), dtype=np.float32)
-        for j in range(-1, NBLOCKS - 1):
-            jblock = j*blocksize
-            for k in range(-1, NBLOCKS - 1):
-                kblock = k*blocksize
-                # Load block
-                for ii in range(blocksize_extended):
-                    for jj in range(blocksize_extended):
-                        for kk in range(blocksize_extended):
-                            xblock[ii,jj,kk] = x_old[iblock + ii - 1, jblock + jj - 1, kblock + kk - 1]
-                # Stencil computation
-                for ii in range(blocksize):
-                    for jj in range(blocksize):
-                        for kk in range(blocksize):
-                            x[iblock+ii, jblock+jj, kblock+kk] = (
-                                    xblock[ii-1, jj, kk]
-                                    + xblock[ii, jj-1, kk]
-                                    + xblock[ii, jj, kk-1]
-                                    - h2 * b[iblock+ii, jblock+jj, kblock+kk]
-                                    + xblock[ii, jj, kk+1]
-                                    + xblock[ii, jj+1, kk]
-                                    + xblock[ii+1, jj, kk]
-                                ) * invsix
-                            
+
 @njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
 def block_jacobi(x: npt.NDArray[np.float32], x_old: npt.NDArray[np.float32], b: npt.NDArray[np.float32], A_inv) -> None:
     ncells_1d = x.shape[0]
     h2 = np.float32(1.0 / ncells_1d**2)
     BLOCK_SIZE = int(np.round(np.cbrt(len(A_inv))))
     NBLOCKS = ncells_1d // BLOCK_SIZE
-    for bi in prange(-1,NBLOCKS-1):
+    for bi in prange(NBLOCKS):
         i0 = bi * BLOCK_SIZE
-        for bj in range(-1,NBLOCKS-1):
+        for bj in range(NBLOCKS):
             j0 = bj * BLOCK_SIZE
-            for bk in range(-1,NBLOCKS-1):
+            for bk in range(NBLOCKS):
                 k0 = bk * BLOCK_SIZE
 
-                # effective RHS
+                # Effective RHS
                 rhs_block = np.empty((BLOCK_SIZE,BLOCK_SIZE,BLOCK_SIZE), dtype=np.float32)
+                x_block = np.empty_like(rhs_block)
+                rhs_flat = rhs_block.ravel()
+                x_flat = x_block.ravel()
                 for ii in range(BLOCK_SIZE):
                     i = i0 + ii
                     for jj in range(BLOCK_SIZE):
@@ -969,20 +927,18 @@ def block_jacobi(x: npt.NDArray[np.float32], x_old: npt.NDArray[np.float32], b: 
                             if ii == 0:
                                 rhs_tmp -= x_old[i-1,j,k] 
                             if ii == BLOCK_SIZE - 1:
-                                rhs_tmp -= x_old[i+1,j,k] 
+                                rhs_tmp -= x_old[i+1-ncells_1d,j,k] 
                             if jj == 0:
                                 rhs_tmp -= x_old[i,j-1,k] 
                             if jj == BLOCK_SIZE - 1:
-                                rhs_tmp -= x_old[i,j+1,k] 
+                                rhs_tmp -= x_old[i,j+1-ncells_1d,k] 
                             if kk == 0:
                                 rhs_tmp -= x_old[i,j,k-1] 
                             if kk == BLOCK_SIZE - 1:
-                                rhs_tmp -= x_old[i,j,k+1] 
+                                rhs_tmp -= x_old[i,j,k+1-ncells_1d] 
                             rhs_block[ii,jj,kk] = rhs_tmp
                 # Block Jacobi
-                rhs_flat = rhs_block.ravel()
-                x_flat = A_inv @ rhs_flat
-                x_block = x_flat.reshape((BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE))
+                matvec_multiply(x_flat, A_inv, rhs_flat)
                 # Write in array
                 for ii in range(BLOCK_SIZE):
                         i = i0 + ii
@@ -998,15 +954,19 @@ def block_jacobi_w(x: npt.NDArray[np.float32], x_old: npt.NDArray[np.float32], b
     h2 = np.float32(1.0 / ncells_1d**2)
     BLOCK_SIZE = int(np.round(np.cbrt(len(A_inv))))
     NBLOCKS = ncells_1d // BLOCK_SIZE
-    for bi in prange(-1,NBLOCKS-1):
+    one_minus_w = np.float32(1-w)
+    for bi in prange(NBLOCKS):
         i0 = bi * BLOCK_SIZE
-        for bj in range(-1,NBLOCKS-1):
+        for bj in range(NBLOCKS):
             j0 = bj * BLOCK_SIZE
-            for bk in range(-1,NBLOCKS-1):
+            for bk in range(NBLOCKS):
                 k0 = bk * BLOCK_SIZE
 
-                # effective RHS
+                # Effective RHS
                 rhs_block = np.empty((BLOCK_SIZE,BLOCK_SIZE,BLOCK_SIZE), dtype=np.float32)
+                x_block = np.empty_like(rhs_block)
+                rhs_flat = rhs_block.ravel()
+                x_flat = x_block.ravel()
                 for ii in range(BLOCK_SIZE):
                     i = i0 + ii
                     for jj in range(BLOCK_SIZE):
@@ -1017,20 +977,18 @@ def block_jacobi_w(x: npt.NDArray[np.float32], x_old: npt.NDArray[np.float32], b
                             if ii == 0:
                                 rhs_tmp -= x_old[i-1,j,k] 
                             if ii == BLOCK_SIZE - 1:
-                                rhs_tmp -= x_old[i+1,j,k] 
+                                rhs_tmp -= x_old[i+1-ncells_1d,j,k] 
                             if jj == 0:
                                 rhs_tmp -= x_old[i,j-1,k] 
                             if jj == BLOCK_SIZE - 1:
-                                rhs_tmp -= x_old[i,j+1,k] 
+                                rhs_tmp -= x_old[i,j+1-ncells_1d,k] 
                             if kk == 0:
                                 rhs_tmp -= x_old[i,j,k-1] 
                             if kk == BLOCK_SIZE - 1:
-                                rhs_tmp -= x_old[i,j,k+1] 
+                                rhs_tmp -= x_old[i,j,k+1-ncells_1d] 
                             rhs_block[ii,jj,kk] = rhs_tmp
                 # Block Jacobi
-                rhs_flat = rhs_block.ravel()
-                x_flat = A_inv @ rhs_flat
-                x_block = x_flat.reshape((BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE))
+                matvec_multiply(x_flat, A_inv, rhs_flat)
                 # Write in array
                 for ii in range(BLOCK_SIZE):
                         i = i0 + ii
@@ -1038,15 +996,8 @@ def block_jacobi_w(x: npt.NDArray[np.float32], x_old: npt.NDArray[np.float32], b
                             j = j0 + jj
                             for kk in range(BLOCK_SIZE):
                                 k = k0 + kk
-                                x[i,j,k] = w*x_block[ii,jj,kk] + (1-w)*x_old[i,j,k]
-
-@njit(["void(f4[:,:,::1], f4[:,:,::1], f4[:,::1])"], fastmath=True, cache=True, parallel=True)
-def exact_solve(x: npt.NDArray[np.float32], b: npt.NDArray[np.float32], A_inv) -> None:
-    # Block Jacobi
-    rhs_flat = b.ravel()
-    x_ravel = x.ravel()
-    # Exact solve
-    x_ravel[:] = A_inv @ rhs_flat
+                                x[i,j,k] = w*x_block[ii,jj,kk] + one_minus_w*x_old[i,j,k]
+    
 
 @njit
 def compute_A(blocksize):
@@ -1513,10 +1464,12 @@ def exact_coarse_solve(
     x: npt.NDArray[np.float32],
     b: npt.NDArray[np.float32]
 ) -> None:
+    rhs_flat = b.ravel()
+    x_ravel = x.ravel()
     # Exact solve of Ax = b for 4x4x4 grid
     h2 = np.float32(1./16.)
     Ainv = compute_Ainv_periodic(4) * h2
-    exact_solve(x, b, Ainv)
+    matvec_multiply(x_ravel, Ainv, rhs_flat)
 
 # @utils.time_me
 def smoothing_jacobi(

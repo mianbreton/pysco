@@ -49,28 +49,42 @@ def clean_key(key):
         raise ValueError(f"Missing clean key")
 
 def clean_title(file):
-    if "jacobi-jacobi" in file:
+    if "block_jacobi-block_jacobi" in file:
+        return "Block Jacobi - Block Jacobi"
+    elif "block_jacobi-jacobi" in file:
+        return "Block Jacobi - Jacobi"
+    elif "block_jacobi-gs" in file:
+        return "Block Jacobi - GS"
+    elif "block_jacobi-chebyshev4_opt" in file:
+        return "Block Jacobi - Chebyshev 4th (Opt)"
+    elif "block_jacobi-chebyshev4" in file:
+        return "Block Jacobi - Chebyshev 4th"
+    elif "jacobi-block_jacobi" in file:
+        return "Jacobi - Block Jacobi"
+    elif "jacobi-jacobi" in file:
         return "Jacobi - Jacobi"
-    elif "block_jacobi" in file:
-        return "Block Jacobi"
+    elif "jacobi-gs" in file:
+        return "Jacobi - GS"
+    elif "gs-block_jacobi" in file:
+        return "GS - Block Jacobi"
+    elif "gs-jacobi" in file:
+        return "Gauss-Seidel - Jacobi"
     elif "gs-gs" in file:
         return "Gauss-Seidel - Gauss-Seidel"
-    elif "jacobi-gs" in file:
-        return "Jacobi - Gauss-Seidel"
-    elif "jacobi_weight" in file:
-        return "Jacobi"
-    elif "gauss_seidel" in file:
-        return "Gauss-Seidel"
     elif "chebyshev1-jacobi" in file:
         return "Chebyshev 1st - Jacobi"
     elif "chebyshev1-gs" in file:
         return "Chebyshev 1st - Gauss-Seidel"
     elif "chebyshev4-jacobi" in file:
         return "Chebyshev 4th - Jacobi"
+    elif "chebyshev4-block_jacobi" in file:
+        return "Chebyshev 4th - Block Jacobi"
     elif "chebyshev4-gs" in file:
         return "Chebyshev 4th - Gauss-Seidel"
     elif "chebyshev4_opt-jacobi" in file:
         return "Chebyshev 4th (Opt) - Jacobi"
+    elif "chebyshev4_opt-jacobi" in file:
+        return "Chebyshev 4th (Opt) - Block Jacobi"
     elif "chebyshev4_opt-gs" in file:
         return "Chebyshev 4th (Opt) - Gauss-Seidel"
     elif "chebyshev1" in file:
@@ -79,6 +93,12 @@ def clean_title(file):
         return "Chebyshev 4th"
     elif "chebyshev4_opt" in file:
         return "Chebyshev 4th (Opt)"
+    elif "jacobi" in file:
+        return "Jacobi"
+    elif "block_jacobi" in file:
+        return "Block Jacobi"
+    elif "gauss_seidel" in file:
+        return "Gauss-Seidel"
     else:
         raise ValueError(f"Missing clean title, currently {file=}")
 
@@ -135,21 +155,31 @@ dat_ref = data[:,idx]
 # In[ ]:
 
 dirs = [
-"block_jacobi",
+#"block_jacobi",
+#"block_jacobi-chebyshev4",
+#"block_jacobi-chebyshev4_opt",
+#"block_jacobi-block_jacobi",
+#"block_jacobi-jacobi", 
+#"block_jacobi-gs", 
+#"jacobi",
+#"jacobi-block_jacobi",
+#"jacobi-jacobi",
+#"jacobi-gs",
+#"gauss_seidel",
+#"gs-block_jacobi", 
+#"gs-jacobi", 
+#"gs-gs",
 #"chebyshev1", 
+#"chebyshev1-jacobi", #12k!!!
+"chebyshev1-gs",
+#"chebyshev4",
+#"chebyshev4-block_jacobi",
+#"chebyshev4-jacobi",
 #"chebyshev4-gs",
 #"chebyshev4_opt",
+#"chebyshev4_opt-block_jacobi",
 #"chebyshev4_opt-jacobi",
-#"gauss_seidel",
-#"jacobi-gs",
-#"jacobi_weight",
-##"chebyshev1-gs",
-##"chebyshev1-jacobi", #25k!!!
-#"chebyshev4",
-#"chebyshev4-jacobi",
 #"chebyshev4_opt-gs",
-#"gs-gs",
-#"jacobi-jacobi",
 ]
 
 for dir in dirs:
